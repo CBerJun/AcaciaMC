@@ -1,0 +1,603 @@
+# Minecraft Command Generator of Acacia
+from ..ast import *
+from ..constants import Config
+from ..error import *
+from .expression import *
+from .symbol import *
+
+__all__ = ['MCFunctionFile', 'Generator']
+
+# --- MCFUNCTIONFILE --- #
+class MCFunctionFile:
+    # an MCFunctionFile represents a .mcfunction file
+    def __init__(self, path: str = None):
+        # path:str the path of function from Config.function_folder
+        # e.g. `lib/acalib3`, `main`
+        self.commands = []
+        self.path = path
+    
+    def has_content(self):
+        # return if there IS any commands in this file
+        for line in self.commands:
+            line = line.strip()
+            if (not line.startswith('#')) and bool(line):
+                return True
+        return False
+    
+    # --- Export Methods ---
+
+    def to_str(self) -> str:
+        # make commands to str
+        return '\n'.join(self.commands)
+    
+    def call(self) -> str:
+        # return the command that runs this file
+        if self.path is None:
+            raise ValueError('MCFunctionFile.path not given')
+        return 'function %s/%s' % (Config.function_folder, self.path)
+
+    # --- Write Methods ---
+    
+    def write(self, *commands: str):
+        self.commands.extend(commands)
+    
+    def write_debug(self, *comments: str):
+        # check enabled
+        if not Config.debug_comments:
+            return
+        self.write(*comments)
+    
+    def extend(self, commands: str):
+        # extend commands
+        self.commands.extend(commands)
+
+# --- GENERATOR --- #
+
+class Generator(ASTVisitor):
+    # A Generator generates code of an AST (a single file)
+    def __init__(self, node: AST, main_file: MCFunctionFile, compiler):
+        # compiler:Compiler
+        # main_file:MCFunctionFile
+        super().__init__()
+        self.node = node
+        self.compiler = compiler
+        self.current_file = main_file
+        self.current_scope = self.compiler.get_basic_scope()
+        # result_var: the var that stores result value
+        # only exists when passing functions
+        self.result_var = None
+        # result_var: the var that stores inverted stopif value
+        # only exists when passing loops
+        self.loop_continue_var = None
+        # processing_node is prepared for showing errors
+        # to know which AST we are passing (so that lineno and col are known)
+        self.processing_node = self.node
+        self.node_depth = -1 # how deep we are in the tree (for debug comment)
+        # current_tmp_scores: tmp scores allocated on current statement
+        # see method `visit`
+        self.current_tmp_scores = []
+
+    def parse(self):
+        # parse the AST and generate commands
+        self.visit(self.node)
+    
+    def parse_as_module(self) -> AcaciaModule:
+        # parse the AST and return it as AcaciaModule
+        self.parse()
+        return AcaciaModule(self.current_scope, self.compiler)
+    
+    # --- INTERNAL USE ---
+    
+    def check_assignable(self, value: AcaciaExpr):
+        # check if a an AcaciaExpr is assignable
+        if not isinstance(value, VarValue):
+            self.compiler.error(ErrorType.UNASSIGNABLE)
+    
+    def register_symbol(self, target_node: AST, target_value: AcaciaExpr):
+        # register a value to a SymbolTable according to AST
+        # `target_value` is the value that the ast represents
+        # e.g. Identifier(name='a'), IntVar(...) -> 
+        #   self.current_scope.create('a', IntVar(...))
+        if isinstance(target_node, Identifier):
+            self.current_scope.create(target_node.name, target_value)
+        elif isinstance(target_node, Attribute):
+            # get AttributeTable and register
+            object_ = self.visit(target_node.object)
+            object_.attribute_table.create(target_node.attr, target_value)
+        else: raise TypeError
+    
+    def write_debug(self, comment: str, target: MCFunctionFile = None):
+        # write debug comment to current_file
+        # target:MCFunctionFile the file to write comments into
+        # (default self.current_file)
+        # decide target
+        target = self.current_file if target is None else target
+        # write
+        for comment_line in comment.split('\n'):
+            target.write_debug(
+                '# %s(%d:%d) %s' % (
+                    ' ' * self.node_depth,
+                    self.processing_node.lineno,
+                    self.processing_node.col,
+                    comment_line
+                )
+            )
+
+    # --- VISITORS ---
+    
+    def visit(self, node: AST, **kwargs):
+        # store which node we are passing now
+        old_node = self.processing_node
+        self.processing_node = node
+        self.node_depth += 1 # used by self.write_debug
+        if isinstance(node, Statement):
+            # NOTE self.current_tmp_scores is modified by Compiler, to tell
+            # the tmp scores that are allocated in this statement
+            # so that we can free them when the statement ends
+            # Therefore, only update tmp scores when node is a Statement
+            old_tmp_scores = self.current_tmp_scores
+            self.current_tmp_scores = []
+        # write debug
+        if not isinstance(node, (Expression, ArgumentTable)):
+            self.write_debug(type(node).__name__)
+        # visit the node
+        res = super().visit(node, **kwargs)
+        # set back node info
+        self.processing_node = old_node
+        self.node_depth -= 1
+        if isinstance(node, Statement):
+            # delete used vars
+            for score in self.current_tmp_scores:
+                self.compiler.free_tmp(*score)
+            self.current_tmp_scores = old_tmp_scores
+        return res
+    
+    def visit_Module(self, node: Module):
+        # start
+        for stmt in node.body:
+            self.visit(stmt)
+    
+    ### --- visit Statement ---
+
+    def visit_Assign(self, node: Assign):
+        # analyze expr first
+        value = self.visit(node.value)
+        # then analyze target
+        target = self.visit(node.target, check_undef = False)
+        # for new defined var, analyze type and apply for score
+        if target is None:
+            ## apply a var according to type
+            try:
+                target = value.type.new_var()
+            except NotImplementedError:
+                self.compiler.error(
+                    ErrorType.UNSUPPORTED_VAR_TYPE,
+                    var_type = value.type.name
+                )
+            ## register the var to symbol table
+            self.register_symbol(node.target, target)
+        else: # for existed name, check if it is assignable
+            self.check_assignable(target)
+        # check type
+        if target.type is not value.type:
+            self.compiler.error(
+                ErrorType.WRONG_ASSIGN_TYPE,
+                expect = target.type.name, got = value.type.name
+            )
+        # assign
+        # NOTE to avoid problems of changing var too early,
+        # (e.g. a = 1 + a, we will let a = 1 first, and then plus 1
+        # so whatever a is before assigning, it becomes 2 now)
+        # we need a temporary var
+        # (assign to tmp first and move it to target)
+        # TODO analyze if expression uses target var
+        # sometimes a temporary var is not needed
+        tmp = target.type.new_var(tmp = True)
+        self.current_file.extend(value.export(tmp))
+        self.current_file.extend(tmp.export(target))
+    
+    def visit_AugmentedAssign(self, node: AugmentedAssign):
+        # visit nodes
+        target = self.visit(node.target, check_undef = True)
+        self.check_assignable(target)
+        value = self.visit(node.value)
+        # call target's methods
+        OP2METHOD = {
+            Operator.add: 'iadd',
+            Operator.minus: 'isub',
+            Operator.multiply: 'imul',
+            Operator.divide: 'idiv',
+            Operator.mod: 'imod'
+        }
+        self.current_file.extend(
+            getattr(target, OP2METHOD[node.operator])(value)
+        )
+    
+    def visit_MacroBind(self, node: MacroBind):
+        # analyze target (should be undefined)
+        target = self.visit(node.target, check_undef = False)
+        if target is not None:
+            self.compiler.error(ErrorType.BIND_EXISTED_NAME)
+        # analyze value
+        value = self.visit(node.value)
+        # register to symbol table
+        self.register_symbol(node.target, value)
+
+    def visit_ExprStatement(self, node: ExprStatement):
+        # XXX we don't need the value of the expr
+        # (e.g. ExprStatement `1 + 2` is redundant)
+        expr = self.visit(node.value)
+        self.current_file.extend(expr.export_novalue())
+    
+    def visit_Pass(self, node: Pass):
+        pass
+    
+    def visit_Command(self, node: Command):
+        # get exact command (without formatting)
+        cmd = ''
+        for section in node.values:
+            # expressions in commands need to be parsed
+            if section[0] is StringMode.expression:
+                expr = self.visit(section[1])
+                if not isinstance(expr.type, BuiltinStringType):
+                    self.compiler.error(
+                        ErrorType.INVALID_CMD_FORMATTING,
+                        expr_type = expr.type.name
+                    )
+                cmd += expr.value
+            elif section[0] is StringMode.text:
+                cmd += section[1]
+            else: raise ValueError
+        self.current_file.write(cmd)
+    
+    def visit_If(self, node: If):
+        # condition
+        condition = self.visit(node.condition)
+        if not isinstance(condition.type, BuiltinBoolType):
+            self.compiler.error(
+                ErrorType.WRONG_IF_CONDITION, got = condition.type
+            )
+        # optimization: if condition is a constant, just run the code
+        if isinstance(condition, BoolLiteral):
+            run_node = node.body if condition.value is True else node.else_body
+            for stmt in run_node:
+                self.visit(stmt)
+            return
+        dependencies, condition = to_BoolVar(condition)
+        self.current_file.extend(dependencies) # add dependencies
+        # process body
+        old_file = self.current_file
+        self.current_file = MCFunctionFile()
+        self.write_debug('If body')
+        for stmt in node.body:
+            self.visit(stmt)
+        if self.current_file.has_content():
+            # only add command when some commands ARE generated
+            self.compiler.add_file(self.current_file)
+            old_file.write(export_execute_subcommands(
+                subcmds = ['if score %s matches 1' % condition],
+                main = self.current_file.call()
+            ))
+        # process else_bosy (almost same as above)
+        self.current_file = MCFunctionFile()
+        self.write_debug('Else branch of If')
+        for stmt in node.else_body:
+            self.visit(stmt)
+        if self.current_file.has_content():
+            self.compiler.add_file(self.current_file)
+            old_file.write(export_execute_subcommands(
+                subcmds = ['if score %s matches 0' % condition],
+                main = self.current_file.call()
+            ))
+        # set back old file
+        self.current_file = old_file
+    
+    def visit_InterfaceDef(self, node: InterfaceDef):
+        # new environment
+        old_file = self.current_file
+        old_scope = self.current_scope
+        self.current_file = MCFunctionFile('interface/%s' % node.name)
+        self.current_scope = ScopedSymbolTable(outer = old_scope)
+        # body
+        self.write_debug('Interface definition')
+        for stmt in node.body:
+            self.visit(stmt)
+        # add lib
+        if self.current_file.has_content():
+            self.compiler.add_file(self.current_file)
+            self.write_debug(
+                'Generated at %s' % self.current_file.path, target = old_file
+            )
+        else:
+            self.write_debug(
+                'No commands generated', target = old_file
+            )
+        # resume environment
+        self.current_file = old_file
+        self.current_scope = old_scope
+    
+    def visit_ArgumentTable(self, node: ArgumentTable):
+        # handle arg table
+        args = node.args
+        types = dict.fromkeys(args)
+        defaults = dict.fromkeys(args)
+        for arg in args:
+            default_node = node.default[arg]
+            type_node = node.types[arg]
+            if default_node is not None:
+                defaults[arg] = self.visit(default_node)
+            if type_node is None:
+                # type is ommited (default must be given,
+                # or else Parser would have raise an Error)
+                types[arg] = defaults[arg].type
+            else: # type is given
+                types[arg] = self.visit(type_node)
+                # make sure specified type is a type
+                # e.g. `def f(a: 1)`
+                if not isinstance(types[arg].type, BuiltinTypeType):
+                    self.compiler.error(
+                        ErrorType.INVALID_ARG_TYPE,
+                        arg = arg, arg_type = types[arg].type.name
+                    )
+                # make sure default value matches type
+                # e.g. `def f(a: int = True)`
+                if (defaults[arg] is not None and \
+                    defaults[arg].type is not types[arg]):
+                    self.compiler.error(
+                        ErrorType.UNMATCHED_ARG_DEFAULT_TYPE,
+                        arg = arg, arg_type = types[arg],
+                        default_type = defaults[arg].type
+                    )
+        return args, types, defaults
+    
+    def visit_FuncDef(self, node: FuncDef):
+        # make sure name does not exist
+        if self.current_scope.lookup(node.name):
+            self.compiler.error(ErrorType.FUNC_NAME_EXISTS, name = node.name)
+        # get return type (of Type type)
+        if node.returns is None:
+            returns = self.compiler.types[BuiltinNoneType]
+        else:
+            returns = self.visit(node.returns)
+            if not isinstance(returns.type, BuiltinTypeType):
+                self.compiler.error(
+                    ErrorType.INVALID_RESULT_TYPE, got = returns.type.name
+                )
+        # parse arg
+        args, types, defaults = self.visit(node.arg_table)
+        # create var
+        func_var = AcaciaFunction(
+            args = args,
+            arg_types = types,
+            arg_defaults = defaults,
+            returns = returns,
+            compiler = self.compiler
+        )
+        self.current_scope.create(node.name, func_var)
+        # read body
+        old_file = self.current_file
+        old_scope = self.current_scope
+        old_res_var = self.result_var
+        self.current_file = MCFunctionFile()
+        self.current_scope = ScopedSymbolTable(outer = old_scope)
+        self.result_var = func_var.result_var
+        func_var.arg_handler.register_args_to_scope(self.current_scope)
+        self.write_debug('Function definition of %s()' % node.name)
+        for stmt in node.body:
+            self.visit(stmt)
+        # add file
+        if self.current_file.has_content():
+            self.compiler.add_file(self.current_file)
+            self.write_debug(
+                'Generated at %s' % self.current_file.path,
+                target = old_file
+            )
+            func_var.file = self.current_file
+        else:
+            self.write_debug('No commands generated', target = old_file)
+        # resume environment
+        self.current_file = old_file
+        self.current_scope = old_scope
+        self.result_var = old_res_var
+    
+    def visit_LoopDef(self, node: LoopDef):
+        # make sure name does not exist
+        if self.current_scope.lookup(node.name):
+            self.compiler.error(ErrorType.LOOP_NAME_EXISTS, name = node.name)
+        # parse arg
+        args, types, defaults = self.visit(node.arg_table)
+        # create var
+        loop_var = Loop(
+            args = args,
+            arg_types = types,
+            arg_defaults = defaults,
+            compiler = self.compiler
+        )
+        self.current_scope.create(node.name, loop_var)
+        # read body
+        old_file = self.current_file
+        old_scope = self.current_scope
+        old_continue_var = self.loop_continue_var
+        self.current_file = MCFunctionFile()
+        self.current_scope = ScopedSymbolTable(outer = old_scope)
+        self.loop_continue_var = loop_var.running_var
+        loop_var.arg_handler.register_args_to_scope(self.current_scope)
+        self.write_debug('Loop definition of %s()' % node.name)
+        for stmt in node.body:
+            self.visit(stmt)
+        # add file
+        if self.current_file.has_content():
+            self.compiler.add_file(self.current_file)
+            self.write_debug(
+                'Generated at %s' % self.current_file.path,
+                target = old_file
+            )
+            loop_var.file = self.current_file
+        else:
+            self.write_debug('No commands generated', target = old_file)
+        # add command to tick.mcfunction
+        self.compiler.file_tick.write(loop_var.export_tick())
+        # resume environment
+        self.current_file = old_file
+        self.current_scope = old_scope
+        self.loop_continue_var = old_continue_var
+    
+    def visit_Result(self, node: Result):
+        # check
+        if self.result_var is None:
+            self.compiler.error(ErrorType.RESULT_OUT_OF_SCOPE)
+        # visit expr and check type
+        expr = self.visit(node.value)
+        if expr.type is not self.result_var.type:
+            self.compiler.error(
+                ErrorType.WRONG_RESULT_TYPE,
+                expect = self.result_var.type.name,
+                got = expr.type.name
+            )
+        # write file
+        self.current_file.extend(expr.export(self.result_var))
+    
+    def visit_StopIf(self, node: StopIf):
+        # check
+        if self.loop_continue_var is None:
+            self.compiler.error(ErrorType.STOPIF_OUT_OF_SCOPE)
+        # visit expr and check type
+        expr = self.visit(node.value)
+        if not isinstance(expr.type, BuiltinBoolType):
+            self.compiler.error(
+                ErrorType.WRONG_STOPIF_EXPR, got = expr.type.name
+            )
+        # write file
+        ## self.loop_continue_var stores whether we should continue,
+        ## so we need to invert StopIf.value
+        self.current_file.extend(expr.not_().export(self.loop_continue_var))
+    
+    def visit_Import(self, node: Import):
+        # find files; .py -> BinaryModule; .aca -> AcaciaModule
+        location, ext = self.compiler.find_module(
+            node.leadint_dots, node.last_name, node.parents
+        )
+        self.write_debug('Found module at %s' % location)
+        if ext == '.py':
+            mod = BinaryModule(location, self.compiler)
+        elif ext == '.aca':
+            self.current_file.write_debug('## Start of another module')
+            mod = self.compiler.parse_module(location)
+            self.current_file.write_debug('## End of another module')
+        else: raise ValueError
+        self.current_scope.create(node.last_name, mod)
+    
+    ### --- visit Expression ---
+    # literal
+    
+    def visit_Literal(self, node: Literal):
+        value = node.value
+        # NOTE Python bool is a subclass of int!!!
+        if isinstance(value, bool):
+            return BoolLiteral(value, compiler = self.compiler)
+        elif isinstance(value, int):
+            return IntLiteral(value, compiler = self.compiler)
+        elif isinstance(value, str):
+            return String(value, compiler = self.compiler)
+        raise TypeError
+    
+    # assignable & bindable
+    # check_undef:bool if True, raise Error when the assignable is
+    # not found in SymbolTable; if False, return None when not found
+    
+    def visit_Identifier(self, node: Identifier, check_undef = True):
+        res = self.current_scope.lookup(node.name)
+        # check undef
+        if res is None and check_undef:
+            self.compiler.error(ErrorType.NAME_NOT_DEFINED, name = node.name)
+        # return product
+        return res
+    
+    def visit_Attribute(self, node: Attribute, check_undef = True):
+        value = self.visit(node.object)
+        res = value.attribute_table.lookup(node.attr)
+        # check undef
+        if res is None and check_undef:
+            self.compiler.error(
+                ErrorType.HAS_NO_ATTRIBUTE,
+                value_type = value.type.name, attr = node.attr,
+            )
+        # return product
+        return res
+    
+    def visit_RawScore(self, node: RawScore, check_undef = True):
+        # a valid raw score always exists; `check_undef` is ommitted
+        objective = self.visit(node.objective)
+        selector = self.visit(node.selector)
+        if not isinstance(objective, String):
+            self.compiler.error(
+                ErrorType.INVALID_RAWSCORE_OBJECTIVE, got = objective.type.name
+            )
+        if not isinstance(selector, String):
+            self.compiler.error(
+                ErrorType.INVALID_RAWSCORE_SELECTOR, got = selector.type.name
+            )
+        return IntVar(
+            objective.value, selector.value,
+            compiler = self.compiler, with_quote = False
+        )
+
+    # operators
+    
+    def visit_UnaryOp(self, node: UnaryOp):
+        operand = self.visit(node.operand)
+        if node.operator is Operator.positive:
+            return + operand
+        elif node.operator is Operator.negative:
+            return - operand
+        elif node.operator is Operator.not_:
+            return operand.not_()
+        raise TypeError
+    
+    def visit_BinOp(self, node: BinOp):
+        left, right = self.visit(node.left), self.visit(node.right)
+        if node.operator is Operator.add:
+            return left + right
+        elif node.operator is Operator.minus:
+            return left - right
+        elif node.operator is Operator.multiply:
+            return left * right
+        elif node.operator is Operator.divide:
+            return left // right
+        elif node.operator is Operator.mod:
+            return left % right
+        raise TypeError
+    
+    def visit_CompareOp(self, node: CompareOp):
+        compares = [] # BoolCompare objects that are generated
+        left, right = None, self.visit(node.left)
+        # split `e0 o1 e1 o2 e2 ... o(n) e(n)` into
+        # `e0 o1 e1 and ... and e(n-1) o(n) e(n)`
+        for operand, operator in zip(node.operands, node.operators):
+            left, right = right, self.visit(operand)
+            compares.append(new_compare(
+                left, operator, right, compiler = self.compiler
+            ))
+        return new_and_group(compares, compiler = self.compiler)
+    
+    def visit_BoolOp(self, node: BoolOp):
+        operands = [self.visit(operand) for operand in node.operands]
+        if node.operator is Operator.and_:
+            return new_and_group(operands, compiler = self.compiler)
+        elif node.operator is Operator.or_:
+            return new_or_expression(operands, compiler = self.compiler)
+        raise TypeError
+    
+    # call
+
+    def visit_Call(self, node: Call) -> CallResult:
+        # find called function
+        func = self.visit(node.func)
+        # process given args and keywords
+        args, keywords = [], {}
+        for value in node.args:
+            args.append(self.visit(value))
+        for arg, value in node.keywords.items():
+            keywords[arg] = self.visit(value)
+        # call it
+        return func.call(args, keywords)

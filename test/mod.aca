@@ -1,0 +1,4 @@
+# Test companion of module.aca
+
+def test(x: int) -> bool:
+    result x >= 0

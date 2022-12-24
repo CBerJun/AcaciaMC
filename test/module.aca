@@ -1,0 +1,22 @@
+# Test file for modules in Acacia
+
+import math # builtin module
+import .mod # relative module
+x = math.randintc(1, 10) # Random integer between 1 ~ 10
+y = math.powc(x, y = 4) # x to the power of 4
+# Maximum value between `x` and `y `(it accepts 1 or more arguments)
+# `math.min` also exists
+x = math.max(x, y)
+# Call the `test` function in module `mod`
+b = mod.test(x)
+
+import print # Also a builtin one, for output and string formatting
+fs1 -> print.format("ab%1cd%%%{a}%x%{0}", x, b, a=1)
+# Usage of % escape is similar to this in Python
+print.tell(fs1)
+fs2 -> print.format("an%0", x)
+s -> "some string"
+print.tell(fs1 + s + fs2, "@p")
+print.title(fs2)
+print.title(s, target="@p", mode=print.ACTIONBAR, stay_time=100)
+print.title_clear("@p")

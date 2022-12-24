@@ -1,0 +1,11 @@
+# Formatting in commands
+
+player -> "@p[tag=player]"
+
+/scoreboard players add ${player} score 1
+/tp ${player} 0 0 0
+/*
+say
+${"this player: " + player}
+won this game!
+*/

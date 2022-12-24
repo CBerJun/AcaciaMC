@@ -1,0 +1,123 @@
+#*
+ * General test file for Acacia
+ * This file gives you a brief picture of Acacia,
+ * while itself is a legal Acacia program.
+ *
+ * Compile this with:
+ *   cd path/to/acacia
+ *   python3 main.py -d test/brief_intro.aca
+ * "-d" is to show the debugging comments in output files
+ * Any Python 3 environment could interpret this, since Acacia
+ * does not require any third-party modules.
+ *#
+
+# Fancy number & Constant folding
+# This `+` and `and` operator should be calculated during compile time
+x = 0XF2e + 0b11
+y = True and False
+
+# Macro defining (aka. Binding)
+scoreboard -> "scb"
+# The following occurances of `scoreboard` are replaced with `"scb"`
+player -> "@a[tag=player]"
+
+# Accessing scoreboards
+# "|" selector ":" objective "|" is referring to selector's score on objective
+x = |"@p": "score"| + 10
+|"CBerJun": scoreboard| = 3
+x = |player: "data"|
+
+# Fancy operators
+i2 = (x % -2) * (x + 3)
+
+# Accessing Raw Command
+/say Hello, world!
+# Using macros with commands
+/tp ${player} 11 45 14
+/scoreboard players add ${player} ${scoreboard} 10
+/*
+tellraw @a {"rawtext":[
+    {"text": "Hello "},
+    {"text": "world!"}
+]}
+*/
+
+# Line continuation using backslash
+x = \
+    10 + int(y)
+    # convert bool to int, also referring to the builtin integer type
+
+# Great builtin modules
+# The builtin modules are actually seperated from the compiler itself,
+# which means: everyone can create their own Acacia module!
+# These builtin modules are written in Python at acaciamc/modules
+import print
+# Tell every players "Hello world!"
+print.tell("Hello world!", "@a")
+# Show title "Chapter I" on the nearest player's screen, for 10 seconds
+print.title("Chapter I", "@p", stay_time=200)
+# Show everyone the value of `x` in the form of "Value of X: ..." above actionbar
+print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
+# Another builtin module is `math`. See test/module.aca
+# Not only these modules written in Python are supported, Acacia code
+# can be imported by other Acacia programs. See test/module.aca
+
+# Exported interface
+# These interfaces are exported for later use in Minecraft
+interface a:
+    # local variables are unreachable outside scope
+    local = 20 < x <= 100 and (i2 > 4 or x <= 5)
+    if local and (8 > x + 1 > 5):
+        x = 2
+# Now we can use the `a` interface in Minecraft through /function
+# command (when using default compile options, it is stored at
+# acacia/interface/a.mcfunction)
+# A useless interface is automatically deleted
+interface b:
+    if False:
+        x = 3
+
+# Function definition
+# Type of argument or its default value must be specified
+def max(a: int, b = int.MAX) -> int:
+                    # int.MAX is referring to 2147483647
+    #* Return the larger one between a and b *#
+    if a >= b:
+        result a
+        # Unlike "return" in modern languages like Python,
+        # result statements do not stop functions!
+    else:
+        result b
+
+def is_larger(a: int, b: int) -> bool:
+    #* Return whether a is larger than b *#
+    result a > b
+
+if not is_larger(x, 4):
+    x = 2
+# Comments and empty lines does not affect parsing an indented block
+    i2 = 1 + max(x, i2)
+# This Elif statement is optimized (1 < 10 is always True)
+elif 1 < 10:
+    x = 100
+else:
+    pass # Empty block
+
+# Using loops
+# Using loops, however, is difficult in Minecraft, since normal code
+# can be done within 1 tick, but loops take time.
+# I'am trying to figure out a better way to deal with loops
+# Acacia uses keyword `loop` to "define" loop objects
+loop l(i = 0):
+    i += 1
+    print.tell(print.format("%0", i))
+    stopif i >= 10
+# The "argument" shows the variables that changes during loop.
+# In this case, `i` changes during loop. The `stopif` keyword specifies
+# whether to stop loop after current execution.
+# Similar to result statements in function, stopif statements do NOT
+# stop the loop immediately after the statement is reached.
+# Instead, the loop would stop after the remaining code were all executed
+
+# That's it.
+# Enjoy this project.

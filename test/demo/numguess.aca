@@ -1,0 +1,61 @@
+#*
+  用Acacia制作的猜数字~
+  CBerJun 2022.12.16
+*#
+
+# 导入内置的Py拓展模块
+import print
+import math
+
+MAX_ANSWER -> 999 # 尾数需要是9
+answer = 0
+guess = 0
+TAG -> "num_guess" # 使用的标签
+PLAYER -> "@p[tag=" + TAG + "]"
+
+interface input:
+    # 输入1位
+    # 将|"input":"numguess"|设为输入再使用
+    if guess <= MAX_ANSWER / 10:
+        guess *= 10
+        guess += |"input":"numguess"|
+
+interface delete:
+    # 删除1位
+    guess /= 10
+
+loop show_guess():
+    # 为玩家展示当前猜测的数值
+    print.title( \
+        print.format("当前猜测: %0", guess), \
+        PLAYER, print.ACTIONBAR \
+    )
+
+interface commit:
+    # 提交答案
+    if guess == answer:
+        print.title("你获胜了!", PLAYER)
+        print.title( \
+            print.format("答案是%0", answer), \
+            PLAYER, print.SUBTITLE \
+        )
+        /tag ${PLAYER} remove ${TAG}
+        show_guess.stop()
+    elif guess > answer:
+        print.title("猜大了哦", PLAYER)
+    else:
+        print.title("猜小了哦", PLAYER)
+
+interface start:
+    # 开始游戏
+    ## 数值重设
+    answer = math.randintc(1, MAX_ANSWER)
+    guess = 0
+    ## 交互
+    /tag @p add ${TAG}
+    print.title("游戏开始!", PLAYER)
+    print.title( \
+        print.format("猜1个1-%0以内的数字~", MAX_ANSWER), \
+        PLAYER, print.SUBTITLE \
+    )
+    show_guess.start()

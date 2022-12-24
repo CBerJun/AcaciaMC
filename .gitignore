@@ -1,0 +1,4 @@
+.vscode
+*.acaout
+__pycache__
+TODO.txt
