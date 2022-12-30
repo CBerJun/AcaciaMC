@@ -92,9 +92,6 @@ def _max(func: BinaryFunction):
         res.write('scoreboard players operation {this} > %s' % var)
     return res
 
-# TODO add function `min` and `max`
-# TODO add function `pow(int, int) -> loop`
-
 def acacia_build(compiler):
     return {
         'randintc': BinaryFunction(_randintc, compiler),
