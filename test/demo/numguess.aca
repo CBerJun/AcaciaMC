@@ -53,9 +53,9 @@ interface start:
     answer = math.randintc(1, MAX_ANSWER)
     guess = 0
     /tag @p add ${TAG}
-    print.title("游戏开始!", PLAYER)
+    print.title("Guess the Number", PLAYER)
     print.title( \
-        print.format("猜1个1-%0以内的数字~", MAX_ANSWER), \
+        print.format("Guess a number between 1~%0", MAX_ANSWER), \
         PLAYER, print.SUBTITLE \
     )
     show_guess.start()
