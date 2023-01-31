@@ -316,16 +316,16 @@ class Parser:
     ## Statement generator
 
     def if_stmt(self, origin_indent):
-        # if_statement := IF expr COLON statement<indented>+
-        #   (ELIF expr COLON statement<indented>+)*
-        #   (ELSE COLON statement<indented>+)?
+        # if_statement := IF expr COLON statement_block
+        #   (ELIF expr COLON statement_block)*
+        #   (ELSE COLON statement_block)?
         indent = origin_indent + Config.indent
         pos = self.current_pos
         IF_EXTRA = (TokenType.elif_, TokenType.else_)
         def _if_extra() -> list:
             # if statement is defined recursively, so a recursion is needed
-            # if_extra := (ELIF expr COLON statement<indented>+ if_extra?)
-            #   | (ELSE COLON statement<indented>+)
+            # if_extra := (ELIF expr COLON statement_block if_extra?)
+            #   | (ELSE COLON statement_block)
             # return list of statements
             if self.current_token.type is TokenType.else_:
                 self.eat()
@@ -346,7 +346,7 @@ class Parser:
                 self.eat() # eat line_begin
                 else_stmts = _if_extra()
             return [If(condition, stmts, else_stmts, **self.current_pos)]
-        # if_statement := IF expr COLON statement<indented>+ if_extra?
+        # if_statement := IF expr COLON statement_block if_extra?
         self.eat(TokenType.if_)
         condition = self.expr()
         self.eat(TokenType.colon)
@@ -359,6 +359,15 @@ class Parser:
             else_stmts = _if_extra()
         return If(condition, stmts, else_stmts, **pos)
     
+    def while_stmt(self, origin_indent):
+        # while_stmt := WHILE expr COLON statement_block
+        pos = self.current_pos
+        self.eat(TokenType.while_)
+        condition = self.expr()
+        self.eat(TokenType.colon)
+        body = self._block(origin_indent + Config.indent)
+        return While(condition, body, **pos)
+    
     def pass_stmt(self):
         # pass_statement := PASS
         node = Pass(**self.current_pos)
@@ -366,7 +375,7 @@ class Parser:
         return node
     
     def interface_stmt(self, origin_indent):
-        # interface_stmt := INTERFACE IDENTIFIER COLON statement<indented>+
+        # interface_stmt := INTERFACE IDENTIFIER COLON statement_block
         pos = self.current_pos
         self.eat(TokenType.interface)
         name = self.current_token.value
@@ -377,7 +386,7 @@ class Parser:
     
     def def_stmt(self, origin_indent):
         # def_stmt := DEF IDENTIFIER argument_table (ARROW expr)?
-        #   COLON statement<indented>+
+        #   COLON statement_block
         pos = self.current_pos
         self.eat(TokenType.def_)
         name = self.current_token.value
@@ -461,6 +470,8 @@ class Parser:
             return None
         if token_type is TokenType.if_:
             return self.if_stmt(expect_indent)
+        elif token_type is TokenType.while_:
+            return self.while_stmt(expect_indent)
         elif token_type is TokenType.pass_:
             return self.pass_stmt()
         elif token_type is TokenType.interface:

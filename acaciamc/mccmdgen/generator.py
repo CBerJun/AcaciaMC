@@ -1,4 +1,6 @@
 # Minecraft Command Generator of Acacia
+import contextlib
+
 from ..ast import *
 from ..constants import Config
 from ..error import *
@@ -47,7 +49,7 @@ class MCFunctionFile:
             return
         self.write(*comments)
     
-    def extend(self, commands: str):
+    def extend(self, commands):
         # extend commands
         self.commands.extend(commands)
 
@@ -119,6 +121,17 @@ class Generator(ASTVisitor):
                     comment_line
                 )
             )
+    
+    @contextlib.contextmanager
+    def new_mcfunc_file(self, path: str = None):
+        # Create a new mcfunction file
+        f = MCFunctionFile(path)
+        old = self.current_file
+        self.current_file = f
+        yield f
+        if f.has_content():
+            self.compiler.add_file(f)
+        self.current_file = old
 
     # --- VISITORS ---
     
@@ -288,6 +301,46 @@ class Generator(ASTVisitor):
             ))
         # set back old file
         self.current_file = old_file
+    
+    def visit_While(self, node: While):
+        # condition
+        condition = self.visit(node.condition)
+        if not isinstance(condition.type, BuiltinBoolType):
+            self.compiler.error(
+                ErrorType.WRONG_WHILE_CONDITION, got = condition.type.name
+            )
+        # optimization: if condition is always False, ommit
+        if isinstance(condition, BoolLiteral):
+            if condition.value is False:
+                self.write_debug(
+                    'Skipped because the condition always evaluates to False'
+                )
+                return
+            else:
+                self.compiler.error(ErrorType.ENDLESS_WHILE_LOOP)
+        # convert condition to BoolVar
+        dependencies, condition = to_BoolVar(condition)
+        # body
+        with self.new_mcfunc_file() as body_file:
+            self.write_debug('While definition')
+            body_file.write_debug('## Part 1. Body')
+            for stmt in node.body:
+                self.visit(stmt)
+        # trigering the function
+        if body_file.has_content(): # continue when body is not empty
+            def _write_condition(file: MCFunctionFile):
+                file.extend(dependencies)
+                file.write(export_execute_subcommands(
+                    ['if score %s matches 1' % condition],
+                    body_file.call()
+                ))
+            # Keep recursion if condition is True
+            body_file.write_debug('## Part 2. Recursion')
+            _write_condition(body_file)
+            # Only start the function when condition is True
+            _write_condition(self.current_file)
+        else:
+            self.write_debug('No commands generated')
     
     def visit_InterfaceDef(self, node: InterfaceDef):
         # new environment

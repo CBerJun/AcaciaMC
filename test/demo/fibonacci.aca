@@ -1,17 +1,15 @@
 # Output the Fibonacci Sequence
 # 斐波那契数列计算
 # 输出到MAX为止的斐波那契数列
-# IMPORTANT: THIS FILE DOES NOT WORK NOW
 
 import print
 
 MAX -> 114514
 
-loop calculate(a=0, b=1):
+a = 0
+b = 1
+while b <= MAX:
     new_b = a + b
     a = b
     b = new_b
     print.tell(print.format("%0", a))
-    stopif b > MAX
-
-calculate.start()

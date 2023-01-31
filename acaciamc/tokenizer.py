@@ -56,6 +56,7 @@ class TokenType(enum.Enum):
     if_ = 'if'
     elif_ = 'elif'
     else_ = 'else'
+    while_ = 'while'
     pass_ = 'pass'
     and_ = 'and'
     or_ = 'or'

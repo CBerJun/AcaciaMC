@@ -58,8 +58,6 @@ class Compiler:
             '## Usage: Run this Acacia project',
             '## Execute this before using interfaces!!!'
         )
-        ## comment on tick.mcfunction
-        self.file_tick.write_debug('## Executed every ticks for Acacia')
         ## start
         with self._load_generator(main_path) as generator:
             generator.parse()
@@ -98,14 +96,6 @@ class Compiler:
         self._write_mcfunction(self.file_main, f_path)
         for file in self.libs:
             self._write_mcfunction(file, f_path)
-        # write tick.mcfunction accordingly
-        if self.file_tick.has_content():
-            self._write_mcfunction(self.file_tick, f_path)
-            # write tick.json
-            self._write_file(
-                content = '{"values": ["%s/tick"]}' % Config.function_folder,
-                path = os.path.join(path, 'tick.json')
-            )
     
     def error(
         self, error_type: ErrorType, lineno = None, col = None, **kwargs

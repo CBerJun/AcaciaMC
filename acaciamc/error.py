@@ -37,6 +37,9 @@ class ErrorType(enum.Enum):
     BIND_EXISTED_NAME = 'Value of bind target already exists'
     FUNC_NAME_EXISTS = 'Can\'t define functions using an existed name "{name}"'
     WRONG_IF_CONDITION = '"if" conditions must be "bool", not "{got}"'
+    WRONG_WHILE_CONDITION = '"while" conditions must be "bool", not "{got}"'
+    ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
+        'always evaluates to True'
     INVALID_RESULT_TYPE = 'Specified result type "{got}" is not a type'
     INVALID_ARG_TYPE = 'Type "{arg_type}" for argument "{arg}" is not a type'
     ## INVALID_ARG_TYPE: `def f(a: 1)` "1" (int) is not a type

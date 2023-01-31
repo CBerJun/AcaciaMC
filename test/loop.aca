@@ -1,0 +1,7 @@
+# Test loops in Acacia
+import print
+
+x = 10
+while x > 0:
+    print.tell(print.format("x: %0", x))
+    x -= 1
