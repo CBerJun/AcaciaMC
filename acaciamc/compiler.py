@@ -32,7 +32,6 @@ class Compiler:
         self.OPEN_ARGS = open_args
         self.file_init = MCFunctionFile('init') # initialize Acacia
         self.file_main = MCFunctionFile('load')
-        self.file_tick = MCFunctionFile('tick') # tickloop file
         self.libs = [] # list of MCFunctionFiles, store the libraries
         # define `types` dict and generate builtin Types
         # keys:type subclasses of Type

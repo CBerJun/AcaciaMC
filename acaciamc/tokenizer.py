@@ -51,7 +51,6 @@ class TokenType(enum.Enum):
     identifier = 'IDENTIFIER' # value:str = this id
     # keywords
     true = 'True' # must at beginning of keyword part
-    loop = 'loop'
     def_ = 'def'
     interface = 'interface'
     if_ = 'if'
@@ -62,7 +61,6 @@ class TokenType(enum.Enum):
     or_ = 'or'
     not_ = 'not'
     result = 'result'
-    stopif = 'stopif'
     import_ = 'import'
     false = 'False' # must at end of keyword part
 

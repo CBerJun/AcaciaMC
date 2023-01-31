@@ -191,7 +191,7 @@ class ArgumentHandler:
     # a tool to match the arguments against the given pattern
     # this class also creates a VarValue for every args
     # (when calling function, arguments are passed using these vars)
-    # used by AcaciaFunction, Loop
+    # used by AcaciaFunction
     def __init__(self, args, arg_types, arg_defaults, compiler):
         # args, arg_types, arg_defaults: same as these in ast.FunctionDef
         # these arguments decide the pattern of this callable

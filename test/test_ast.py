@@ -103,8 +103,7 @@ definition_test = '''
 interface x:
     pass
 def x(a: int, b=True) -> a:
-    loop x():
-        a + b
+    pass
 '''
 
 if_test = '''if a:

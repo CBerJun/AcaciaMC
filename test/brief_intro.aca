@@ -103,21 +103,7 @@ elif 1 < 10:
 else:
     pass # Empty block
 
-# Using loops
-# Using loops, however, is difficult in Minecraft, since normal code
-# can be done within 1 tick, but loops take time.
-# I'am trying to figure out a better way to deal with loops
-# Acacia uses keyword `loop` to "define" loop objects
-loop l(i = 0):
-    i += 1
-    print.tell(print.format("%0", i))
-    stopif i >= 10
-# The "argument" shows the variables that changes during loop.
-# In this case, `i` changes during loop. The `stopif` keyword specifies
-# whether to stop loop after current execution.
-# Similar to result statements in function, stopif statements do NOT
-# stop the loop immediately after the statement is reached.
-# Instead, the loop would stop after the remaining code were all executed
+
 
 # That's it.
 # Enjoy this project.

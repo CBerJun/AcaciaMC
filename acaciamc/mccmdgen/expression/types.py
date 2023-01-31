@@ -129,9 +129,6 @@ class BuiltinNoneType(Type):
 class BuiltinStringType(Type):
     name = 'str'
 
-class BuiltinLoopType(Type):
-    name = 'looptype'
-
 class BuiltinModuleType(Type):
     name = 'module'
 
@@ -145,7 +142,7 @@ from .none import NoneVar
 BUILTIN_TYPES = (
     BuiltinTypeType, BuiltinIntType, BuiltinBoolType,
     BuiltinFunctionType, BuiltinNoneType, BuiltinStringType,
-    BuiltinLoopType, BuiltinModuleType
+    BuiltinModuleType
 )
 
 __all__ = [

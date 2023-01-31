@@ -390,18 +390,6 @@ class Parser:
         self.eat(TokenType.colon)
         stmts = self._block(origin_indent + Config.indent)
         return FuncDef(name, arg_table, stmts, returns, **pos)
-
-    def loop_stmt(self, origin_indent):
-        # loop_stmt := LOOP DEF IDENTIFIER argument_table
-        #   COLON statement<indented>+
-        pos = self.current_pos
-        self.eat(TokenType.loop)
-        name = self.current_token.value
-        self.eat(TokenType.identifier)
-        arg_table = self.argument_table()
-        self.eat(TokenType.colon)
-        stmts = self._block(origin_indent + Config.indent)
-        return LoopDef(name, arg_table, stmts, **pos)
     
     def command_stmt(self):
         # command_stmt := COMMAND
@@ -425,12 +413,6 @@ class Parser:
         pos = self.current_pos
         self.eat(TokenType.result)
         return Result(self.expr(), **pos)
-    
-    def stopif_stmt(self):
-        # stopif_stmt := STOPIF expr
-        pos = self.current_pos
-        self.eat(TokenType.stopif)
-        return StopIf(self.expr(), **pos)
     
     def import_statement(self):
         # import_statement := IMPORT POINT* IDENTIFIER (POINT IDENTIFIER)*
@@ -458,8 +440,7 @@ class Parser:
         #     (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
         #     TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
         #   )) | if_stmt | pass_stmt | interface_stmt | def_stmt |
-        #   loop_stmt | command_stmt | result_stmt | stopif_stmt |
-        #   import_stmt
+        #   command_stmt | result_stmt | import_stmt
         # )
         # expect_indent:int what size of indent block should be
         # this function may return None to show that file ends
@@ -486,14 +467,10 @@ class Parser:
             return self.interface_stmt(expect_indent)
         elif token_type is TokenType.def_:
             return self.def_stmt(expect_indent)
-        elif token_type is TokenType.loop:
-            return self.loop_stmt(expect_indent)
         elif token_type is TokenType.command:
             return self.command_stmt()
         elif token_type is TokenType.result:
             return self.result_stmt()
-        elif token_type is TokenType.stopif:
-            return self.stopif_stmt()
         elif token_type is TokenType.import_:
             return self.import_statement()
         

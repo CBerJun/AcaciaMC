@@ -36,9 +36,7 @@ class ErrorType(enum.Enum):
     UNASSIGNABLE = 'The target is unassignable'
     BIND_EXISTED_NAME = 'Value of bind target already exists'
     FUNC_NAME_EXISTS = 'Can\'t define functions using an existed name "{name}"'
-    LOOP_NAME_EXISTS = 'Can\'t define loops using an existed name "{name}"'
     WRONG_IF_CONDITION = '"if" conditions must be "bool", not "{got}"'
-    WRONG_STOPIF_EXPR = '"stopif" expressions must be "bool", not "{got}"'
     INVALID_RESULT_TYPE = 'Specified result type "{got}" is not a type'
     INVALID_ARG_TYPE = 'Type "{arg_type}" for argument "{arg}" is not a type'
     ## INVALID_ARG_TYPE: `def f(a: 1)` "1" (int) is not a type
@@ -49,7 +47,6 @@ class ErrorType(enum.Enum):
     ARG_MULTIPLE_VALUES = 'Multiple values for argument "{arg}"'
     MISSING_ARG = 'Required argument "{arg}" is missed'
     RESULT_OUT_OF_SCOPE = 'Found "result" statement out of function'
-    STOPIF_OUT_OF_SCOPE = 'Found "stopif" statement out of loop'
     TOO_MANY_ARGS = 'Too many positioned arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
     UNCALLABLE = '"{expr_type}" is not callable'

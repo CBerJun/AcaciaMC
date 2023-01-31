@@ -2,6 +2,7 @@
   A number guessing game written in Acacia
   CBerJun 2022.12.16
 *#
+# IMPORTANT: THIS FILE DOES NOT WORK NOW
 
 # import the builtin modules
 import print

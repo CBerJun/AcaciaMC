@@ -90,17 +90,7 @@ class FuncDef(Statement):
         self.arg_table = arg_table
         self.returns = returns
         self.body = body
-        
-class LoopDef(Statement):
-    def __init__(
-        self, name: str, arg_table: ArgumentTable,
-        body: list, lineno, col
-    ):
-        super().__init__(lineno, col)
-        self.name = name
-        self.arg_table = arg_table
-        self.body = body
-        
+
 class InterfaceDef(Statement):
     def __init__(self, name: str, body: list, lineno, col):
         super().__init__(lineno, col)
@@ -120,11 +110,6 @@ class Command(Statement): # raw command
         self.values = values
         
 class Result(Statement): # set func result
-    def __init__(self, value: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.value = value
-        
-class StopIf(Statement): # stop loop if ...
     def __init__(self, value: Expression, lineno, col):
         super().__init__(lineno, col)
         self.value = value

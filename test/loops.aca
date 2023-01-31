@@ -1,6 +1,0 @@
-loop add(i: int):
-    i += 1
-    stopif i >= 10
-
-add.start(i = 4)
-add.stop()

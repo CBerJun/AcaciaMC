@@ -2,7 +2,6 @@
 from .base import *
 from .types import * # import these first!
 from .callable import *
-from .loop import *
 from .module import *
 from .boolean import *
 from .integer import *

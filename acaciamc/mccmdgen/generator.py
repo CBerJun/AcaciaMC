@@ -66,9 +66,6 @@ class Generator(ASTVisitor):
         # result_var: the var that stores result value
         # only exists when passing functions
         self.result_var = None
-        # result_var: the var that stores inverted stopif value
-        # only exists when passing loops
-        self.loop_continue_var = None
         # processing_node is prepared for showing errors
         # to know which AST we are passing (so that lineno and col are known)
         self.processing_node = self.node
@@ -400,48 +397,6 @@ class Generator(ASTVisitor):
         self.current_scope = old_scope
         self.result_var = old_res_var
     
-    def visit_LoopDef(self, node: LoopDef):
-        # make sure name does not exist
-        if self.current_scope.lookup(node.name):
-            self.compiler.error(ErrorType.LOOP_NAME_EXISTS, name = node.name)
-        # parse arg
-        args, types, defaults = self.visit(node.arg_table)
-        # create var
-        loop_var = Loop(
-            args = args,
-            arg_types = types,
-            arg_defaults = defaults,
-            compiler = self.compiler
-        )
-        self.current_scope.create(node.name, loop_var)
-        # read body
-        old_file = self.current_file
-        old_scope = self.current_scope
-        old_continue_var = self.loop_continue_var
-        self.current_file = MCFunctionFile()
-        self.current_scope = ScopedSymbolTable(outer = old_scope)
-        self.loop_continue_var = loop_var.running_var
-        loop_var.arg_handler.register_args_to_scope(self.current_scope)
-        self.write_debug('Loop definition of %s()' % node.name)
-        for stmt in node.body:
-            self.visit(stmt)
-        # add file
-        if self.current_file.has_content():
-            self.compiler.add_file(self.current_file)
-            self.write_debug(
-                'Generated at %s' % self.current_file.path,
-                target = old_file
-            )
-            loop_var.file = self.current_file
-        else:
-            self.write_debug('No commands generated', target = old_file)
-        # add command to tick.mcfunction
-        self.compiler.file_tick.write(loop_var.export_tick())
-        # resume environment
-        self.current_file = old_file
-        self.current_scope = old_scope
-        self.loop_continue_var = old_continue_var
-    
     def visit_Result(self, node: Result):
         # check
         if self.result_var is None:
@@ -456,21 +411,6 @@ class Generator(ASTVisitor):
             )
         # write file
         self.current_file.extend(expr.export(self.result_var))
-    
-    def visit_StopIf(self, node: StopIf):
-        # check
-        if self.loop_continue_var is None:
-            self.compiler.error(ErrorType.STOPIF_OUT_OF_SCOPE)
-        # visit expr and check type
-        expr = self.visit(node.value)
-        if not isinstance(expr.type, BuiltinBoolType):
-            self.compiler.error(
-                ErrorType.WRONG_STOPIF_EXPR, got = expr.type.name
-            )
-        # write file
-        ## self.loop_continue_var stores whether we should continue,
-        ## so we need to invert StopIf.value
-        self.current_file.extend(expr.not_().export(self.loop_continue_var))
     
     def visit_Import(self, node: Import):
         # find files; .py -> BinaryModule; .aca -> AcaciaModule
