@@ -135,9 +135,10 @@ class CommandToken(Token):
         self._dump_text()
 
 class Tokenizer:
-    def __init__(self, src: str):
+    def __init__(self, src: str, file: str):
         # src:str source code
         self.src = src
+        self.FILE = file
         self.current_char = ''
         self.current_lineno = 1
         self.current_col = 0
@@ -155,7 +156,7 @@ class Tokenizer:
         col = self.current_col if col is None else col
         raise Error(
             err_type,
-            lineno = lineno, col = col,
+            lineno = lineno, col = col, file = self.FILE,
             **kwargs
         )
 
@@ -448,7 +449,7 @@ class Tokenizer:
                 self.forward()
             self.forward() # skip "}"
             # create the Tokenizer
-            tokenizer = Tokenizer(expr_str)
+            tokenizer = Tokenizer(expr_str, self.FILE)
             tokenizer.current_lineno = start_ln
             tokenizer.current_col = start_col
             tokenizer.get_next_token() # skip line_begin token

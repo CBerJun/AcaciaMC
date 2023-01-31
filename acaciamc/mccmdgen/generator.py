@@ -265,7 +265,7 @@ class Generator(ASTVisitor):
         condition = self.visit(node.condition)
         if not isinstance(condition.type, BuiltinBoolType):
             self.compiler.error(
-                ErrorType.WRONG_IF_CONDITION, got = condition.type
+                ErrorType.WRONG_IF_CONDITION, got = condition.type.name
             )
         # optimization: if condition is a constant, just run the code
         if isinstance(condition, BoolLiteral):
@@ -276,31 +276,26 @@ class Generator(ASTVisitor):
         dependencies, condition = to_BoolVar(condition)
         self.current_file.extend(dependencies) # add dependencies
         # process body
-        old_file = self.current_file
-        self.current_file = MCFunctionFile()
-        self.write_debug('If body')
-        for stmt in node.body:
-            self.visit(stmt)
-        if self.current_file.has_content():
+        with self.new_mcfunc_file() as body_file:
+            self.write_debug('If body')
+            for stmt in node.body:
+                self.visit(stmt)
+        if body_file.has_content():
             # only add command when some commands ARE generated
-            self.compiler.add_file(self.current_file)
-            old_file.write(export_execute_subcommands(
+            self.current_file.write(export_execute_subcommands(
                 subcmds = ['if score %s matches 1' % condition],
-                main = self.current_file.call()
+                main = body_file.call()
             ))
         # process else_bosy (almost same as above)
-        self.current_file = MCFunctionFile()
-        self.write_debug('Else branch of If')
-        for stmt in node.else_body:
-            self.visit(stmt)
-        if self.current_file.has_content():
-            self.compiler.add_file(self.current_file)
-            old_file.write(export_execute_subcommands(
+        with self.new_mcfunc_file() as else_body_file:
+            self.write_debug('Else branch of If')
+            for stmt in node.else_body:
+                self.visit(stmt)
+        if else_body_file.has_content():
+            self.current_file.write(export_execute_subcommands(
                 subcmds = ['if score %s matches 0' % condition],
-                main = self.current_file.call()
+                main = else_body_file.call()
             ))
-        # set back old file
-        self.current_file = old_file
     
     def visit_While(self, node: While):
         # condition
@@ -344,26 +339,19 @@ class Generator(ASTVisitor):
     
     def visit_InterfaceDef(self, node: InterfaceDef):
         # new environment
-        old_file = self.current_file
         old_scope = self.current_scope
-        self.current_file = MCFunctionFile('interface/%s' % node.name)
         self.current_scope = ScopedSymbolTable(outer = old_scope)
         # body
-        self.write_debug('Interface definition')
-        for stmt in node.body:
-            self.visit(stmt)
+        with self.new_mcfunc_file('interface/%s' % node.name) as body_file:
+            self.write_debug('Interface definition')
+            for stmt in node.body:
+                self.visit(stmt)
         # add lib
-        if self.current_file.has_content():
-            self.compiler.add_file(self.current_file)
-            self.write_debug(
-                'Generated at %s' % self.current_file.path, target = old_file
-            )
+        if body_file.has_content():
+            self.write_debug('Generated at %s' % self.current_file.path)
         else:
-            self.write_debug(
-                'No commands generated', target = old_file
-            )
+            self.write_debug('No commands generated')
         # resume environment
-        self.current_file = old_file
         self.current_scope = old_scope
     
     def visit_ArgumentTable(self, node: ArgumentTable):
@@ -425,28 +413,22 @@ class Generator(ASTVisitor):
         )
         self.current_scope.create(node.name, func_var)
         # read body
-        old_file = self.current_file
         old_scope = self.current_scope
         old_res_var = self.result_var
-        self.current_file = MCFunctionFile()
         self.current_scope = ScopedSymbolTable(outer = old_scope)
         self.result_var = func_var.result_var
         func_var.arg_handler.register_args_to_scope(self.current_scope)
-        self.write_debug('Function definition of %s()' % node.name)
-        for stmt in node.body:
-            self.visit(stmt)
+        with self.new_mcfunc_file() as body_file:
+            self.write_debug('Function definition of %s()' % node.name)
+            for stmt in node.body:
+                self.visit(stmt)
         # add file
-        if self.current_file.has_content():
-            self.compiler.add_file(self.current_file)
-            self.write_debug(
-                'Generated at %s' % self.current_file.path,
-                target = old_file
-            )
-            func_var.file = self.current_file
+        if body_file.has_content():
+            self.write_debug('Generated at %s' % body_file.path)
+            func_var.file = body_file
         else:
-            self.write_debug('No commands generated', target = old_file)
+            self.write_debug('No commands generated')
         # resume environment
-        self.current_file = old_file
         self.current_scope = old_scope
         self.result_var = old_res_var
     

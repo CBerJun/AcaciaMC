@@ -82,7 +82,7 @@ class ASTVisualizer(ASTVisitor):
 
 def test_tokenize(src: str):
     print('===TOKENIZER===')
-    tk = Tokenizer(src)
+    tk = Tokenizer(src, "<unknown>")
     while True:
         token = tk.get_next_token()
         print(token)
@@ -91,7 +91,7 @@ def test_tokenize(src: str):
 
 def test_parser(src: str):
     print('===PARSER===')
-    parser = Parser(Tokenizer(src))
+    parser = Parser(Tokenizer(src, "<unknown>"))
     visualizer = ASTVisualizer(parser.module())
     print(visualizer.get_string())
 

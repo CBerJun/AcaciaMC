@@ -9,6 +9,7 @@ __all__ = ['Parser']
 class Parser:
     def __init__(self, tokenizer: Tokenizer):
         self.tokenizer = tokenizer
+        self.FILE = tokenizer.FILE
         self.current_token = self.tokenizer.get_next_token()
         # next_token: when using method `peek`, next token is reserved here
         self.next_token = None
@@ -25,7 +26,7 @@ class Parser:
         col = self.current_pos['col'] if col is None else col
         raise Error(
             err_type,
-            lineno = lineno, col = col,
+            lineno = lineno, col = col, file = self.FILE
             **kwargs
         )
     

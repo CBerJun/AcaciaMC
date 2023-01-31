@@ -253,7 +253,7 @@ class Compiler:
         self._current_file = path
         self.current_generator = Generator(
             node = Parser(
-                Tokenizer(src)
+                Tokenizer(src, path)
             ).module(),
             main_file = self.file_main,
             compiler = self
