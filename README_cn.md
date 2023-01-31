@@ -26,6 +26,18 @@ def foo(x: int, y = True) -> int:
     pass # 这里写函数体代码
 ```
 
+控制语句:
+```
+# 检测`x`是不是质数
+x = 1147
+mod = 2
+flag = True
+while mod <= x / 2:
+    if x % mod == 0:
+        flag = False
+    mod += 1
+```
+
 内置的模块:
 ```
 import print

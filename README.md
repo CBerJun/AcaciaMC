@@ -21,6 +21,18 @@ a = 10
 b = (10 + 20) * a - 5
 ```
 
+Flow Control Statements:
+```
+# Test if `x` is a prime number
+x = 1147
+mod = 2
+flag = True
+while mod <= x / 2:
+    if x % mod == 0:
+        flag = False
+    mod += 1
+```
+
 Functions:
 ```
 def foo(x: int, y = True) -> int:

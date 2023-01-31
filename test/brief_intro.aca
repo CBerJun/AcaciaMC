@@ -12,25 +12,42 @@
  *#
 
 # Fancy number & Constant folding
-# This `+` and `and` operator should be calculated during compile time
-x = 0XF2e + 0b11
+# Following `+` and `and` operator should be calculated during compile time
+x = 10
+x = 0XF2e + 0b11 # Referring to hexadecimal 3886 and binary 3
 y = True and False
+
+# Fancy operators
+i2 = (x % -2) * (x + 3)
 
 # Macro defining (aka. Binding)
 scoreboard -> "scb"
 # The following occurances of `scoreboard` are replaced with `"scb"`
 player -> "@a[tag=player]"
 
-# Accessing scoreboards
+# Control statements
+## If statement
+if x > 5:
+    x *= 2
+# `x` will be doubled only when it's larger than 5
+## While statement
+sum = 0
+while x > 0:
+    sum += x
+    x -= 1
+# Sum up numbers from 1 to `x`
+# IMPORTANT NOTICE: Loops are implemented through recursion, which runs
+# a lot of commands. Minecraft limits the amount of commands that one
+# function could trigger to 10000. Be careful when using loops.
+
+# Compatible with the original command system
+## Accessing scoreboards
 # "|" selector ":" objective "|" is referring to selector's score on objective
 x = |"@p": "score"| + 10
 |"CBerJun": scoreboard| = 3
 x = |player: "data"|
 
-# Fancy operators
-i2 = (x % -2) * (x + 3)
-
-# Accessing Raw Command
+## Accessing Raw Command
 /say Hello, world!
 # Using macros with commands
 /tp ${player} 11 45 14
@@ -42,12 +59,7 @@ tellraw @a {"rawtext":[
 ]}
 */
 
-# Line continuation using backslash
-x = \
-    10 + int(y)
-    # convert bool to int, also referring to the builtin integer type
-
-# Great builtin modules
+# Great builtin modules!
 # The builtin modules are actually seperated from the compiler itself,
 # which means: everyone can create their own Acacia module!
 # These builtin modules are written in Python at acaciamc/modules
@@ -61,21 +73,6 @@ print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
 # Another builtin module is `math`. See test/module.aca
 # Not only these modules written in Python are supported, Acacia code
 # can be imported by other Acacia programs. See test/module.aca
-
-# Exported interface
-# These interfaces are exported for later use in Minecraft
-interface a:
-    # local variables are unreachable outside scope
-    local = 20 < x <= 100 and (i2 > 4 or x <= 5)
-    if local and (8 > x + 1 > 5):
-        x = 2
-# Now we can use the `a` interface in Minecraft through /function
-# command (when using default compile options, it is stored at
-# acacia/interface/a.mcfunction)
-# A useless interface is automatically deleted
-interface b:
-    if False:
-        x = 3
 
 # Function definition
 # Type of argument or its default value must be specified
@@ -103,7 +100,25 @@ elif 1 < 10:
 else:
     pass # Empty block
 
+# Exported interface
+# These interfaces are exported for later use in Minecraft
+interface a:
+    # local variables are unreachable outside scope
+    local = 20 < x <= 100 and (i2 > 4 or x <= 5)
+    if local and (8 > x + 1 > 5):
+        x = 2
+# Now we can use the `a` interface in Minecraft through /function
+# command (when using default compile options, it is stored at
+# acacia/interface/a.mcfunction)
+# A useless interface is automatically deleted
+interface b:
+    if False:
+        x = 3
 
+# Line continuation using backslash
+x = \
+    10 + int(y)
+    # convert bool to int, also referring to the builtin integer type
 
-# That's it.
-# Enjoy this project.
+# That's all~
+# Enjoy this project :)
