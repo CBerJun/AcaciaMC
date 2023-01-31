@@ -3,10 +3,6 @@ from .base import *
 from .types import *
 from ...error import *
 
-from .integer import IntCallResult
-from .boolean import BoolCallResult
-from .none import NoneCallResult
-
 __all__ = ['AcaciaFunction', 'BinaryFunction']
 
 # There are 2 types of functions:
@@ -63,12 +59,13 @@ class BinaryFunction(AcaciaExpr):
     # will be accepted; if the implementation of function is not satisfied
     # with the args given, it can raise an INVALID_BINARY_FUNC_ARG error
     # Also, the result value is not static -- Any types of result can be
-    # returned, as long as its an BinFuncCallResult
+    # returned.
     def __init__(self, implementation, compiler):
         # implementation: it should handle a call to this function,
-        # and this BinaryFunction object is passed as its first argument
-        # any args in function call is passed to it, and it should return a
-        # BinFuncCallResult object which stands for function result
+        # and this BinaryFunction object is passed as its first argument.
+        # The implementation should then parse the arguments using the
+        # methods in this class (such as `arg_require`). At last, it needs
+        # to give a result which could be any `AcaciaExpr`
         super().__init__(compiler.types[BuiltinFunctionType], compiler)
         self.implementation = implementation
     

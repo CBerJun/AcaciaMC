@@ -111,17 +111,19 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
     #   e.g. str, module, function
     # To define a new type, you need to:
     #  - Define a subclass of `Type` that represents the type
-    #    the `name` (str) attribute must be given to show the name of your type
-    #    please notice not to override the `Type.__init__` directly!
+    #    The `name` (str) attribute must be given to show the name of your type
+    #    please notice not to use `Type.__init__` for initializations!
     #    Use `Type.do_init` instead.
-    #    Remember to use `Compiler.add_type` to register a type
+    #    Remember to use `Compiler.add_type` to register a type.
+    #    Do NOT create instances of any `Type` by yourself, use
+    #    `Compiler.types[<Type class>]` to get `Type` instance
     #  - Define at least one subclass of `AcaciaExpr`, which represents the
     #    objects of this type.
-    #    Every subclasses should check out whether they need to override the
-    #    `export_novalue` method, so please check the default definition and
-    #    comments below.
+    #    Every subclasses should check whether they need to override the
+    #    `export_novalue` method. Make sure to check the default definition and
+    #    comments of this method below.
     #    NOTE a special case is that, `CallResult` has implemented
-    #    this method for you, so it's no necessary to consider this
+    #    this method for you, so it's not necessary to consider this
     #    for CallResults
     # Extra things for "storable" types to implement:
     #  - at least one (usually 1) class that is a subclass of VarValue,
@@ -146,7 +148,7 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
     # --- CONTRIBUTOR GUIDE END ---
     # Here are the methods that have special meanings:
     #  - `call`: When calling an AcaciaExpr, this method is called
-    #  - `_init_class`: When adding attributes/methods about operators,
+    #  - `_init_class`: Used to add attributes/methods about operators,
     #    (before the decorator works) (See `_AcaciaExprMeta`)
     def __init__(self, type, compiler):
         # compiler:Compiler master
@@ -184,11 +186,11 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
         # Here `a + 1` is an ExprStatement, and `IntOpGroup.export_novalue`
         # is called so that compiler knows what commands to generate for this
         # line.
-        # Default: Returns nothing
+        # Default: Generates no command for this `ExprStatement`
         return []
 
 class ArgumentHandler:
-    # a tool to match the arguments against the given pattern
+    # a tool to match the arguments against the given definition
     # this class also creates a VarValue for every args
     # (when calling function, arguments are passed using these vars)
     # used by AcaciaFunction
@@ -217,7 +219,7 @@ class ArgumentHandler:
                 )
     
     def match(self, args: list, keywords: dict) -> dict:
-        # match the pattern with these given args
+        # match the definition with these given args
         # args:iterable[AcaciaExpr] Positioned args
         # keywords:dict{str<arg>:AcaciaExpr} Keyword args
         # return a dict, keys are argument names,
@@ -283,6 +285,7 @@ class VarValue(AcaciaExpr):
     # VarValues are also used to hold temporary variables
     # e.g. 1 + 2 -> IntLiteral(3) -> Unassignable
     # e.g. a -> IntVar("acacia", "acacia3") -> Assignable
+    # e.g. |"x": "y"| -> IntVar("y", "x") -> Assignable
     # e.g. bool -> Type -> Unassignable
     pass
 
@@ -299,12 +302,6 @@ class CallResult(AcaciaExpr):
         super().__init__(type, compiler)
         self.dependencies = dependencies
         self.result_var = result_var
-    
-    @classmethod
-    def _build_operators(cls):
-        # This is called by metaclass
-        # It should initialize operator classes
-        pass
     
     def export(self, var: VarValue):
         return self.dependencies + self.result_var.export(var)

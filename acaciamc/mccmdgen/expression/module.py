@@ -24,8 +24,8 @@ class BinaryModule(AcaciaExpr):
         # Call `acacia_build`
         # binary modules should define a callable object named `acacia_build`,
         # which accepts 1 argument `compiler` and should return a dict:
-        # keys are str, the attributes to export
-        # values are AcaciaExpr, the values of attributes
+        # keys are str (showing the attributes to export) and
+        # values are AcaciaExpr (showing the values of attributes)
         if not hasattr(module, 'acacia_build'):
             self._module_error('can\'t find acacia_build')
         if not hasattr(module.acacia_build, '__call__'):

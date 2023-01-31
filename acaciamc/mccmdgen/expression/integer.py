@@ -23,7 +23,6 @@ def _to_mcop(operator: str):
     raise ValueError
 
 # Four types of values are used to represent an Acacia int object:
-# (are passed between Generator.visit_<Expression> methods)
 # - IntLiteral: a literal integer like `3` (for const folding)
 # - IntVar: describe a value stored in a Minecraft score
 #   which is usually an Acacia variable
@@ -47,10 +46,7 @@ def _to_mcop(operator: str):
 # other's method `other.__rxxx__` is used
 
 class IntLiteral(AcaciaExpr):
-    # Literals is also an instant product during generation of expressions
-    # They store a literal. When adding Literal to Literal,
-    # we still get Literal; while adding Literal to Expr or VarValue
-    # always gives us an Expr (level up)
+    # Represents a literal integer.
     # NOTE the purpose of these class is to implement an optimization called
     # "constant folding" which calculate the value of constant expressions
     # while compiling (e.g. compiler can convert 2 + 3 to 5)
@@ -269,7 +265,7 @@ class IntCallResult(CallResult):
                 return res
             return _wrapped
         for name in (
-            # __pos__ can be optimizaed so it is not here
+            # __pos__ can be optimized so it is not here
             '__neg__',
             '__add__', '__sub__', '__mul__', '__floordiv__', '__mod__',
             '__radd__', '__rsub__', '__rmul__', '__rfloordiv__', '__rmod__'
@@ -350,9 +346,8 @@ class IntOpGroup(AcaciaExpr):
         target.extend(commands)
     
     def deepcopy(self):
-        # move data of self to another Expr
+        # deepcopy this `IntOpGroup`
         # NOTE some of the attributes are not deepcopied
-        # NOTE __init__ of subclass must accept param like below
         res = IntOpGroup(init = None, compiler = self.compiler)
         res.main = deepcopy(self.main)
         res.libs = deepcopy(self.libs)
