@@ -135,5 +135,5 @@ try:
     }).output(out_path)
 except CompileError as err:
     error(str(err))
-'''except Exception as err:
-    error('unexpected error when compiling: %s' % err)'''
+except Exception as err:
+    error('unexpected error when compiling: %s' % err)
