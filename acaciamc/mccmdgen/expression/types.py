@@ -78,11 +78,11 @@ class BuiltinIntType(Type):
             # `int(x: int)` -> x
             # `int(x: bool)` -> 0 if x.value is False else 1
             arg = func.arg_optional(
-                'x', None, (BuiltinIntType, BuiltinBoolType)
+                'x',
+                default = IntLiteral(0, self.compiler),
+                type_ = (BuiltinIntType, BuiltinBoolType)
             )
-            if arg is None:
-                return IntLiteral(0, self.compiler)
-            elif isinstance(arg.type, BuiltinIntType):
+            if isinstance(arg.type, BuiltinIntType):
                 return arg
             elif isinstance(arg.type, BuiltinBoolType):
                 # True -> 1; False -> 0
