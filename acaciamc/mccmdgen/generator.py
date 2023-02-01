@@ -227,7 +227,7 @@ class Generator(ASTVisitor):
         # analyze target (should be undefined)
         target = self.visit(node.target, check_undef = False)
         if target is not None:
-            self.compiler.error(ErrorType.BIND_EXISTED_NAME)
+            self.compiler.error(ErrorType.BIND_TARGET_EXISTS)
         # analyze value
         value = self.visit(node.value)
         # register to symbol table

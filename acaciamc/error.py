@@ -19,8 +19,8 @@ class ErrorType(enum.Enum):
     DONT_KNOW_ARG_TYPE = 'Type of argument or its default value ' \
         'must be specified: "{arg}"'
     DUPLICATE_ARG_DEF = 'Duplicate argument "{arg}" in function definition'
-    POSITIONED_ARG_AFTER_KEYWORD = 'Positioned argument after keyword'
-    INVALID_ASSIGN_TARGET = 'Invalid assign target'
+    POSITIONED_ARG_AFTER_KEYWORD = 'Positional argument after keyword'
+    INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_BIND_TARGET = 'Invalid bind target'
     # Command Generator
     NAME_NOT_DEFINED = 'Name "{name}" is not defined'
@@ -34,8 +34,9 @@ class ErrorType(enum.Enum):
     WRONG_ARG_TYPE = 'Expect "{expect}" type for argument "{arg}", got "{got}"'
     WRONG_RESULT_TYPE = 'Expect "{expect}" type as result, got "{got}"'
     UNASSIGNABLE = 'The target is unassignable'
-    BIND_EXISTED_NAME = 'Value of bind target already exists'
-    FUNC_NAME_EXISTS = 'Can\'t define functions using an existed name "{name}"'
+    BIND_TARGET_EXISTS = 'Target to bind already has a value'
+    FUNC_NAME_EXISTS = 'Can\'t define functions using an existing name ' \
+        '"{name}"'
     WRONG_IF_CONDITION = '"if" conditions must be "bool", not "{got}"'
     WRONG_WHILE_CONDITION = '"while" conditions must be "bool", not "{got}"'
     ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
@@ -48,9 +49,9 @@ class ErrorType(enum.Enum):
         '"{arg}" does not match type of default value "{default_type}"'
     # ARG_MULTIPLE_VALUES is used by both Generator and Parser
     ARG_MULTIPLE_VALUES = 'Multiple values for argument "{arg}"'
-    MISSING_ARG = 'Required argument "{arg}" is missed'
+    MISSING_ARG = 'Required argument "{arg}" is missing'
     RESULT_OUT_OF_SCOPE = 'Found "result" statement out of function'
-    TOO_MANY_ARGS = 'Too many positioned arguments'
+    TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
     UNCALLABLE = '"{expr_type}" is not callable'
     INVALID_CMD_FORMATTING = 'Invalid formatted expression of type ' \
