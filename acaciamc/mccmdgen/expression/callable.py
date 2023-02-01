@@ -91,10 +91,10 @@ class BinaryFunction(AcaciaExpr):
         elif not issubclass(type_, Type):
             raise TypeError'''
         if not isinstance(value.type, type_):
-            if issubclass(type_, Type):
+            if isinstance(type_, type) and issubclass(type_, Type):
                 expect = type_.name
             else:
-                expect = ', '.join(type_)
+                expect = ', '.join(map(lambda t: t.name, type_))
             self.compiler.error(
                 ErrorType.WRONG_ARG_TYPE, arg = arg,
                 expect = expect, got = value.type.name

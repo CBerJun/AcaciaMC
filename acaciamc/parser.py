@@ -26,7 +26,7 @@ class Parser:
         col = self.current_pos['col'] if col is None else col
         raise Error(
             err_type,
-            lineno = lineno, col = col, file = self.FILE
+            lineno = lineno, col = col, file = self.FILE,
             **kwargs
         )
     
