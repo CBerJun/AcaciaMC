@@ -5,7 +5,7 @@ __all__ = ['ErrorType', 'Error']
 class ErrorType(enum.Enum):
     # Tokenizer
     INVALID_CHAR = 'Invalid character: "{char}"'
-    INT_OVERFLOW = 'Integer overflows: {value}'
+    INT_OVERFLOW = 'Integer overflows'
     UNCLOSED_LONG_COMMENT = 'Unclosed multi-line comment'
     UNCLOSED_LONG_COMMAND = 'Unclosed multi-line command'
     UNCLOSED_QUOTE = 'Unclosed double quote'
@@ -63,6 +63,7 @@ class ErrorType(enum.Enum):
     CANT_CREATE_INSTANCE = 'Can\'t create instance of "{type_}" type'
     INITIALIZER_RESULT = '{type_}.__init__ initializer should not produce ' \
         'result'
+    CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{name}"'
