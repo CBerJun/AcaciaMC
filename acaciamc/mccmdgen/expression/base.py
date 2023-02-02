@@ -108,7 +108,7 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
     # - The "unstorable" types. These types of expression cannot be stored
     #   in Minecraft, and is only remembered by the compiler. Therefore,
     #   their values can't be changed.
-    #   e.g. str, module, function
+    #   e.g. str, nonetype, module, function
     # To define a new type, you need to:
     #  - Define a subclass of `Type` that represents the type
     #    The `name` (str) attribute must be given to show the name of your type
@@ -280,8 +280,8 @@ class ArgumentHandler:
 
 class VarValue(AcaciaExpr):
     # VarValues are special AcaciaExprs that can be assigned
-    # So far, only 3 types have their VarValue: int, bool and nonetype,
-    # meaning users can create new variables of int or bool type
+    # So far, only 2 types have their VarValue: int and bool ("storable"
+    # types), meaning users can create new variables of int or bool type
     # VarValues are also used to hold temporary variables
     # e.g. 1 + 2 -> IntLiteral(3) -> Unassignable
     # e.g. a -> IntVar("acacia", "acacia3") -> Assignable

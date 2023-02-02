@@ -2,20 +2,18 @@
 from .base import *
 from .types import BuiltinNoneType
 
-__all__ = ['NoneVar', 'NoneCallResult']
+__all__ = ['None_']
 
-# None is used when function returns nothing
-class NoneVar(VarValue):
-    def __init__(self, compiler):
+# `None_` is a placeholder mainly used for binary functions.
+# When a binary function does not give a result expression, but it really
+# wants to write commands to file, `None_` accept these commands.
+# Also, if a binary function allows the user to ommit some arguments,
+# it can set `None_` to the default value of these args.
+
+class None_(AcaciaExpr):
+    def __init__(self, dependencies: list, compiler):
         super().__init__(compiler.types[BuiltinNoneType], compiler)
+        self.dependencies = dependencies
     
-    def export(self, var):
-        # This does nothing but won't raise NotImplementedError
-        return []
-
-class NoneCallResult(CallResult):
-    def __init__(self, dependencies: list, result_var: NoneVar, compiler):
-        super().__init__(
-            dependencies, result_var,
-            compiler.types[BuiltinNoneType], compiler
-        )
+    def export_novalue(self):
+        return list(self.dependencies)

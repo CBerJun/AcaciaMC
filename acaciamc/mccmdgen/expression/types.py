@@ -123,9 +123,6 @@ class BuiltinFunctionType(Type):
 class BuiltinNoneType(Type):
     name = 'nonetype'
 
-    def new_var(self, tmp = False):
-        return NoneVar(self.compiler)
-
 class BuiltinStringType(Type):
     name = 'str'
 
@@ -137,7 +134,6 @@ class BuiltinModuleType(Type):
 from .callable import BinaryFunction
 from .boolean import BoolVar, BoolLiteral, to_BoolVar
 from .integer import IntCallResult, IntVar, IntLiteral
-from .none import NoneVar
 
 BUILTIN_TYPES = (
     BuiltinTypeType, BuiltinIntType, BuiltinBoolType,

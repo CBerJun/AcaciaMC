@@ -87,22 +87,25 @@ class Parser:
     ## Expression generator
 
     def literal(self):
-        # read a Literal (literal int, bool, str)
+        # read a Literal (literal int, bool, str and None)
         if self.current_token.type in (TokenType.integer, TokenType.string):
             node = Literal(
                 self.current_token.value,
                 **self.current_pos
             )
             self.eat()
-            return node
         elif self.current_token.type in (TokenType.true, TokenType.false):
             node = Literal(
                 self.current_token.type is TokenType.true,
                 **self.current_pos
             )
             self.eat()
-            return node
-        self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
+        elif self.current_token.type is TokenType.none:
+            node = Literal(None, **self.current_pos)
+            self.eat()
+        else:
+            self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
+        return node
     
     def identifier(self):
         # identifier := IDENTIFIER
@@ -131,7 +134,7 @@ class Parser:
         # )*
         # Call, Attribute, Constant, Identifier, other expressions with braces
         if self.current_token.type in (
-            TokenType.integer, TokenType.true,
+            TokenType.integer, TokenType.true, TokenType.none,
             TokenType.false, TokenType.string
         ):
             node = self.literal()

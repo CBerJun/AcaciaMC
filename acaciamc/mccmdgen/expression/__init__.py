@@ -10,6 +10,5 @@ from .none import *
 
 BUILTIN_CALLRESULTS = {
     BuiltinIntType: IntCallResult,
-    BuiltinBoolType: BoolCallResult,
-    BuiltinNoneType: NoneCallResult
+    BuiltinBoolType: BoolCallResult
 }

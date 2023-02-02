@@ -208,7 +208,7 @@ def _tell(func: BinaryFunction):
     cmds.append('tellraw %s %s' % (
         arg_target.value, arg_text.export_json_str()
     ))
-    return NoneCallResult(cmds, NoneVar(func.compiler), func.compiler)
+    return None_(cmds, func.compiler)
 
 # title modes
 # NOTE these are just random numbers...
@@ -280,7 +280,7 @@ def _title(func: BinaryFunction):
         # only reset when config is not the default one
         res.append('titleraw %s reset' % target)
     ## return
-    return NoneCallResult(res, NoneVar(func.compiler), func.compiler)
+    return None_(res, func.compiler)
 
 def _title_clear(func: BinaryFunction):
     # title_clear(target: str = "@a")
@@ -290,9 +290,8 @@ def _title_clear(func: BinaryFunction):
     )
     func.assert_no_arg()
     # Write
-    return NoneCallResult(
-        ['titleraw %s clear' % arg_target.value],
-        NoneVar(func.compiler), func.compiler
+    return None_(
+        ['titleraw %s clear' % arg_target.value], func.compiler
     )
 
 # builder
