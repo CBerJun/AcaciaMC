@@ -2,11 +2,11 @@
   A number guessing game written in Acacia
   CBerJun 2022.12.16
 *#
-# IMPORTANT: THIS FILE DOES NOT WORK NOW
 
 # import the builtin modules
 import print
 import math
+import schedule
 
 MAX_ANSWER -> 999 # the last digit should be 9
 answer = 0
@@ -16,23 +16,16 @@ PLAYER -> "@p[tag=" + TAG + "]"
 
 interface input:
     # Input 1 digit
-    # Set the value of "input" on scoreboard "numguess" to the number user
-    # pressed.
+    # Set the value of "input" on scoreboard "numguess" to the
+    # number user pressed.
     if guess <= MAX_ANSWER / 10:
         # Make sure the input value is not larger than MAX_ANSWER
         guess *= 10
-        guess += |"input":"numguess"|
+        guess += |"input": "numguess"|
 
 interface delete:
     # Delete 1 digit
     guess /= 10
-
-loop show_guess():
-    # Show users the number they input
-    print.title( \
-        print.format("Your guess: %0", guess), \
-        PLAYER, print.ACTIONBAR \
-    )
 
 interface commit:
     # Commit user's guess
@@ -43,7 +36,6 @@ interface commit:
             PLAYER, print.SUBTITLE \
         )
         /tag ${PLAYER} remove ${TAG}
-        show_guess.stop()
     elif guess > answer:
         print.title("Too large", PLAYER)
     else:
@@ -59,4 +51,11 @@ interface start:
         print.format("Guess a number between 1~%0", MAX_ANSWER), \
         PLAYER, print.SUBTITLE \
     )
-    show_guess.start()
+
+def show_guess():
+    # Show users the number they input
+    print.title( \
+        print.format("Your guess: %0", guess), \
+        PLAYER, print.ACTIONBAR \
+    )
+schedule.register_loop(show_guess)
