@@ -88,21 +88,20 @@ class Parser:
 
     def literal(self):
         # read a Literal (literal int, bool, str)
-        if self.current_token.type in (TokenType.integer, TokenType.string):
-            node = Literal(
-                self.current_token.value,
-                **self.current_pos
-            )
+        tok_type = self.current_token.type
+        value = NotImplemented
+        if tok_type in (TokenType.integer, TokenType.string):
+            value = self.current_token.value
             self.eat()
-            return node
-        elif self.current_token.type in (TokenType.true, TokenType.false):
-            node = Literal(
-                self.current_token.type is TokenType.true,
-                **self.current_pos
-            )
+        elif tok_type in (TokenType.true, TokenType.false):
+            value = tok_type is TokenType.true
             self.eat()
-            return node
-        self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
+        elif tok_type is TokenType.none:
+            value = None
+            self.eat()
+        if value is NotImplemented:
+            self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
+        return Literal(value, **self.current_pos)
     
     def identifier(self):
         # identifier := IDENTIFIER
@@ -132,7 +131,7 @@ class Parser:
         # Call, Attribute, Constant, Identifier, other expressions with braces
         if self.current_token.type in (
             TokenType.integer, TokenType.true,
-            TokenType.false, TokenType.string
+            TokenType.false, TokenType.string, TokenType.none
         ):
             node = self.literal()
         elif self.current_token.type is TokenType.identifier:

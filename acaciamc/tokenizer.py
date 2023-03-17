@@ -63,6 +63,7 @@ class TokenType(enum.Enum):
     not_ = 'not'
     result = 'result'
     import_ = 'import'
+    none = 'None'
     false = 'False' # must at end of keyword part
 
 # Build dict from keyword str to TokenType

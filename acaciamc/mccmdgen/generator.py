@@ -474,6 +474,8 @@ class Generator(ASTVisitor):
             return IntLiteral(value, compiler = self.compiler)
         elif isinstance(value, str):
             return String(value, compiler = self.compiler)
+        elif value is None:
+            return NoneLiteral(compiler = self.compiler)
         raise TypeError
     
     # assignable & bindable
