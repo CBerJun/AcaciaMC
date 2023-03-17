@@ -32,6 +32,7 @@ class Compiler:
         self.OPEN_ARGS = open_args
         self.file_init = MCFunctionFile('init') # initialize Acacia
         self.file_main = MCFunctionFile('load')
+        self.file_tick = MCFunctionFile('tick') # runs every tick
         self.libs = [] # list of MCFunctionFiles, store the libraries
         # define `types` dict and generate builtin Types
         # keys:type subclasses of Type
@@ -96,6 +97,13 @@ class Compiler:
         self._write_mcfunction(self.file_main, f_path)
         for file in self.libs:
             self._write_mcfunction(file, f_path)
+        # --- tick.json AND tick.mcfunction ---
+        if self.file_tick.has_content():
+            self._write_mcfunction(self.file_tick, f_path)
+            self._write_file(
+                '{"values": ["tick"]}',
+                os.path.join(path, 'tick.json')
+            )
     
     def error(
         self, error_type: ErrorType, lineno = None, col = None, **kwargs
@@ -112,11 +120,11 @@ class Compiler:
     
     def add_file(self, file: MCFunctionFile):
         # add a file to "libs" folder
-        if file.path is None:
+        if not file.is_path_set():
             # if path of file is not given by Generator, we consider it
             # as a lib, and give it a id automatically
             self._lib_count += 1
-            file.path = 'lib/acalib%d' % self._lib_count
+            file.set_path('lib/acalib%d' % self._lib_count)
         self.libs.append(file)
     
     def add_type(self, type_: type):
@@ -286,5 +294,5 @@ class Compiler:
         # file is at "a/b/a.mcfunction"
         self._write_file(
             content = file.to_str(),
-            path = os.path.join(path, file.path + '.mcfunction')
+            path = os.path.join(path, file.get_path() + '.mcfunction')
         )

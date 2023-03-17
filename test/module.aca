@@ -1,16 +1,18 @@
 # Test file for modules in Acacia
 
-import math # builtin module
-import .mod # relative module
+#* Relative module *#
+import .mod
+# Call the `test` function in module `mod`
+b = mod.test(-10)
+
+#* math: Math utilities *#
+import math
 x = math.randintc(1, 10) # Random integer between 1 ~ 10
 y = math.powc(x, y = 4) # x to the power of 4
-# Maximum value between `x` and `y `(it accepts 1 or more arguments)
-# `math.min` also exists
-x = math.max(x, y)
-# Call the `test` function in module `mod`
-b = mod.test(x)
+x = math.max(x, y, 50) # Maximum of all the given arguments
 
-import print # Also a builtin one, for output and string formatting
+#* print: Output and formatting *#
+import print
 fs1 -> print.format("ab%1cd%%%{a}%x%{0}", x, b, a=1)
 # Usage of % escape is similar to this in Python
 print.tell(fs1)
@@ -20,3 +22,15 @@ print.tell(fs1 + s + fs2, "@p")
 print.title(fs2)
 print.title(s, target="@p", mode=print.ACTIONBAR, stay_time=100)
 print.title_clear("@p")
+
+#* schedule: Working through several ticks *#
+import schedule
+x = 10
+def foo():
+    x += 1
+task -> schedule.Task(foo)
+task.after(20)
+
+def foo2(n: int):
+    x += n
+schedule.register_loop(foo2, interval=5, n=1)

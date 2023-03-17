@@ -16,7 +16,7 @@ class MCFunctionFile:
         # path:str the path of function from Config.function_folder
         # e.g. `lib/acalib3`, `main`
         self.commands = []
-        self.path = path
+        self.set_path(path)
     
     def has_content(self):
         # return if there IS any commands in this file
@@ -26,6 +26,18 @@ class MCFunctionFile:
                 return True
         return False
     
+    # --- About Path ---
+    def get_path(self):
+        if self._path is None:
+            raise ValueError('"path" attribute is not set yet')
+        return self._path
+    
+    def set_path(self, path: str):
+        self._path = path
+    
+    def is_path_set(self) -> bool:
+        return self._path is not None
+    
     # --- Export Methods ---
 
     def to_str(self) -> str:
@@ -34,9 +46,7 @@ class MCFunctionFile:
     
     def call(self) -> str:
         # return the command that runs this file
-        if self.path is None:
-            raise ValueError('MCFunctionFile.path not given')
-        return 'function %s/%s' % (Config.function_folder, self.path)
+        return 'function %s/%s' % (Config.function_folder, self.get_path())
 
     # --- Write Methods ---
     
@@ -348,7 +358,7 @@ class Generator(ASTVisitor):
                 self.visit(stmt)
         # add lib
         if body_file.has_content():
-            self.write_debug('Generated at %s' % self.current_file.path)
+            self.write_debug('Generated at %s' % self.current_file.get_path())
         else:
             self.write_debug('No commands generated')
         # resume environment
@@ -424,7 +434,7 @@ class Generator(ASTVisitor):
                 self.visit(stmt)
         # add file
         if body_file.has_content():
-            self.write_debug('Generated at %s' % body_file.path)
+            self.write_debug('Generated at %s' % body_file.get_path())
             func_var.file = body_file
         else:
             self.write_debug('No commands generated')
