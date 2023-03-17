@@ -420,7 +420,8 @@ def new_and_group(operands, compiler) -> AcaciaExpr:
     for operand in operands:
         if not isinstance(operand.type, BuiltinBoolType):
             compiler.error(
-                ErrorType.INVALID_OPERAND, operator = 'and', operand = operand
+                ErrorType.INVALID_OPERAND, operator = 'and',
+                operand = repr(operand.type.name)
             )
     ## Purpose 2. to do these optimizations:
     literals = filter(
@@ -450,8 +451,8 @@ def new_or_expression(operands, compiler) -> AcaciaExpr:
     def _map(operand):
         if not isinstance(operand.type, BuiltinBoolType):
             compiler.error(
-                ErrorType.INVALID_OPERAND,
-                operator = 'or', operand = operand
+                ErrorType.INVALID_OPERAND, operator = 'or',
+                operand = repr(operand.type.name)
             )
         return operand.not_()
     inverted_operands = map(_map, operands)
