@@ -64,9 +64,12 @@ class ErrorType(enum.Enum):
     INITIALIZER_RESULT = '{type_}.__init__ initializer should not produce ' \
         'result'
     CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
+    MODULE_NAME_CONFLICT = 'Can\'t import modules with an existing name ' \
+        '"{name}"'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{name}"'
+    CIRCULAR_PARSE = 'File {file_!r} seems to call itself'
     # Any; should only be used by binary modules
     ANY = '{message}'
 

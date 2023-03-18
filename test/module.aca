@@ -1,10 +1,5 @@
 # Test file for modules in Acacia
 
-#* Relative module *#
-import .mod
-# Call the `test` function in module `mod`
-b = mod.test(-10)
-
 #* math: Math utilities *#
 import math
 x = math.randintc(1, 10) # Random integer between 1 ~ 10
@@ -13,7 +8,7 @@ x = math.max(x, y, 50) # Maximum of all the given arguments
 
 #* print: Output and formatting *#
 import print
-fs1 -> print.format("ab%1cd%%%{a}%x%{0}", x, b, a=1)
+fs1 -> print.format("ab%1cd%%%{a}%x%{0}", x, y, a=1)
 # Usage of % escape is similar to this in Python
 print.tell(fs1)
 fs2 -> print.format("an%0", x)
@@ -34,3 +29,8 @@ task.after(20)
 def foo2(n: int):
     x += n
 schedule.register_loop(foo2, interval=5, n=1)
+
+#* Relative module *#
+import .mod
+# Call the `test` function in module `mod`
+b = mod.test(-10)

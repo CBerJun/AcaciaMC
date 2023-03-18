@@ -92,7 +92,9 @@ class Generator(ASTVisitor):
     
     def parse_as_module(self) -> AcaciaModule:
         # parse the AST and return it as AcaciaModule
+        self.current_file.write_debug("## Start of module parsing")
         self.parse()
+        self.current_file.write_debug("## End of module parsing")
         return AcaciaModule(self.current_scope, self.compiler)
     
     # --- INTERNAL USE ---
@@ -458,19 +460,14 @@ class Generator(ASTVisitor):
         self.current_file.extend(expr.export(self.result_var))
     
     def visit_Import(self, node: Import):
-        # find files; .py -> BinaryModule; .aca -> AcaciaModule
-        location, ext = self.compiler.find_module(
+        name = node.last_name
+        if self.current_scope.lookup(name):
+            self.compiler.error(ErrorType.MODULE_NAME_CONFLICT, name=name)
+        module, path = self.compiler.parse_module(
             node.leadint_dots, node.last_name, node.parents
         )
-        self.write_debug('Found module at %s' % location)
-        if ext == '.py':
-            mod = BinaryModule(location, self.compiler)
-        elif ext == '.aca':
-            self.current_file.write_debug('## Start of another module')
-            mod = self.compiler.parse_module(location)
-            self.current_file.write_debug('## End of another module')
-        else: raise ValueError
-        self.current_scope.create(node.last_name, mod)
+        self.write_debug("Got module from %s" % path)
+        self.current_scope.create(name, module)
     
     ### --- visit Expression ---
     # literal

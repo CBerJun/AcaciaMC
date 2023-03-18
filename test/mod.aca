@@ -1,4 +1,11 @@
-# Test companion of module.aca
+# Test companion of `module.aca`
+
+#* Circular import test *#
+# import .module
+
+#* Cache test *#
+# `module.aca` has imported `print`, so here it should use cache
+import print
 
 def test(x: int) -> bool:
     result x >= 0

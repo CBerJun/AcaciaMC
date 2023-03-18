@@ -52,6 +52,8 @@ class Compiler:
         self._score_max = 0 # max id of score allocated
         self._free_tmp_score = [] # free tmp scores (see method `allocate_tmp`)
         self._current_file = None # str; Path of current parsing file
+        self._cached_modules = {} # loaded modules are cached here
+        self._loading_files = [] # paths of Acacia modules that are loading
 
         # --- START COMPILE ---
         ## comment on load.mcfunction
@@ -191,12 +193,6 @@ class Compiler:
         self._int_consts[value] = var
         return var
     
-    def parse_module(self, path: str) -> AcaciaModule:
-        # Add an Acacia module to compile project
-        # `path` is the path of that module
-        with self._load_generator(path) as generator:
-            return generator.parse_as_module()
-    
     # -- End allocation --
     
     def get_basic_scope(self) -> ScopedSymbolTable:
@@ -212,9 +208,9 @@ class Compiler:
 
     def find_module(
         self, leading_dots: int, last_name: str, parents: list
-    ) -> tuple:
+    ) -> str:
         # find a module; the arguments are the same as ast.Import
-        # return tuple(str<path of module>, ext<extension>)
+        # return path of module (str) or None is not found
         # In details, this work like this:
         # 1. if leading_dots is 0, find the module in self.path
         #    else, find the module in the parent folder of
@@ -248,17 +244,46 @@ class Compiler:
                     continue
                 got_name, ext = os.path.splitext(child)
                 if got_name == last_name and (ext == '.py' or ext == '.aca'):
-                    return (path, ext)
-        self.error(ErrorType.MODULE_NOT_FOUND, name = last_name)
+                    return path
+        return None
+    
+    def parse_module(self, leading_dots: int, last_name: str, parents: list):
+        # Parse and get a module
+        path = self.find_module(leading_dots, last_name, parents)
+        if path is None:
+            self.error(ErrorType.MODULE_NOT_FOUND, name=last_name)
+        # Get the module accoding to path
+        for p in self._cached_modules:
+            # Return cached if exists
+            if os.path.samefile(p, path):
+                mod = self._cached_modules[p]
+                break
+        else:
+            # Load the module
+            _, ext = os.path.splitext(path)
+            if ext == ".aca":
+                # Parse the Acacia module
+                with self._load_generator(path) as generator:
+                    mod = generator.parse_as_module()
+            elif ext == ".py":
+                # Parse the binary module
+                mod = BinaryModule(path, self)
+            self._cached_modules[path] = mod
+        return (mod, path)
     
     @contextmanager
     def _load_generator(self, path: str):
         # load the Generator of an Acacia source
         # and store it at self.current_generator
+        # Check if the module is being loading (prevent circular import)
+        for p in self._loading_files:
+            if os.path.samefile(p, path):
+                self.error(ErrorType.CIRCULAR_PARSE, file_=path)
         src = self._read_file(path)
         oldf = self._current_file
         oldg = self.current_generator
         self._current_file = path
+        self._loading_files.append(path)
         self.current_generator = Generator(
             node = Parser(
                 Tokenizer(src, path)
@@ -269,6 +294,7 @@ class Compiler:
         yield self.current_generator
         self._current_file = oldf
         self.current_generator = oldg
+        self._loading_files.pop()
     
     # --- I/O Util (Internal use) ---
 
