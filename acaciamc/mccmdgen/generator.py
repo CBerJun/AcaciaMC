@@ -460,14 +460,11 @@ class Generator(ASTVisitor):
         self.current_file.extend(expr.export(self.result_var))
     
     def visit_Import(self, node: Import):
-        name = node.last_name
-        if self.current_scope.lookup(name):
-            self.compiler.error(ErrorType.MODULE_NAME_CONFLICT, name=name)
-        module, path = self.compiler.parse_module(
-            node.leadint_dots, node.last_name, node.parents
-        )
+        if self.current_scope.lookup(node.name):
+            self.compiler.error(ErrorType.MODULE_NAME_CONFLICT, name=node.name)
+        module, path = self.compiler.parse_module(node.meta)
         self.write_debug("Got module from %s" % path)
-        self.current_scope.create(name, module)
+        self.current_scope.create(node.name, module)
     
     ### --- visit Expression ---
     # literal

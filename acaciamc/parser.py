@@ -423,10 +423,8 @@ class Parser:
         self.eat(TokenType.result)
         return Result(self.expr(), **pos)
     
-    def import_statement(self):
-        # import_statement := IMPORT POINT* IDENTIFIER (POINT IDENTIFIER)*
-        pos = self.current_pos
-        self.eat(TokenType.import_)
+    def module_meta(self):
+        # module_meta := POINT* IDENTIFIER (POINT IDENTIFIER)*
         # leading dots
         leadint_dots = 0
         while self.current_token.type is TokenType.point:
@@ -441,7 +439,25 @@ class Parser:
             names.append(self.current_token.value)
             self.eat(TokenType.identifier)
         last_name = names.pop()
-        return Import(leadint_dots, last_name, names, **pos)
+        return ModuleMeta(leadint_dots, last_name, names)
+    
+    def alia(self) -> str:
+        # Try to read an alia. Return None if no alia is given.
+        # alia := (AS IDENTIFIER)?
+        if self.current_token.type is TokenType.as_:
+            self.eat()
+            value = self.current_token.value
+            self.eat(TokenType.identifier)
+            return value
+        return None
+    
+    def import_statement(self):
+        # import_statement := IMPORT module_meta alia
+        pos = self.current_pos
+        self.eat(TokenType.import_)
+        meta = self.module_meta()
+        alia = self.alia()
+        return Import(meta, alia, **pos)
 
     def statement(self, expect_indent = 0) -> (Statement or None):
         # statement := LINE_BEGIN (

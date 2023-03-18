@@ -27,6 +27,13 @@ class Operator(enum.Enum):
     and_ = 0x30
     or_ = 0x31
 
+class ModuleMeta:
+    # Meta data of a module
+    def __init__(self, leading_dots: int, last_name: str, parents: list):
+        self.leading_dots = leading_dots
+        self.last_name = last_name
+        self.parents = parents
+
 # This is to export StringMode from tokenizer
 from .tokenizer import StringMode
 
@@ -136,14 +143,13 @@ class MacroBind(Statement): # define a macro
         self.target = target
         self.value = value
 
-class Import(Statement): # import a module
-    def __init__(
-        self, leading_dots: int, last_name: str, parents: list, lineno, col
-    ):
+class Import(Statement): # import module
+    def __init__(self, meta: ModuleMeta, alia: str, lineno, col):
         super().__init__(lineno, col)
-        self.leadint_dots = leading_dots
-        self.last_name = last_name
-        self.parents = parents
+        self.meta = meta
+        self.name = alia
+        if self.name is None:
+            self.name = self.meta.last_name
 
 class Literal(Expression): # a literal constant
     def __init__(self, literal, lineno, col):

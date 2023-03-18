@@ -31,6 +31,7 @@ def foo2(n: int):
 schedule.register_loop(foo2, interval=5, n=1)
 
 #* Relative module *#
-import .mod
+# Import `mod` module from current directory and rename it as `testmod`
+import .mod as testmod
 # Call the `test` function in module `mod`
-b = mod.test(-10)
+b = testmod.test(-10)

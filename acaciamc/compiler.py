@@ -1,5 +1,6 @@
 # The main Compiler of Acacia
 # It assembles files and classes together and write output
+from .ast import ModuleMeta
 from .constants import Config
 from .error import *
 from .tokenizer import Tokenizer
@@ -206,10 +207,8 @@ class Compiler:
             res.create(name, self.types[cls])
         return res
 
-    def find_module(
-        self, leading_dots: int, last_name: str, parents: list
-    ) -> str:
-        # find a module; the arguments are the same as ast.Import
+    def find_module(self, meta: ModuleMeta) -> str:
+        # find a module
         # return path of module (str) or None is not found
         # In details, this work like this:
         # 1. if leading_dots is 0, find the module in self.path
@@ -222,17 +221,17 @@ class Compiler:
         # 3. find the module file in the directory
         #    e.g. main_dir at a/b/c; ".pack.file" -> a/b/c/pack/file.aca
         ## Step 1
-        if leading_dots == 0:
+        if meta.leading_dots == 0:
             paths = self.path
         else:
             _path = self.main_dir
-            for _ in range(leading_dots - 1):
+            for _ in range(meta.leading_dots - 1):
                 _path = os.path.join(_path, os.pardir)
             paths = (_path,)
         ## Step 2~3
         for root in paths:
             ## Step 2
-            final = os.path.join(root, *parents)
+            final = os.path.join(root, *meta.parents)
             if not os.path.isdir(final):
                 # failed to find any of the child directory,
                 # meaning this `root` is invalid; continue
@@ -243,15 +242,16 @@ class Compiler:
                 if not os.path.isfile(path):
                     continue
                 got_name, ext = os.path.splitext(child)
-                if got_name == last_name and (ext == '.py' or ext == '.aca'):
+                if got_name == meta.last_name and \
+                   (ext == '.py' or ext == '.aca'):
                     return path
         return None
     
-    def parse_module(self, leading_dots: int, last_name: str, parents: list):
+    def parse_module(self, meta: ModuleMeta):
         # Parse and get a module
-        path = self.find_module(leading_dots, last_name, parents)
+        path = self.find_module(meta)
         if path is None:
-            self.error(ErrorType.MODULE_NOT_FOUND, name=last_name)
+            self.error(ErrorType.MODULE_NOT_FOUND, name=meta.last_name)
         # Get the module accoding to path
         for p in self._cached_modules:
             # Return cached if exists
