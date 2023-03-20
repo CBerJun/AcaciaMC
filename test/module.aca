@@ -33,5 +33,11 @@ schedule.register_loop(foo2, interval=5, n=1)
 #* Relative module *#
 # Import `mod` module from current directory and rename it as `testmod`
 import .mod as testmod
-# Call the `test` function in module `mod`
+# Import `mod.test` as `test_function`
+from .mod import test as test_function
+# Import everything from `mod`
+from .mod import *
+# The following lines all call the same function
 b = testmod.test(-10)
+b = test_function(-10)
+b = test(-10)

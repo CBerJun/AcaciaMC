@@ -457,6 +457,21 @@ class Generator(ASTVisitor):
         self.write_debug("Got module from %s" % path)
         self.current_scope.set(node.name, module)
     
+    def visit_FromImport(self, node: FromImport):
+        module, path = self.compiler.parse_module(node.meta)
+        self.write_debug("Import from %s" % path)
+        for name, alia in node.id2name.items():
+            value = module.attribute_table.lookup(name)
+            if value is None:
+                self.compiler.error(ErrorType.MODULE_NO_ATTRIBUTE, name=name)
+            self.current_scope.set(alia, value)
+    
+    def visit_FromImportAll(self, node: FromImportAll):
+        module, path = self.compiler.parse_module(node.meta)
+        self.write_debug("Import everything from %s" % path)
+        for name, value in module.attribute_table:
+            self.current_scope.set(name, value)
+
     ### --- visit Expression ---
     # literal
     

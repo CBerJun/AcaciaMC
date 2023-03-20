@@ -452,20 +452,42 @@ class Parser:
         return None
     
     def import_statement(self):
-        # import_statement := IMPORT module_meta alia
+        # import_stmt := IMPORT module_meta alia
         pos = self.current_pos
         self.eat(TokenType.import_)
         meta = self.module_meta()
         alia = self.alia()
         return Import(meta, alia, **pos)
+    
+    def from_import_statement(self):
+        # from_import_stmt := FROM module_meta IMPORT (STAR | (
+        #   IDENTIFIER alia (COMMA IDENTIFIER alia)*
+        # ))
+        pos = self.current_pos
+        self.eat(TokenType.from_)
+        meta = self.module_meta()
+        self.eat(TokenType.import_)
+        if self.current_token.type is TokenType.star:
+            self.eat()
+            return FromImportAll(meta, **pos)
+        else:
+            names = [self.current_token.value]
+            self.eat(TokenType.identifier)
+            alias = [self.alia()]
+            while self.current_token.type is TokenType.comma:
+                self.eat()
+                names.append(self.current_token.value)
+                self.eat(TokenType.identifier)
+                alias.append(self.alia())
+            return FromImport(meta, names, alias, **pos)
 
     def statement(self, expect_indent = 0) -> (Statement or None):
         # statement := LINE_BEGIN (
-        #   (expr ?(
+        #   (expr (
         #     (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
         #     TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
-        #   )) | if_stmt | pass_stmt | interface_stmt | def_stmt |
-        #   command_stmt | result_stmt | import_stmt
+        #   )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
+        #   command_stmt | result_stmt | import_stmt | from_import_stmt
         # )
         # expect_indent:int what size of indent block should be
         # this function may return None to show that file ends
@@ -500,6 +522,8 @@ class Parser:
             return self.result_stmt()
         elif token_type is TokenType.import_:
             return self.import_statement()
+        elif token_type is TokenType.from_:
+            return self.from_import_statement()
         
         # other statements that starts with an expression
         pos = self.current_pos

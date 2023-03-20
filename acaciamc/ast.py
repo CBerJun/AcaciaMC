@@ -151,6 +151,21 @@ class Import(Statement): # import module
         if self.name is None:
             self.name = self.meta.last_name
 
+class FromImport(Statement): # import specific things from a module
+    def __init__(
+        self, meta: ModuleMeta, names: list, alias: list, lineno, col
+    ):
+        super().__init__(lineno, col)
+        self.meta = meta
+        self.id2name = {} # keys are actual IDs and values are alias
+        for name, alia in zip(names, alias):
+            self.id2name[name] = name if alia is None else alia
+
+class FromImportAll(Statement): # import everything in a module
+    def __init__(self, meta: ModuleMeta, lineno, col):
+        super().__init__(lineno, col)
+        self.meta = meta
+
 class Literal(Expression): # a literal constant
     def __init__(self, literal, lineno, col):
         super().__init__(lineno, col)

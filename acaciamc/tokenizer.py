@@ -64,6 +64,7 @@ class TokenType(enum.Enum):
     result = 'result'
     import_ = 'import'
     as_ = 'as'
+    from_ = 'from'
     none = 'None'
     false = 'False' # must at end of keyword part
 
