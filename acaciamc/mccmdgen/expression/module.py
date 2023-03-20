@@ -38,7 +38,7 @@ class BinaryModule(AcaciaExpr):
                 self._module_error('acacia_build return key should be str')
             if not isinstance(value, AcaciaExpr):
                 self._module_error('acacia_build value should be AcaciaExpr')
-            self.attribute_table.create(name, value)
+            self.attribute_table.set(name, value)
     
     def _module_error(self, message: str):
         raise ValueError(repr(self.path) + ': ' + message)

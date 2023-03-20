@@ -34,9 +34,6 @@ class ErrorType(enum.Enum):
     WRONG_ARG_TYPE = 'Expect "{expect}" type for argument "{arg}", got "{got}"'
     WRONG_RESULT_TYPE = 'Expect "{expect}" type as result, got "{got}"'
     UNASSIGNABLE = 'The target is unassignable'
-    BIND_TARGET_EXISTS = 'Target to bind already has a value'
-    FUNC_NAME_EXISTS = 'Can\'t define functions using an existing name ' \
-        '"{name}"'
     WRONG_IF_CONDITION = '"if" conditions must be "bool", not "{got}"'
     WRONG_WHILE_CONDITION = '"while" conditions must be "bool", not "{got}"'
     ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
@@ -64,8 +61,6 @@ class ErrorType(enum.Enum):
     INITIALIZER_RESULT = '{type_}.__init__ initializer should not produce ' \
         'result'
     CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
-    MODULE_NAME_CONFLICT = 'Can\'t import modules with an existing name ' \
-        '"{name}"'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{name}"'

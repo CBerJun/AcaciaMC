@@ -49,7 +49,7 @@ class TaskType(Type):
             target = func.arg_require("target", BuiltinFunctionType)
             other_arg, other_kw = func.arg_raw()
             return Task(target, other_arg, other_kw, self.compiler)
-        self.attribute_table.create(
+        self.attribute_table.set(
             "__new__", BinaryFunction(_new, self.compiler)
         )
 
@@ -86,15 +86,15 @@ class Task(AcaciaExpr):
                 self.timer, Operator.greater_equal, IntLiteral(0, compiler),
                 compiler
             )
-        self.attribute_table.create(
+        self.attribute_table.set(
             "__init__", BinaryFunction(_timer_reset, compiler)
         )
-        self.attribute_table.create("_timer", self.timer)
-        self.attribute_table.create("after", BinaryFunction(_after, compiler))
-        self.attribute_table.create(
+        self.attribute_table.set("_timer", self.timer)
+        self.attribute_table.set("after", BinaryFunction(_after, compiler))
+        self.attribute_table.set(
             "cancel", BinaryFunction(_cancel, compiler)
         )
-        self.attribute_table.create(
+        self.attribute_table.set(
             "has_schedule", BinaryFunction(_has_schedule, compiler)
         )
         # Write tick.mcfunction

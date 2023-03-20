@@ -276,7 +276,7 @@ class ArgumentHandler:
         # register arguments to the given scope
         # scope:ScopedSymbolTable
         for arg in self.args:
-            scope.create(arg, self.arg_vars[arg])
+            scope.set(arg, self.arg_vars[arg])
 
 class VarValue(AcaciaExpr):
     # VarValues are special AcaciaExprs that can be assigned

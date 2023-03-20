@@ -71,8 +71,8 @@ class BuiltinIntType(Type):
     name = 'int'
     
     def do_init(self):
-        self.attribute_table.create('MAX', IntLiteral(INT_MAX, self.compiler))
-        self.attribute_table.create('MIN', IntLiteral(INT_MIN, self.compiler))
+        self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
+        self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
         def _new(func: BinaryFunction):
             # `int()` -> literal `0`
             # `int(x: int)` -> x
@@ -102,7 +102,7 @@ class BuiltinIntType(Type):
                     ),
                     compiler = self.compiler
                 )
-        self.attribute_table.create(
+        self.attribute_table.set(
             '__new__', BinaryFunction(_new, self.compiler)
         )
     

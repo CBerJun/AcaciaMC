@@ -56,6 +56,15 @@ class Compiler:
         self._cached_modules = {} # loaded modules are cached here
         self._loading_files = [] # paths of Acacia modules that are loading
 
+        # --- BUILTIN SYMBOL TABLE ---
+        self.builtins = SymbolTable()
+        # builtin types
+        for name, cls in (
+            ('int', BuiltinIntType),
+            ('bool', BuiltinBoolType)
+        ):
+            self.builtins.set(name, self.types[cls])
+
         # --- START COMPILE ---
         ## comment on load.mcfunction
         self.file_main.write_debug(
@@ -195,17 +204,6 @@ class Compiler:
         return var
     
     # -- End allocation --
-    
-    def get_basic_scope(self) -> ScopedSymbolTable:
-        # get the basic scope with builtin names
-        res = ScopedSymbolTable()
-        # builtin types
-        for name, cls in (
-            ('int', BuiltinIntType),
-            ('bool', BuiltinBoolType)
-        ):
-            res.create(name, self.types[cls])
-        return res
 
     def find_module(self, meta: ModuleMeta) -> str:
         # find a module

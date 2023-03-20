@@ -74,7 +74,7 @@ class Generator(ASTVisitor):
         self.node = node
         self.compiler = compiler
         self.current_file = main_file
-        self.current_scope = self.compiler.get_basic_scope()
+        self.current_scope = ScopedSymbolTable(builtins=self.compiler.builtins)
         # result_var: the var that stores result value
         # only exists when passing functions
         self.result_var = None
@@ -108,13 +108,13 @@ class Generator(ASTVisitor):
         # register a value to a SymbolTable according to AST
         # `target_value` is the value that the ast represents
         # e.g. Identifier(name='a'), IntVar(...) -> 
-        #   self.current_scope.create('a', IntVar(...))
+        #   self.current_scope.set('a', IntVar(...))
         if isinstance(target_node, Identifier):
-            self.current_scope.create(target_node.name, target_value)
+            self.current_scope.set(target_node.name, target_value)
         elif isinstance(target_node, Attribute):
             # get AttributeTable and register
             object_ = self.visit(target_node.object)
-            object_.attribute_table.create(target_node.attr, target_value)
+            object_.attribute_table.set(target_node.attr, target_value)
         else: raise TypeError
     
     def write_debug(self, comment: str, target: MCFunctionFile = None):
@@ -236,18 +236,12 @@ class Generator(ASTVisitor):
         )
     
     def visit_MacroBind(self, node: MacroBind):
-        # analyze target (should be undefined)
-        target = self.visit(node.target, check_undef = False)
-        if target is not None:
-            self.compiler.error(ErrorType.BIND_TARGET_EXISTS)
         # analyze value
         value = self.visit(node.value)
         # register to symbol table
         self.register_symbol(node.target, value)
-
+    
     def visit_ExprStatement(self, node: ExprStatement):
-        # XXX we don't need the value of the expr
-        # (e.g. ExprStatement `1 + 2` is redundant)
         expr = self.visit(node.value)
         self.current_file.extend(expr.export_novalue())
     
@@ -352,7 +346,8 @@ class Generator(ASTVisitor):
     def visit_InterfaceDef(self, node: InterfaceDef):
         # new environment
         old_scope = self.current_scope
-        self.current_scope = ScopedSymbolTable(outer = old_scope)
+        self.current_scope = ScopedSymbolTable(
+            outer=old_scope, builtins=self.compiler.builtins)
         # body
         with self.new_mcfunc_file('interface/%s' % node.name) as body_file:
             self.write_debug('Interface definition')
@@ -401,9 +396,6 @@ class Generator(ASTVisitor):
         return args, types, defaults
     
     def visit_FuncDef(self, node: FuncDef):
-        # make sure name does not exist
-        if self.current_scope.lookup(node.name):
-            self.compiler.error(ErrorType.FUNC_NAME_EXISTS, name = node.name)
         # get return type (of Type type)
         if node.returns is None:
             returns = self.compiler.types[BuiltinNoneType]
@@ -423,11 +415,12 @@ class Generator(ASTVisitor):
             returns = returns,
             compiler = self.compiler
         )
-        self.current_scope.create(node.name, func_var)
+        self.current_scope.set(node.name, func_var)
         # read body
         old_scope = self.current_scope
         old_res_var = self.result_var
-        self.current_scope = ScopedSymbolTable(outer = old_scope)
+        self.current_scope = ScopedSymbolTable(
+            outer=old_scope, builtins=self.compiler.builtins)
         self.result_var = func_var.result_var
         func_var.arg_handler.register_args_to_scope(self.current_scope)
         with self.new_mcfunc_file() as body_file:
@@ -460,11 +453,9 @@ class Generator(ASTVisitor):
         self.current_file.extend(expr.export(self.result_var))
     
     def visit_Import(self, node: Import):
-        if self.current_scope.lookup(node.name):
-            self.compiler.error(ErrorType.MODULE_NAME_CONFLICT, name=node.name)
         module, path = self.compiler.parse_module(node.meta)
         self.write_debug("Got module from %s" % path)
-        self.current_scope.create(node.name, module)
+        self.current_scope.set(node.name, module)
     
     ### --- visit Expression ---
     # literal

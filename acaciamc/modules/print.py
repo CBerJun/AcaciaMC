@@ -145,7 +145,7 @@ class FStringType(Type):
                 func.compiler.error(ErrorType.ANY, message = str(err))
             # scan pattern
             return FString(dependencies, json, func.compiler)
-        self.attribute_table.create(
+        self.attribute_table.set(
             '__new__', BinaryFunction(_new, self.compiler)
         )
 
