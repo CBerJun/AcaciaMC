@@ -6,30 +6,35 @@
  * Compile this with:
  *   cd path/to/acacia
  *   python3 main.py -d test/brief_intro.aca
- * "-d" is to show the debugging comments in output files
- * Any Python 3 environment could interpret this, since Acacia
- * does not require any third-party modules.
+ * "-d" is to show the debugging comments in output files.
+ *
+ * It can be interpreted using Python (version above 3.3)
+ * No third-party package is required.
  *#
 
-# Fancy number & Constant folding
-# Following `+` and `and` operator should be calculated during compile time
+#* Variables *#
+# Define a variable `x` and assign 10 to it
 x = 10
-x = 0XF2e + 0b11 # Referring to hexadecimal 3886 and binary 3
-y = True and False
+# Following `+` operator should be calculated during compile time
+# `0x` and `0b` can be used to refer to hexadecimal and binary number
+x = 0XF2e + 0b11 # `int` type
+y = True # `bool` type
 
-# Fancy operators
-i2 = (x % -2) * (x + 3)
+#* Fancy operators *#
+number = (x % -2) * (x + 3)
+boolean = y and (x > 10) or (x < 0)
 
-# Macro defining (aka. Binding)
+#* Macro defining (aka. Binding) *#
 scoreboard -> "scb"
-# The following occurances of `scoreboard` are replaced with `"scb"`
+# The following occurances of `scoreboard` all refers to `"scb"`
 player -> "@a[tag=player]"
 
-# Control statements
+#* Control statements *#
 ## If statement
 if x > 5:
     x *= 2
 # `x` will be doubled only when it's larger than 5
+
 ## While statement
 sum = 0
 while x > 0:
@@ -40,7 +45,7 @@ while x > 0:
 # a lot of commands. Minecraft limits the amount of commands that one
 # function could trigger to 10000. Be careful when using loops.
 
-# Compatible with the original command system
+#* Compatible with the original command system *#
 ## Accessing scoreboards
 # "|" selector ":" objective "|" is referring to selector's score on objective
 x = |"@p": "score"| + 10
@@ -59,10 +64,13 @@ tellraw @a {"rawtext":[
 ]}
 */
 
-# Great builtin modules!
-# The builtin modules are actually seperated from the compiler itself,
-# which means: everyone can create their own Acacia module!
-# These builtin modules are written in Python at acaciamc/modules
+#* Great builtin modules! *#
+#*
+ * The builtin modules are actually seperated from the compiler itself,
+ * which means: everyone can create their own Acacia module!
+ * These builtin modules are written in Python at acaciamc/modules
+ *#
+# To indicate that you are using `print` module
 import print
 # Tell every players "Hello world!"
 print.tell("Hello world!", "@a")
@@ -70,11 +78,11 @@ print.tell("Hello world!", "@a")
 print.title("Chapter I", "@p", stay_time=200)
 # Show everyone the value of `x` in the form of "Value of X: ..." above actionbar
 print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
-# Another builtin module is `math`. See test/module.aca
+# Introduction to other builtin modules can be found in test/module.aca
 # Not only these modules written in Python are supported, Acacia code
 # can be imported by other Acacia programs. See test/module.aca
 
-# Function definition
+#* Functions *#
 # Type of argument or its default value must be specified
 def max(a: int, b = int.MAX) -> int:
                     # int.MAX is referring to 2147483647
@@ -93,20 +101,19 @@ def is_larger(a: int, b: int) -> bool:
 if not is_larger(x, 4):
     x = 2
 # Comments and empty lines does not affect parsing an indented block
-    i2 = 1 + max(x, i2)
+    x = 1 + max(x, 10)
 # This Elif statement is optimized (1 < 10 is always True)
 elif 1 < 10:
     x = 100
 else:
     pass # Empty block
 
-# Exported interface
+#* Exported interfaces *#
 # These interfaces are exported for later use in Minecraft
 interface a:
-    # local variables are unreachable outside scope
-    local = 20 < x <= 100 and (i2 > 4 or x <= 5)
-    if local and (8 > x + 1 > 5):
-        x = 2
+    # Local variables are unreachable outside scope
+    local = 20 < x <= 100 # Chained comparison operators!
+    # Do something...
 # Now we can use the `a` interface in Minecraft through /function
 # command (when using default compile options, it is stored at
 # acacia/interface/a.mcfunction)
@@ -115,10 +122,9 @@ interface b:
     if False:
         x = 3
 
-# Line continuation using backslash
+#* Line continuation using backslash *#
 x = \
     10 + int(y)
     # convert bool to int, also referring to the builtin integer type
 
-# That's all~
-# Enjoy this project :)
+# ENJOY!!!

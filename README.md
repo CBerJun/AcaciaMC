@@ -2,15 +2,18 @@
 English | [中文](README_cn.md)
 
 ## Introduction
-Acacia is a programming language for Minecraft (Bedrock) command development.
-*Simple* is what Acacia wants. Minecraft commands can be complicated,
-long and hard to maintain. Acacia simplify commands into Python-like
-codes. Acacia code is finally compiled into mcfunction files, and can
-be loaded in a Minecraft world as a datapack.
+Acacia is a programming language for Minecraft Bedrock Edition command
+development. Our principle is to be *as simple as possible*. Minecraft
+commands can be complicated, long and hard to maintain. Acacia simplify
+commands into Python-like code. Acacia code is finally compiled into
+`.mcfunction` files, and can be loaded in a Minecraft world as a datapack.
+
+Acacia is written in Python (require 3.3 or newer), so it's easy to create
+a binary module using Python for Acacia code to use.
 
 Go to [this test file](test/brief_intro.aca) for an overview of Acacia.
 
-## Simple Code
+## Simple Syntax
 Defining variables in Acacia: `a = 1`. That's it.
 No need for scoreboards.
 
@@ -21,19 +24,7 @@ a = 10
 b = (10 + 20) * a - 5
 ```
 
-Flow Control Statements:
-```
-# Test if `x` is a prime number
-x = 1147
-mod = 2
-flag = True
-while mod <= x / 2:
-    if x % mod == 0:
-        flag = False
-    mod += 1
-```
-
-Functions:
+Function definition:
 ```
 def foo(x: int, y = True) -> int:
     pass # code here...
@@ -41,6 +32,18 @@ def foo(x: int, y = True) -> int:
 foo(1)
 z = foo(2, False)
 z = foo(x=3)
+```
+
+Flow Control Statement:
+```
+def is_prime(x: int) -> bool:
+    # Test if `x` is a prime number
+    mod = 2
+    result True
+    while mod <= x / 2:
+        if x % mod == 0:
+            result False
+        mod += 1
 ```
 
 Builtin modules:
@@ -73,6 +76,33 @@ player -> "@p[tag=player]" # defining macro
 ```
 
 Accessing scores on scoreboard: `|"player": "scoreboard"| = 10`
+
+## Optimized Output
+Acacia can even do better than you in some aspects like doing math!
+```
+def sum_between(start: int, to: int, delta=1) -> int:
+    #* Return sum of Equidistant sequence from `start` to `to` with `delta` *#
+    result (start + to) * ((to - start) / delta + 1) / 2
+sum_between(-5, 5, delta=2)
+```
+
+These commands are generated for function `sum_between`:
+```mcfunction
+# On initial run
+scoreboard players set "acacia5" "acacia" 2
+```
+```mcfunction
+# "acacia1", "acacia2" and "acacia3" are the arguments
+scoreboard players operation "acacia6" "acacia" = "acacia2" "acacia"
+scoreboard players operation "acacia6" "acacia" -= "acacia1" "acacia"
+scoreboard players operation "acacia6" "acacia" /= "acacia3" "acacia"
+scoreboard players add "acacia6" "acacia" 1
+scoreboard players operation "acacia4" "acacia" = "acacia1" "acacia"
+scoreboard players operation "acacia4" "acacia" += "acacia2" "acacia"
+scoreboard players operation "acacia4" "acacia" *= "acacia6" "acacia"
+scoreboard players operation "acacia4" "acacia" /= "acacia5" "acacia"
+```
+The order of the operations are well-organized by Acacia compiler.
 
 ## Discover More about Acacia
 - [An introduction video in Chinese](https://www.bilibili.com/video/BV1uR4y167w9)
