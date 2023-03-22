@@ -29,10 +29,10 @@ class Operator(enum.Enum):
 
 class ModuleMeta:
     # Meta data of a module
-    def __init__(self, leading_dots: int, last_name: str, parents: list):
+    def __init__(self, last_name: str, leading_dots=0, parents=[]):
         self.leading_dots = leading_dots
         self.last_name = last_name
-        self.parents = parents
+        self.parents = list(parents)
 
 # This is to export StringMode from tokenizer
 from .tokenizer import StringMode

@@ -269,6 +269,11 @@ class Compiler:
             self._cached_modules[path] = mod
         return (mod, path)
     
+    def get_module(self, meta: ModuleMeta):
+        # Parse a module meta and just return the module
+        # An API for binary module developing
+        return self.parse_module(meta)[0]
+
     @contextmanager
     def _load_generator(self, path: str):
         # load the Generator of an Acacia source

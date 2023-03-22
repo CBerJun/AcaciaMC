@@ -439,7 +439,7 @@ class Parser:
             names.append(self.current_token.value)
             self.eat(TokenType.identifier)
         last_name = names.pop()
-        return ModuleMeta(leadint_dots, last_name, names)
+        return ModuleMeta(last_name, leadint_dots, names)
     
     def alia(self) -> str:
         # Try to read an alia. Return None if no alia is given.

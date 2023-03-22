@@ -1,0 +1,9 @@
+#* _math: Internal module used by builtin `math` module *#
+
+def _pow(x: int, y: int) -> int:
+    #* Return `x` to the power of `y`.
+    `y` is treated as 1 when smaller than 1. *#
+    while y > 1:
+        x *= x
+        y -= 1
+    result x
