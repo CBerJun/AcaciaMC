@@ -355,7 +355,7 @@ class Generator(ASTVisitor):
                 self.visit(stmt)
         # add lib
         if body_file.has_content():
-            self.write_debug('Generated at %s' % self.current_file.get_path())
+            self.write_debug('Generated at %s' % body_file.get_path())
         else:
             self.write_debug('No commands generated')
         # resume environment
