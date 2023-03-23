@@ -117,10 +117,10 @@ interface a:
 # Now we can use the `a` interface in Minecraft through /function
 # command (when using default compile options, it is stored at
 # acacia/interface/a.mcfunction)
-# A useless interface is automatically deleted
-interface b:
-    if False:
-        x = 3
+
+# The following is generated at acacia/interface/b/c.mcfunction
+interface b.c:
+    /say b.c called
 
 #* Line continuation using backslash *#
 x = \

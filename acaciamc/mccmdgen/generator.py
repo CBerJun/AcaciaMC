@@ -349,7 +349,9 @@ class Generator(ASTVisitor):
         self.current_scope = ScopedSymbolTable(
             outer=old_scope, builtins=self.compiler.builtins)
         # body
-        with self.new_mcfunc_file('interface/%s' % node.name) as body_file:
+        with self.new_mcfunc_file(
+            'interface/%s' % '/'.join(node.path)
+        ) as body_file:
             self.write_debug('Interface definition')
             for stmt in node.body:
                 self.visit(stmt)

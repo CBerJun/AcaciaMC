@@ -105,9 +105,9 @@ class FuncDef(Statement):
         self.body = body
 
 class InterfaceDef(Statement):
-    def __init__(self, name: str, body: list, lineno, col):
+    def __init__(self, path: list, body: list, lineno, col):
         super().__init__(lineno, col)
-        self.name = name
+        self.path = path
         self.body = body
 
 class Assign(Statement): # normal assign

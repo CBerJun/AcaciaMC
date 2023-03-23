@@ -95,15 +95,6 @@ class Compiler:
         # e.g. when `path` is "a/b", main file is
         # generated at "a/b/<Config.function_folder>/load.mcfunction"
         f_path = os.path.join(path, Config.function_folder)
-        # --- CREATE FOLDERS ---
-        for sub_path in (
-            '', # the root folder
-            'lib', # dependencies of main file
-            'interface' # user defined interfaces
-        ):
-            target = os.path.join(f_path, sub_path)
-            if not os.path.exists(target):
-                os.mkdir(target)
         # --- WRITE FILES ---
         self._write_mcfunction(self.file_init, f_path)
         self._write_mcfunction(self.file_main, f_path)
@@ -311,6 +302,8 @@ class Compiler:
 
     def _write_file(self, content: str, path: str):
         # write `content` to `path`
+        os.makedirs(os.path.realpath(os.path.join(path, os.pardir)),
+                    exist_ok=True)
         try:
             with open(path, 'w', **self.OPEN_ARGS) as f:
                 f.write(content)

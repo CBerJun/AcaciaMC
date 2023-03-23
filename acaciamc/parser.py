@@ -375,14 +375,19 @@ class Parser:
         return node
     
     def interface_stmt(self, origin_indent):
-        # interface_stmt := INTERFACE IDENTIFIER COLON statement_block
+        # interface_stmt := INTERFACE IDENTIFIER (POINT IDENTIFIER)*
+        #   COLON statement_block
         pos = self.current_pos
         self.eat(TokenType.interface)
-        name = self.current_token.value
+        path = [self.current_token.value]
         self.eat(TokenType.identifier)
+        while self.current_token.type is TokenType.point:
+            self.eat()
+            path.append(self.current_token.value)
+            self.eat(TokenType.identifier)
         self.eat(TokenType.colon)
         stmts = self._block(origin_indent + Config.indent)
-        return InterfaceDef(name, stmts, **pos)
+        return InterfaceDef(path, stmts, **pos)
     
     def def_stmt(self, origin_indent):
         # def_stmt := DEF IDENTIFIER argument_table (ARROW expr)?
