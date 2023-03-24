@@ -7,7 +7,7 @@ import json
 
 # FString
 
-class _FStrParseError(Exception):
+class _FStrError(Exception):
     def __str__(self):
         return self.args[0]
 
@@ -42,94 +42,124 @@ class _FStrParser:
             "score": {"objective": objective, "name": selector}
         })
     
+    def add_localization(self, key: str):
+        self.json.append({"translate": key})
+    
     def add_expr(self, expr: AcaciaExpr):
-        # add an expr to string
+        # Format an expression to string
         if isinstance(expr.type, BuiltinIntType):
             if isinstance(expr, IntLiteral):
                 # optimize for literals
                 self.add_text(str(expr.value))
-                return
-            dependencies, var = to_IntVar(expr)
+            else:
+                dependencies, var = to_IntVar(expr)
+                self.dependencies.extend(dependencies)
+                self.add_score(var.objective, var.selector)
         elif isinstance(expr.type, BuiltinBoolType):
             if isinstance(expr, BoolLiteral):
                 # optimize for literals
                 self.add_text('1' if expr.value else '0')
-                return
-            dependencies, var = to_BoolVar(expr)
+            else:
+                dependencies, var = to_BoolVar(expr)
+                self.dependencies.extend(dependencies)
+                self.add_score(var.objective, var.selector)
+        elif isinstance(expr, String):
+            self.add_text(expr.value)
+        elif isinstance(expr, FString):
+            self.json.extend(expr.json)
         else:
-            raise _FStrParseError(
-                'Type "%s" is not supported in fstring' % expr.type.name
-            )
-        self.dependencies.extend(dependencies)
-        self.add_score(var.objective, var.selector)
+            raise _FStrError('Type "%s" can not be formatted as a string' \
+                             % expr.type.name)
     
     def expr_from_id(self, name: str) -> AcaciaExpr:
-        # get the expr from an format
+        # Get the expr from an format
         # e.g. "0" -> args[0]; "key" -> keywords["key"]
         if name.isdecimal():
             index = int(name)
             try:
                 expr = self.args[index]
             except IndexError:
-                raise _FStrParseError('Format index out of range: %d' % index)
+                raise _FStrError('Format index out of range: %d' % index)
         elif name in self.keywords:
             expr = self.keywords[name]
         else:
-            raise _FStrParseError(
-                'Invalid format expression: %r' % name
-            )
+            raise _FStrError('Invalid format expression: %r' % name)
         return expr
     
     def parse(self):
-        char = self.next_char()
-        while char is not None:
-            # normal char
+        char = ''
+        while True:
+            char = self.next_char()
+            if char is None:
+                break
+            # Normal char
             if char != '%':
                 self.add_text(char)
-            else: # % format
-                peek = self.next_char()
-                if peek == '%':
-                    # '%%' escape -> '%'
-                    self.add_text('%')
-                elif peek == '{':
-                    # read until }
-                    expr_str = ''
+                continue
+            # % format
+            second = self.next_char()
+            if second == '%' or second is None:
+                # '%%' escape -> '%' OR '%' at the end of string
+                self.add_text('%')
+                continue
+            # 1. After '%' can be a character indicating the mode
+            if second == 'k': # Valid mode
+                mode = second
+                third = self.next_char()
+                if third is None:
+                    self.add_text(char + mode)
+                    continue
+            else: # No mode specified
+                mode = ''
+                third = second
+            # 2. Parse which expression is being used here
+            if third == '{':
+                # read until }
+                expr_str = ''
+                expr_char = self.next_char()
+                while expr_char != '}':
+                    if expr_char is None:
+                        raise _FStrError('Unclosed "{" in fstring')
+                    expr_str += expr_char
                     expr_char = self.next_char()
-                    while expr_char != '}':
-                        if expr_char is None:
-                            raise _FStrParseError('Unclosed "{" in fstring')
-                        expr_str += expr_char
-                        expr_char = self.next_char()
-                    # expr is integer or an identifier
-                    expr = self.expr_from_id(expr_str)
-                    # add expr
-                    self.add_expr(expr)
-                elif peek is None:
-                    # if string ends at `char`, just use raw text
-                    self.add_text(char)
-                # NOTE isdecimal() branch is put after `is None` to make
-                # sure `peek` is an str (rather than NoneType)
-                elif peek.isdecimal():
-                    # %1 is the alia to %{1}
-                    expr = self.expr_from_id(peek)
-                    self.add_expr(expr)
-                else:
-                    # can't be understood, just use raw text
-                    self.add_text(char + peek)
-            # read next
-            char = self.next_char()
+                # expr is integer or an identifier
+                expr = self.expr_from_id(expr_str)
+            elif third.isdecimal():
+                # %1 is the alia to %{1}
+                expr = self.expr_from_id(third)
+            else:
+                # can't be understood, just use raw text
+                self.add_text(char + mode + third)
+                continue
+            # 3. Handle the `expr` we got
+            if mode == 'k': # localization
+                # An original `str` (not fstring) is required for
+                # localization key
+                if not isinstance(expr, String):
+                    raise _FStrError(
+                        'Type "%s" is not supported as localization key' \
+                        % expr.type.name)
+                self.add_localization(expr.value)
+            else: # default mode
+                self.add_expr(expr)
         return self.dependencies, self.json
 
 class FStringType(Type):
     # formatted string type
-    # format(_pattern: str, *args: int|bool, **kwargs: int|bool)
+    # format(_pattern: str, *args, **kwargs)
+    # So far, `args` and `kwargs` may be int, bool, str and fstring
     # NOTE booleans are formatted as "0" and "1"
     # in _pattern:
     #  "%%" -> character "%"
     #  "%{" integer "}" -> args[integer]
-    #  "%" one-digit -> alia to `"%{" one-digit "}"`
+    #  "%" one-digit-number -> alia to `"%{" one-digit-number "}"`
     #  "%{" id "}" -> kwargs[id] (id is an valid Acacia identifier)
-    # e.g. format("Val1: %0; Val2: %{name}; Name: %{1}", val1, val2, name=x)
+    # Additionally, you can add following character after the first "%":
+    #  "k": Use localization key
+    #  (omitted): Default mode, format the expression as string
+    # Examples:
+    #  format("Val1: %0; Val2: %{name}; Name: %{1}", val1, val2, name=x)
+    #  format("Find %k{diamond} for me please!", diamond="item.diamond.name")
     name = 'fstring'
 
     def do_init(self):
@@ -141,7 +171,7 @@ class FStringType(Type):
                 dependencies, json = _FStrParser(
                     arg_pattern.value, arg_fargs, arg_fkws
                 ).parse()
-            except _FStrParseError as err:
+            except _FStrError as err:
                 func.compiler.error(ErrorType.ANY, message = str(err))
             # scan pattern
             return FString(dependencies, json, func.compiler)
@@ -156,21 +186,21 @@ class FString(AcaciaExpr):
         # json:list JSON rawtext without {"rawtext": ...}
         super().__init__(compiler.types[FStringType], compiler)
         self.dependencies = dependencies
-        self._json = json
+        self.json = json
     
     def export_json_str(self) -> str:
-        return json.dumps({"rawtext": self._json})
+        return json.dumps({"rawtext": self.json})
     
     def add_text(self, text: str):
         # add text to fstring
-        if bool(self._json) and self._json[-1].get('text'):
-            self._json[-1]['text'] += text
+        if bool(self.json) and self.json[-1].get('text'):
+            self.json[-1]['text'] += text
         else: # fallback
-            self._json.append({"text": text})
+            self.json.append({"text": text})
     
     def deepcopy(self):
         return FString(
-            deepcopy(self.dependencies), deepcopy(self._json), self.compiler
+            deepcopy(self.dependencies), deepcopy(self.json), self.compiler
         )
     
     def __add__(self, other):
@@ -180,7 +210,7 @@ class FString(AcaciaExpr):
             res.add_text(other.value)
         elif isinstance(other, FString):
             # connect json
-            res._json.extend(other._json)
+            res.json.extend(other.json)
         else: raise TypeError
         return res
     
