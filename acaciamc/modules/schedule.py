@@ -144,7 +144,7 @@ def _register_loop(func: BinaryFunction):
     cmds.extend(arg_interval.export(timer))
     func.compiler.file_tick.extend(
         export_execute_subcommands(
-            ["if score %s matches 0" % timer], main=cmd
+            ["if score %s matches ..0" % timer], main=cmd
         )
         for cmd in cmds
     )
