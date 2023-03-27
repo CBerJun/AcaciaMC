@@ -104,7 +104,7 @@ class Compiler:
         if self.file_tick.has_content():
             self._write_mcfunction(self.file_tick, f_path)
             self._write_file(
-                '{"values": ["tick"]}',
+                '{"values": ["%s/tick"]}' % Config.function_folder,
                 os.path.join(path, 'tick.json')
             )
     
