@@ -5,7 +5,7 @@
  *
  * Compile this with:
  *   cd path/to/acacia
- *   python3 main.py -d test/brief_intro.aca
+ *   python3 main.py -d test/brief.aca
  * "-d" is to show the debugging comments in output files.
  *
  * It can be interpreted using Python (version above 3.3)

@@ -10,7 +10,7 @@ Acacia 将指令简化为了类似 Python 语言的代码。
 Acacia 是使用 Python 编写的（需要 3.3 或以上版本），所以通过 Python 可以
 简单地创建可供 Acacia 调用的模块。
 
-查看[这个文件](test/brief_intro.aca)来了解 Acacia 大概的语法。
+查看[这个文件](test/brief.aca)来了解 Acacia 大概的语法。
 
 ## 简单的语法
 在 Acacia 中定义变量: `a = 1`。就这么简单捏，无需研究计分板系统了。
@@ -104,5 +104,5 @@ scoreboard players operation "acacia4" "acacia" /= "acacia5" "acacia"
 
 ## 了解更多
 - [一个中文的介绍视频](https://www.bilibili.com/video/BV1uR4y167w9)
-- 查看[这个测试文件](test/brief_intro.aca)来了解 Acacia 大概的语法。
+- 查看[这个测试文件](test/brief.aca)来了解 Acacia 大概的语法。
 - 在[这里](test/demo/numguess.aca)可以找到一个简单的猜数字demo!

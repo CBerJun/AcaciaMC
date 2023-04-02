@@ -11,7 +11,7 @@ commands into Python-like code. Acacia code is finally compiled into
 Acacia is written in Python (require 3.3 or newer), so it's easy to create
 a binary module using Python for Acacia code to use.
 
-Go to [this test file](test/brief_intro.aca) for an overview of Acacia.
+Go to [this test file](test/brief.aca) for an overview of Acacia.
 
 ## Simple Syntax
 Defining variables in Acacia: `a = 1`. That's it.
@@ -106,5 +106,5 @@ The order of the operations are well-organized by Acacia compiler.
 
 ## Discover More about Acacia
 - [An introduction video in Chinese](https://www.bilibili.com/video/BV1uR4y167w9)
-- Go to [this test file](test/brief_intro.aca) for more details about Acacia!
+- Go to [this test file](test/brief.aca) for more details about Acacia!
 - A simple number guessing game written in Acacia can also be found [here](test/demo/numguess.aca)!
