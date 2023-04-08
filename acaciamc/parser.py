@@ -390,20 +390,25 @@ class Parser:
         return InterfaceDef(path, stmts, **pos)
     
     def def_stmt(self, origin_indent):
-        # def_stmt := DEF IDENTIFIER argument_table (ARROW expr)?
-        #   COLON statement_block
+        # def_stmt := INLINE? DEF IDENTIFIER argument_table
+        #   (ARROW expr)? COLON statement_block
         pos = self.current_pos
+        is_inline = self.current_token.type is TokenType.inline
+        if is_inline:
+            self.eat() # Eat `inline`
         self.eat(TokenType.def_)
         name = self.current_token.value
         self.eat(TokenType.identifier)
-        arg_table = self.argument_table()
+        # Inline functions does not require type declaration
+        arg_table = self.argument_table(type_required=(not is_inline))
         returns = None
         if self.current_token.type is TokenType.arrow:
             self.eat()
             returns = self.expr()
         self.eat(TokenType.colon)
         stmts = self._block(origin_indent + Config.indent)
-        return FuncDef(name, arg_table, stmts, returns, **pos)
+        ast_class = InlineFuncDef if is_inline else FuncDef
+        return ast_class(name, arg_table, stmts, returns, **pos)
     
     def command_stmt(self):
         # command_stmt := COMMAND
@@ -519,7 +524,7 @@ class Parser:
             return self.pass_stmt()
         elif token_type is TokenType.interface:
             return self.interface_stmt(expect_indent)
-        elif token_type is TokenType.def_:
+        elif token_type is TokenType.def_ or token_type is TokenType.inline:
             return self.def_stmt(expect_indent)
         elif token_type is TokenType.command:
             return self.command_stmt()
@@ -581,12 +586,15 @@ class Parser:
                 stmts.append(stmt)
         return Module(stmts, **pos)
     
-    def argument_table(self):
+    def argument_table(self, type_required=True):
         # parse an ArgumentTable
         # type_decl := COLON expr
         # default_decl := EQUAL expr
-        # arg_decl := IDENTIFIER ((type_decl | default_decl)
-        #   | (type_decl default_decl))
+        # When `type_required`:
+        #   arg_decl := IDENTIFIER ((type_decl | default_decl)
+        #     | (type_decl default_decl))
+        # Else:
+        #   arg_decl := IDENTIFIER type_decl? default_decl?
         # argument_table := LPAREN (arg_decl COMMA)* arg_decl? RPAREN
         arg_table = ArgumentTable(**self.current_pos)
         self.eat(TokenType.lparen)
@@ -605,7 +613,7 @@ class Parser:
                 self.eat()
                 default = self.expr()
             # check
-            if not (type_ or default):
+            if (not (type_ or default)) and type_required:
                 self.error(ErrorType.DONT_KNOW_ARG_TYPE, **pos, arg = name)
             if name in arg_table.args:
                 self.error(ErrorType.DUPLICATE_ARG_DEF, **pos, arg = name)

@@ -64,7 +64,7 @@ class ArgumentTable(AST): # arguments used in function definition
         self.args = [] # names of arguments
         self.default = {} # default values of arguments
         self.types = {} # types of arguments
-            
+    
     def add_arg(self, name: str, type: Expression, default: Expression):
         self.args.append(name)
         self.types[name] = type
@@ -94,6 +94,17 @@ class While(Statement): # while statement
         self.body = body
 
 class FuncDef(Statement):
+    def __init__(
+        self, name: str, arg_table: ArgumentTable,
+        body: list, returns: Expression, lineno, col
+    ):
+        super().__init__(lineno, col)
+        self.name = name
+        self.arg_table = arg_table
+        self.returns = returns
+        self.body = body
+
+class InlineFuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
         body: list, returns: Expression, lineno, col

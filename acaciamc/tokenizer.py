@@ -53,6 +53,7 @@ class TokenType(enum.Enum):
     true = 'True' # must at beginning of keyword part
     def_ = 'def'
     interface = 'interface'
+    inline = 'inline'
     if_ = 'if'
     elif_ = 'elif'
     else_ = 'else'

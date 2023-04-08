@@ -108,6 +108,30 @@ elif 1 < 10:
 else:
     pass # Empty block
 
+#* Inline functions *#
+#*
+ # Inline functions have great differences from normal ones.
+ * They are like bindings because they are both just an "alia" to make
+ * code simpler.
+ * Inline functions are:
+ *  1. Expanded when called. Every time they get called, their code is
+ *  parsed once. Therefore, type of argument can be omitted.
+ *  2. Arguments are delivered directly, not assigned. The arguments
+ *  are sent in the same way as bindings, while the normal functions
+ *  do it using assignments. Therefore, the argument types can be
+ *  any type you want.
+ *#
+
+inline def my_print(text="Hello!"):
+    #* @param text: str *#
+    print.tell("Acacia: " + text)
+my_print() # Acacia: Hello!
+my_print("Inline functions!") # Acacia: Inline functions!
+
+inline def set_var(x: int):
+    x = 10
+set_var(x) # `x` is 10 now
+
 #* Exported interfaces *#
 # These interfaces are exported for later use in Minecraft
 interface a:

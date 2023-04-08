@@ -117,6 +117,18 @@ class Generator(ASTVisitor):
             object_.attribute_table.set(target_node.attr, target_value)
         else: raise TypeError
     
+    def get_result_type(self, node: Expression) -> Type:
+        # Get result Type according to AST
+        if node is None:
+            return self.compiler.types[BuiltinNoneType]
+        else:
+            returns = self.visit(node)
+            if not isinstance(returns.type, BuiltinTypeType):
+                self.compiler.error(
+                    ErrorType.INVALID_RESULT_TYPE, got = returns.type.name
+                )
+            return returns
+    
     def write_debug(self, comment: str, target: MCFunctionFile = None):
         # write debug comment to current_file
         # target:MCFunctionFile the file to write comments into
@@ -144,6 +156,15 @@ class Generator(ASTVisitor):
         if f.has_content():
             self.compiler.add_file(f)
         self.current_file = old
+    
+    @contextlib.contextmanager
+    def new_scope(self):
+        # Create a new scope
+        old = self.current_scope
+        s = ScopedSymbolTable(outer=old, builtins=self.compiler.builtins)
+        self.current_scope = s
+        yield s
+        self.current_scope = old
 
     # --- VISITORS ---
     
@@ -344,24 +365,19 @@ class Generator(ASTVisitor):
             self.write_debug('No commands generated')
     
     def visit_InterfaceDef(self, node: InterfaceDef):
-        # new environment
-        old_scope = self.current_scope
-        self.current_scope = ScopedSymbolTable(
-            outer=old_scope, builtins=self.compiler.builtins)
-        # body
-        with self.new_mcfunc_file(
-            'interface/%s' % '/'.join(node.path)
-        ) as body_file:
-            self.write_debug('Interface definition')
-            for stmt in node.body:
-                self.visit(stmt)
-        # add lib
-        if body_file.has_content():
-            self.write_debug('Generated at %s' % body_file.get_path())
-        else:
-            self.write_debug('No commands generated')
-        # resume environment
-        self.current_scope = old_scope
+        with self.new_scope():
+            # body
+            with self.new_mcfunc_file(
+                'interface/%s' % '/'.join(node.path)
+            ) as body_file:
+                self.write_debug('Interface definition')
+                for stmt in node.body:
+                    self.visit(stmt)
+            # add lib
+            if body_file.has_content():
+                self.write_debug('Generated at %s' % body_file.get_path())
+            else:
+                self.write_debug('No commands generated')
     
     def visit_ArgumentTable(self, node: ArgumentTable):
         # handle arg table
@@ -374,9 +390,9 @@ class Generator(ASTVisitor):
             if default_node is not None:
                 defaults[arg] = self.visit(default_node)
             if type_node is None:
-                # type is ommited (default must be given,
-                # or else Parser would have raise an Error)
-                types[arg] = defaults[arg].type
+                if default_node is not None:
+                    # type is ommited, default value given
+                    types[arg] = defaults[arg].type
             else: # type is given
                 types[arg] = self.visit(type_node)
                 # make sure specified type is a type
@@ -399,45 +415,45 @@ class Generator(ASTVisitor):
     
     def visit_FuncDef(self, node: FuncDef):
         # get return type (of Type type)
-        if node.returns is None:
-            returns = self.compiler.types[BuiltinNoneType]
-        else:
-            returns = self.visit(node.returns)
-            if not isinstance(returns.type, BuiltinTypeType):
-                self.compiler.error(
-                    ErrorType.INVALID_RESULT_TYPE, got = returns.type.name
-                )
+        returns = self.get_result_type(node.returns)
         # parse arg
         args, types, defaults = self.visit(node.arg_table)
-        # create var
-        func_var = AcaciaFunction(
+        # create function
+        func = AcaciaFunction(
             args = args,
             arg_types = types,
             arg_defaults = defaults,
             returns = returns,
             compiler = self.compiler
         )
-        self.current_scope.set(node.name, func_var)
+        self.current_scope.set(node.name, func)
         # read body
-        old_scope = self.current_scope
         old_res_var = self.result_var
-        self.current_scope = ScopedSymbolTable(
-            outer=old_scope, builtins=self.compiler.builtins)
-        self.result_var = func_var.result_var
-        func_var.arg_handler.register_args_to_scope(self.current_scope)
-        with self.new_mcfunc_file() as body_file:
-            self.write_debug('Function definition of %s()' % node.name)
-            for stmt in node.body:
-                self.visit(stmt)
-        # add file
-        if body_file.has_content():
-            self.write_debug('Generated at %s' % body_file.get_path())
-            func_var.file = body_file
-        else:
-            self.write_debug('No commands generated')
+        self.result_var = func.result_var
+        with self.new_scope():
+            # Register arguments to scope
+            for arg in args:
+                self.current_scope.set(arg, func.arg_vars[arg])
+            # Write file
+            with self.new_mcfunc_file() as body_file:
+                self.write_debug('Function definition of %s()' % node.name)
+                for stmt in node.body:
+                    self.visit(stmt)
+            # Add file
+            if body_file.has_content():
+                self.write_debug('Generated at %s' % body_file.get_path())
+                func.file = body_file
+            else:
+                self.write_debug('No commands generated')
         # resume environment
-        self.current_scope = old_scope
         self.result_var = old_res_var
+    
+    def visit_InlineFuncDef(self, node: InlineFuncDef):
+        returns = self.get_result_type(node.returns)
+        args, types, defaults = self.visit(node.arg_table)
+        func = InlineFunction(node, args, types, defaults,
+                              returns, self.compiler)
+        self.current_scope.set(node.name, func)
     
     def visit_Result(self, node: Result):
         # check
@@ -590,3 +606,21 @@ class Generator(ASTVisitor):
             keywords[arg] = self.visit(value)
         # call it
         return func.call(args, keywords)
+    
+    def call_inline_func(self, func: InlineFunction, args, keywords: dict):
+        # We visit the AST node every time an inline function is called
+        # Return a list of commands
+        with self.new_scope():
+            # Register args directly into scope, without assigning
+            # (as normal function calls do)
+            arg2value = func.arg_handler.match(args, keywords)
+            for arg, value in arg2value.items():
+                self.current_scope.set(arg, value)
+            # Visit body
+            old_result = self.result_var
+            self.result_var = func.result_var
+            self.write_debug("Start of inline function")
+            for stmt in func.node.body:
+                self.visit(stmt)
+            self.write_debug("End of inline function")
+            self.result_var = old_result

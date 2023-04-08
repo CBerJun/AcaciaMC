@@ -203,21 +203,6 @@ class ArgumentHandler:
         self.ARG_LEN = len(self.args)
         self.compiler = compiler
 
-        # create a VarValue for every args according to their types
-        # and store them as dict at self.arg_vars
-        # meanwhile, check whether arg types are supported
-        self.arg_vars = {} # str<arg name>:VarValue<place to store the arg>
-        for arg in self.args:
-            type_ = self.arg_types[arg]
-            try:
-                self.arg_vars[arg] = type_.new_var()
-            except NotImplementedError:
-                # type.new_var() is not implemented
-                self.compiler.error(
-                    ErrorType.UNSUPPORTED_ARG_TYPE,
-                    arg = arg, arg_type = type_.name
-                )
-    
     def match(self, args: list, keywords: dict) -> dict:
         # match the definition with these given args
         # args:iterable[AcaciaExpr] Positioned args
@@ -230,7 +215,8 @@ class ArgumentHandler:
         # util
         def _check_arg_type(arg: str, value: AcaciaExpr):
             # check if `arg` got the correct type of `value`
-            if value.type is not self.arg_types[arg]:
+            t = self.arg_types[arg]
+            if (t is not None) and (value.type is not t):
                 self.compiler.error(
                     ErrorType.WRONG_ARG_TYPE,
                     arg = arg,
@@ -261,22 +247,6 @@ class ArgumentHandler:
                 else:
                     self.compiler.error(ErrorType.MISSING_ARG, arg = arg)
         return res
-    
-    def match_and_assign(self, args, keywords) -> list:
-        # match the given args
-        # and return a list of commands that assigns args to self.arg_vars
-        args = self.match(args, keywords)
-        # Assign arguments
-        res = []
-        for arg, value in args.items():
-            res.extend(value.export(self.arg_vars[arg]))
-        return res
-    
-    def register_args_to_scope(self, scope):
-        # register arguments to the given scope
-        # scope:ScopedSymbolTable
-        for arg in self.args:
-            scope.set(arg, self.arg_vars[arg])
 
 class VarValue(AcaciaExpr):
     # VarValues are special AcaciaExprs that can be assigned

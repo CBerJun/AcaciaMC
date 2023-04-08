@@ -3,10 +3,12 @@ from .base import *
 from .types import *
 from ...error import *
 
-__all__ = ['AcaciaFunction', 'BinaryFunction']
+__all__ = ['AcaciaFunction', 'InlineFunction', 'BinaryFunction']
 
-# There are 2 types of functions:
+# There are 3 types of functions:
 # - AcaciaFunction: functions that are written in Acacia
+# - InlineFunction: functions written in Acacia that
+#   are annotated with `inline`
 # - BinaryFunction: functions that are written in Python,
 #   which is usually a builtin function
 
@@ -20,8 +22,21 @@ class AcaciaFunction(AcaciaExpr):
         # returns:Type Return type
         super().__init__(compiler.types[BuiltinFunctionType], compiler)
         self.arg_handler = ArgumentHandler(
-            args, arg_types, arg_defaults, self.compiler
-        )
+            args, arg_types, arg_defaults, self.compiler)
+        # create a VarValue for every args according to their types
+        # and store them as dict at self.arg_vars
+        # meanwhile, check whether arg types are supported
+        self.arg_vars = {} # str<arg name>:VarValue<place to store the arg>
+        for arg in args:
+            type_ = arg_types[arg]
+            try:
+                self.arg_vars[arg] = type_.new_var()
+            except NotImplementedError:
+                # type.new_var() is not implemented
+                self.compiler.error(
+                    ErrorType.UNSUPPORTED_ARG_TYPE,
+                    arg = arg, arg_type = type_.name
+                )
         # decide result class
         self.result_class = self.compiler.get_call_result(type(returns))
         # allocate a var for result value
@@ -36,8 +51,12 @@ class AcaciaFunction(AcaciaExpr):
         # args:iterable[AcaciaExpr] Positioned args
         # keywords:dict{str<arg>:AcaciaExpr} Keyword args
         # <return>:CallResult return value of func call
+        res = []
         # Parse args
-        res = self.arg_handler.match_and_assign(args, keywords)
+        args = self.arg_handler.match(args, keywords)
+        # Assign argument values to `arg_vars`
+        for arg, value in args.items():
+            res.extend(value.export(self.arg_vars[arg]))
         # Call function
         if self.file is not None:
             res.append(self.file.call())
@@ -46,6 +65,25 @@ class AcaciaFunction(AcaciaExpr):
             dependencies = res,
             result_var = self.result_var,
             compiler = self.compiler
+        )
+
+class InlineFunction(AcaciaExpr):
+    def __init__(self, node, args, arg_types, arg_defaults,
+                 returns: Type, compiler):
+        # We store the InlineFuncDef node directly
+        super().__init__(compiler.types[BuiltinFunctionType], compiler)
+        self.node = node
+        self.result_var = returns.new_var()
+        self.result_class = self.compiler.get_call_result(type(returns))
+        t = node.arg_table
+        self.arg_handler = ArgumentHandler(
+            args, arg_types, arg_defaults, compiler)
+    
+    def call(self, args, keywords: dict):
+        self.compiler.current_generator.call_inline_func(self, args, keywords)
+        return self.result_class(
+            dependencies=[], result_var=self.result_var,
+            compiler=self.compiler
         )
 
 class BinaryFunction(AcaciaExpr):
