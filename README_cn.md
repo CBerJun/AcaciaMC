@@ -3,17 +3,19 @@
 
 ## 简介
 Acacia 是一门为 Minecraft 基岩版指令开发设计的编程语言。
-Acacia 的原则是*尽可能简单*。Minecraft 的命令较为复杂、很长、且难以维护。
+Acacia 的原则是**尽可能简单**。Minecraft 的命令较为复杂、很长、且难以维护。
 Acacia 将指令简化为了类似 Python 语言的代码。
-代码最终会被编译为多个`.mcfunction`文件，可以通过数据包被加载进一个世界。
+代码最终会被编译为多个 `.mcfunction` 文件，可以通过数据包被加载进一个世界。
 
-Acacia 是使用 Python 编写的（需要 3.3 或以上版本），所以通过 Python 可以
-简单地创建可供 Acacia 调用的模块。
+Acacia 是使用 Python 编写的，所以编译器需要 Python（需要 3.3 或以上版本）来运行。
+通过 Python 也可以创建可供 Acacia 调用的模块。例如，通过内置模块 `music` 可以
+自动生成红石音乐。
 
 查看[这个文件](test/brief.aca)来了解 Acacia 大概的语法。
 
 ## 简单的语法
-在 Acacia 中定义变量: `a = 1`。就这么简单捏，无需研究计分板系统了。
+这是在 Acacia 中定义变量的方法: `a = 1`。
+就这么简单捏，无需研究计分板系统了。
 
 一行代码计算复杂的表达式:
 ```
@@ -44,7 +46,7 @@ def is_prime(x: int) -> bool:
         mod += 1
 ```
 
-内置的模块:
+丰富的内置模块:
 ```
 import print
 money = 10
@@ -52,6 +54,12 @@ money = 10
 print.tell("Hello world!")
 # 在所有玩家的快捷栏上方显示"Money: (money变量的数值)"
 print.title(print.format("Money: %0", money), mode=print.ACTIONBAR)
+```
+```
+import music
+# 自动生成红石音乐，并采用1.2倍速。
+m -> music.Music("music_score.mid", speed=120)
+m.play()
 ```
 
 ## 与命令的兼容
@@ -104,5 +112,6 @@ scoreboard players operation "acacia4" "acacia" /= "acacia5" "acacia"
 
 ## 了解更多
 - [一个中文的介绍视频](https://www.bilibili.com/video/BV1uR4y167w9)
+- [用 Acacia 生成红石音乐](https://www.bilibili.com/video/BV1f24y1L7DB)
 - 查看[这个测试文件](test/brief.aca)来了解 Acacia 大概的语法。
 - 在[这里](test/demo/numguess.aca)可以找到一个简单的猜数字demo!
