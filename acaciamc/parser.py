@@ -13,6 +13,7 @@ class Parser:
         self.current_token = self.tokenizer.get_next_token()
         # next_token: when using method `peek`, next token is reserved here
         self.next_token = None
+        self.current_indent = 0
     
     @property
     def current_pos(self):
@@ -48,11 +49,12 @@ class Parser:
             # only generate when not generated yet
             self.next_token = self.tokenizer.get_next_token()
     
-    def _block(self, indent: int):
+    def _block(self):
         # read a block (of many statements with given indent num)
         stmts = []
+        self.current_indent += Config.indent
         while self.current_token.type != TokenType.end_marker:
-            stmt = self.statement(indent)
+            stmt = self.statement()
             if stmt is not None:
                 stmts.append(stmt)
             # every time statement method ends, current_token is
@@ -66,8 +68,9 @@ class Parser:
             #     bc
             # So we do _skip_empty_lines here
             if self.current_token.type is TokenType.line_begin:
-                if self.current_token.value < indent:
+                if self.current_token.value < self.current_indent:
                     break
+        self.current_indent -= Config.indent
         # Python does not allow empty blocks, so it is in Acacia
         if not stmts:
             self.error(ErrorType.EMPTY_BLOCK)
@@ -315,11 +318,10 @@ class Parser:
 
     ## Statement generator
 
-    def if_stmt(self, origin_indent):
+    def if_stmt(self):
         # if_statement := IF expr COLON statement_block
         #   (ELIF expr COLON statement_block)*
         #   (ELSE COLON statement_block)?
-        indent = origin_indent + Config.indent
         pos = self.current_pos
         IF_EXTRA = (TokenType.elif_, TokenType.else_)
         def _if_extra() -> list:
@@ -330,11 +332,11 @@ class Parser:
             if self.current_token.type is TokenType.else_:
                 self.eat()
                 self.eat(TokenType.colon)
-                return self._block(indent)
+                return self._block()
             self.eat(TokenType.elif_)
             condition = self.expr()
             self.eat(TokenType.colon)
-            stmts = self._block(indent)
+            stmts = self._block()
             # To allow empty lines before "elif" or "else"
             self._skip_empty_lines()
             # See if there's more "elif" or "else"
@@ -342,7 +344,7 @@ class Parser:
             next_indent = self.current_token.value
             self.peek() # same as below; skip line_begin
             if (self.next_token.type in IF_EXTRA) and \
-                (next_indent == origin_indent):
+                    (next_indent == self.current_indent):
                 self.eat() # eat line_begin
                 else_stmts = _if_extra()
             return [If(condition, stmts, else_stmts, **self.current_pos)]
@@ -350,22 +352,23 @@ class Parser:
         self.eat(TokenType.if_)
         condition = self.expr()
         self.eat(TokenType.colon)
-        stmts = self._block(indent)
+        stmts = self._block()
         else_stmts = []
         next_indent = self.current_token.value
         self.peek() # current is line_begin, check next
-        if self.next_token.type in IF_EXTRA and next_indent == origin_indent:
+        if (self.next_token.type in IF_EXTRA) and \
+                (next_indent == self.current_indent):
             self.eat() # eat this line_begin
             else_stmts = _if_extra()
         return If(condition, stmts, else_stmts, **pos)
     
-    def while_stmt(self, origin_indent):
+    def while_stmt(self):
         # while_stmt := WHILE expr COLON statement_block
         pos = self.current_pos
         self.eat(TokenType.while_)
         condition = self.expr()
         self.eat(TokenType.colon)
-        body = self._block(origin_indent + Config.indent)
+        body = self._block()
         return While(condition, body, **pos)
     
     def pass_stmt(self):
@@ -374,7 +377,7 @@ class Parser:
         self.eat(TokenType.pass_)
         return node
     
-    def interface_stmt(self, origin_indent):
+    def interface_stmt(self):
         # interface_stmt := INTERFACE IDENTIFIER (POINT IDENTIFIER)*
         #   COLON statement_block
         pos = self.current_pos
@@ -386,10 +389,10 @@ class Parser:
             path.append(self.current_token.value)
             self.eat(TokenType.identifier)
         self.eat(TokenType.colon)
-        stmts = self._block(origin_indent + Config.indent)
+        stmts = self._block()
         return InterfaceDef(path, stmts, **pos)
     
-    def def_stmt(self, origin_indent):
+    def def_stmt(self):
         # def_stmt := INLINE? DEF IDENTIFIER argument_table
         #   (ARROW expr)? COLON statement_block
         pos = self.current_pos
@@ -406,7 +409,7 @@ class Parser:
             self.eat()
             returns = self.expr()
         self.eat(TokenType.colon)
-        stmts = self._block(origin_indent + Config.indent)
+        stmts = self._block()
         ast_class = InlineFuncDef if is_inline else FuncDef
         return ast_class(name, arg_table, stmts, returns, **pos)
     
@@ -461,7 +464,7 @@ class Parser:
             return value
         return None
     
-    def import_statement(self):
+    def import_stmt(self):
         # import_stmt := IMPORT module_meta alia
         pos = self.current_pos
         self.eat(TokenType.import_)
@@ -469,7 +472,7 @@ class Parser:
         alia = self.alia()
         return Import(meta, alia, **pos)
     
-    def from_import_statement(self):
+    def from_import_stmt(self):
         # from_import_stmt := FROM module_meta IMPORT (STAR | (
         #   IDENTIFIER alia (COMMA IDENTIFIER alia)*
         # ))
@@ -491,7 +494,7 @@ class Parser:
                 alias.append(self.alia())
             return FromImport(meta, names, alias, **pos)
 
-    def statement(self, expect_indent = 0) -> (Statement or None):
+    def statement(self) -> (Statement or None):
         # statement := LINE_BEGIN (
         #   (expr (
         #     (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
@@ -499,7 +502,6 @@ class Parser:
         #   )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
         #   command_stmt | result_stmt | import_stmt | from_import_stmt
         # )
-        # expect_indent:int what size of indent block should be
         # this function may return None to show that file ends
         # every time when this func ends, self.current_char falls on
         # either line_begin or end_marker
@@ -507,33 +509,29 @@ class Parser:
         # a line_begin token is needed; check indent
         got_indent = self.current_token.value
         self.eat(TokenType.line_begin)
-        if expect_indent != got_indent:
+        if self.current_indent != got_indent:
             self.error(
                 ErrorType.WRONG_INDENT,
-                got = got_indent, expect = expect_indent
+                got = got_indent, expect = self.current_indent
             )
         # main part
-        token_type = self.current_token.type
-        if token_type is TokenType.end_marker:
+        if self.current_token.type is TokenType.end_marker:
             return None
-        if token_type is TokenType.if_:
-            return self.if_stmt(expect_indent)
-        elif token_type is TokenType.while_:
-            return self.while_stmt(expect_indent)
-        elif token_type is TokenType.pass_:
-            return self.pass_stmt()
-        elif token_type is TokenType.interface:
-            return self.interface_stmt(expect_indent)
-        elif token_type is TokenType.def_ or token_type is TokenType.inline:
-            return self.def_stmt(expect_indent)
-        elif token_type is TokenType.command:
-            return self.command_stmt()
-        elif token_type is TokenType.result:
-            return self.result_stmt()
-        elif token_type is TokenType.import_:
-            return self.import_statement()
-        elif token_type is TokenType.from_:
-            return self.from_import_statement()
+        TOK2STMT = {
+            TokenType.if_: self.if_stmt,
+            TokenType.while_: self.while_stmt,
+            TokenType.pass_: self.pass_stmt,
+            TokenType.interface: self.interface_stmt,
+            TokenType.def_: self.def_stmt,
+            TokenType.inline: self.def_stmt,
+            TokenType.command: self.command_stmt,
+            TokenType.result: self.result_stmt,
+            TokenType.import_: self.import_stmt,
+            TokenType.from_: self.from_import_stmt
+        }
+        stmt_method = TOK2STMT.get(self.current_token.type)
+        if stmt_method:
+            return stmt_method()
         
         # other statements that starts with an expression
         pos = self.current_pos
@@ -581,7 +579,7 @@ class Parser:
         pos = self.current_pos
         stmts = []
         while self.current_token.type != TokenType.end_marker:
-            stmt = self.statement(expect_indent = 0)
+            stmt = self.statement()
             if stmt is not None:
                 stmts.append(stmt)
         return Module(stmts, **pos)
