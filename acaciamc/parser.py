@@ -49,12 +49,27 @@ class Parser:
             # only generate when not generated yet
             self.next_token = self.tokenizer.get_next_token()
     
-    def _block(self):
-        # read a block (of many statements with given indent num)
+    def _block(self, func):
+        # read a block of structures
+        # func:function the structure; should return None or AST
+        # every time when `func` ends, self.current_char should fall on
+        # either line_begin or end_marker
         stmts = []
         self.current_indent += Config.indent
         while self.current_token.type != TokenType.end_marker:
-            stmt = self.statement()
+            # Check line_begin and indent
+            got_indent = self.current_token.value
+            self.eat(TokenType.line_begin)
+            if self.current_indent != got_indent:
+                self.error(
+                    ErrorType.WRONG_INDENT,
+                    got=got_indent, expect=self.current_indent
+                )
+            self._skip_empty_lines()
+            if self.current_token.type is TokenType.end_marker:
+                break
+            # Parse the structure
+            stmt = func()
             if stmt is not None:
                 stmts.append(stmt)
             # every time statement method ends, current_token is
@@ -85,6 +100,10 @@ class Parser:
         ):
             self.eat()
             self.peek()
+    
+    def statement_block(self):
+        # read a block of statements
+        return self._block(self.statement)
     
     # Following are different AST generators
     ## Expression generator
@@ -123,42 +142,42 @@ class Parser:
         objective = self.expr()
         self.eat(TokenType.bar)
         return RawScore(objective, selector, **pos)
-    
-    def expr_l1(self):
-        # arg := (IDENTIFIER EQUAL)? expr
-        # level 1 expression := (
-        #   (LPAREN expr RPAREN) | literal | identifier | raw_score
-        # )(
-        #   (POINT IDENTIFIER) | (LPAREN (arg COMMA)* arg? RPAREN)
-        # )*
-        # Call, Attribute, Constant, Identifier, other expressions with braces
+
+    def expr_l0(self):
+        # level 0 expression := (LPAREN expr RPAREN) | literal |
+        #   identifier | raw_score
         if self.current_token.type in (
             TokenType.integer, TokenType.true,
             TokenType.false, TokenType.string, TokenType.none
         ):
-            node = self.literal()
+            return self.literal()
         elif self.current_token.type is TokenType.identifier:
-            node = self.identifier()
+            return self.identifier()
         elif self.current_token.type is TokenType.lparen:
             self.eat(TokenType.lparen)
             node = self.expr()
             self.eat(TokenType.rparen)
+            return node
         elif self.current_token.type is TokenType.bar:
-            node = self.raw_score()
+            return self.raw_score()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
-        # handle Attribute and Call part
-        def _attribute(node):
+
+    def expr_l1(self):
+        # arg := (IDENTIFIER EQUAL)? expr
+        # level 1 expression := expr_l0 (
+        #   (POINT IDENTIFIER)
+        #   | (LPAREN (arg COMMA)* arg? RPAREN)
+        # )*
+        node = self.expr_l0()
+        def _attribute(node: Expression):
             # make `node` an Attribute
             self.eat(TokenType.point)
             attr = self.current_token.value
             self.eat(TokenType.identifier)
-            return Attribute(
-                node, attr,
-                lineno = node.lineno, col = node.col
-            )
+            return Attribute(node, attr, lineno=node.lineno, col=node.col)
         
-        def _call(node):
+        def _call(node: Expression):
             # make `node` a Call
             args, keywords = [], {}
             self.eat(TokenType.lparen)
@@ -186,7 +205,8 @@ class Parser:
                 # read comma
                 if self.current_token.type is TokenType.comma:
                     self.eat()
-                else: break
+                else:
+                    break
             self.eat(TokenType.rparen)
             return Call(
                 node, args, keywords,
@@ -199,7 +219,8 @@ class Parser:
                 node = _attribute(node)
             elif self.current_token.type is TokenType.lparen:
                 node = _call(node)
-            else: return node
+            else:
+                return node
     
     def expr_l2(self):
         # level 2 expression := ((PLUS | MINUS) expr_l2) | expr_l1
@@ -332,11 +353,11 @@ class Parser:
             if self.current_token.type is TokenType.else_:
                 self.eat()
                 self.eat(TokenType.colon)
-                return self._block()
+                return self.statement_block()
             self.eat(TokenType.elif_)
             condition = self.expr()
             self.eat(TokenType.colon)
-            stmts = self._block()
+            stmts = self.statement_block()
             # To allow empty lines before "elif" or "else"
             self._skip_empty_lines()
             # See if there's more "elif" or "else"
@@ -352,7 +373,7 @@ class Parser:
         self.eat(TokenType.if_)
         condition = self.expr()
         self.eat(TokenType.colon)
-        stmts = self._block()
+        stmts = self.statement_block()
         else_stmts = []
         next_indent = self.current_token.value
         self.peek() # current is line_begin, check next
@@ -368,7 +389,7 @@ class Parser:
         self.eat(TokenType.while_)
         condition = self.expr()
         self.eat(TokenType.colon)
-        body = self._block()
+        body = self.statement_block()
         return While(condition, body, **pos)
     
     def pass_stmt(self):
@@ -389,7 +410,7 @@ class Parser:
             path.append(self.current_token.value)
             self.eat(TokenType.identifier)
         self.eat(TokenType.colon)
-        stmts = self._block()
+        stmts = self.statement_block()
         return InterfaceDef(path, stmts, **pos)
     
     def def_stmt(self):
@@ -409,10 +430,10 @@ class Parser:
             self.eat()
             returns = self.expr()
         self.eat(TokenType.colon)
-        stmts = self._block()
+        stmts = self.statement_block()
         ast_class = InlineFuncDef if is_inline else FuncDef
         return ast_class(name, arg_table, stmts, returns, **pos)
-    
+
     def command_stmt(self):
         # command_stmt := COMMAND
         pos = self.current_pos
@@ -502,21 +523,7 @@ class Parser:
         #   )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
         #   command_stmt | result_stmt | import_stmt | from_import_stmt
         # )
-        # this function may return None to show that file ends
-        # every time when this func ends, self.current_char falls on
-        # either line_begin or end_marker
-        self._skip_empty_lines()
-        # a line_begin token is needed; check indent
-        got_indent = self.current_token.value
-        self.eat(TokenType.line_begin)
-        if self.current_indent != got_indent:
-            self.error(
-                ErrorType.WRONG_INDENT,
-                got = got_indent, expect = self.current_indent
-            )
-        # main part
-        if self.current_token.type is TokenType.end_marker:
-            return None
+        # Statements that start with special token
         TOK2STMT = {
             TokenType.if_: self.if_stmt,
             TokenType.while_: self.while_stmt,
@@ -533,7 +540,7 @@ class Parser:
         if stmt_method:
             return stmt_method()
         
-        # other statements that starts with an expression
+        # Other statements that starts with an expression
         pos = self.current_pos
         expr = self.expr()
         AUG_ASSIGN = {
@@ -577,11 +584,10 @@ class Parser:
     def module(self):
         # parse a Module
         pos = self.current_pos
-        stmts = []
-        while self.current_token.type != TokenType.end_marker:
-            stmt = self.statement()
-            if stmt is not None:
-                stmts.append(stmt)
+        # `statement_block` indent the block once, which is what we are not
+        # expecting, so we dedent once here.
+        self.current_indent -= Config.indent
+        stmts = self.statement_block()
         return Module(stmts, **pos)
     
     def argument_table(self, type_required=True):
