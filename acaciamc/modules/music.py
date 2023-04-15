@@ -95,9 +95,154 @@ class Music(AcaciaExpr):
     # tick.
     # CONFIGS
     DEFAULT_VOLUME = 100 # 0~127
-    DEFAULT_INSTRUMENT = "note.harp" # Piano
     ID2INSTRUMENT = {
-        0: "note.harp"
+        # Piano
+        0: 'note.harp',
+        1: 'note.harp',
+        2: 'note.pling',
+        3: 'note.pling',
+        4: 'note.pling',
+        5: 'note.pling',
+        6: 'note.harp',
+        7: 'note.pling',
+        # Chromatic Percussion
+        8: 'note.harp',
+        9: 'note.bell',
+        10: 'note.chime',
+        11: 'note.iron_xylophone',
+        12: 'note.xylophone',
+        13: 'note.xylophone',
+        14: 'note.chime',
+        15: 'note.bell',
+        # Organ
+        # Organ sounds like flute somehow...
+        16: 'note.flute',
+        17: 'note.flute',
+        18: 'note.flute',
+        19: 'note.flute',
+        20: 'note.flute',
+        21: 'note.flute',
+        22: 'note.flute',
+        23: 'note.flute',
+        # Guitar
+        24: 'note.guitar',
+        25: 'note.guitar',
+        26: 'note.guitar',
+        27: 'note.guitar',
+        28: 'note.guitar',
+        29: 'note.guitar',
+        30: 'note.guitar',
+        31: 'note.bass',
+        # Bass
+        32: 'note.bass',
+        33: 'note.bass',
+        34: 'note.bass',
+        35: 'note.bass',
+        36: 'note.bass',
+        37: 'note.bass',
+        38: 'note.bass',
+        39: 'note.bass',
+        # Solo String
+        # Strings like violin sounds like flute somehow...
+        40: 'note.flute',
+        41: 'note.flute',
+        42: 'note.flute',
+        43: 'note.flute',
+        44: 'note.guitar',
+        45: 'note.guitar',
+        46: 'note.harp',
+        47: 'note.snare',
+        # Ensemble
+        48: 'note.flute',
+        49: 'note.flute',
+        50: 'note.flute',
+        51: 'note.flute',
+        52: 'note.flute',
+        53: 'note.flute',
+        # Brass
+        54: 'note.flute',
+        55: 'note.snare',
+        56: 'note.chime',
+        57: 'note.chime',
+        58: 'note.chime',
+        59: 'note.chime',
+        60: 'note.chime',
+        61: 'note.chime',
+        62: 'note.chime',
+        63: 'note.chime',
+        # Reed
+        # note.bit sounds like Sax somehow...
+        64: 'note.bit',
+        65: 'note.bit',
+        66: 'note.bit',
+        67: 'note.bit',
+        68: 'note.flute',
+        69: 'note.flute',
+        70: 'note.flute',
+        71: 'note.flute',
+        # Pipe
+        72: 'note.flute',
+        73: 'note.flute',
+        74: 'note.flute',
+        75: 'note.flute',
+        76: 'note.flute',
+        77: 'note.flute',
+        78: 'note.bell',
+        79: 'note.flute',
+        # Synth Lead
+        80: 'note.bit',
+        81: 'note.bit',
+        82: 'note.flute',
+        83: 'note.flute',
+        84: 'note.guitar',
+        85: 'note.bit',
+        86: 'note.bit',
+        87: 'note.bit',
+        # Synth Pad
+        88: 'note.bit',
+        89: 'note.bit',
+        90: 'note.bit',
+        91: 'note.bit',
+        92: 'note.guitar',
+        93: 'note.bit',
+        94: 'note.bit',
+        95: 'note.guitar',
+        # Synth Effect
+        96: 'note.bit',
+        97: 'note.bit',
+        98: 'note.bit',
+        99: 'note.bit',
+        100: 'note.bit',
+        101: 'note.bit',
+        102: 'note.bit',
+        103: 'note.bit',
+        # Ethnic
+        104: 'note.guitar',
+        105: 'note.banjo',
+        106: 'note.guitar',
+        107: 'note.guitar',
+        108: 'note.bell',
+        109: 'note.flute',
+        110: 'note.guitar',
+        111: 'note.flute',
+        # Percussive
+        112: 'note.bell',
+        113: 'note.bell',
+        114: 'note.drum',
+        115: 'note.cow_bell',
+        116: 'note.drum',
+        117: 'note.drum',
+        118: 'note.drum',
+        119: 'note.bit',
+        # Sound Effects
+        120: 'note.hat',
+        121: 'note.hat',
+        122: 'note.hat',
+        123: 'note.hat',
+        124: 'note.hat',
+        125: 'note.hat',
+        126: 'note.hat',
+        127: 'note.snare'
     }
 
     def __init__(self, midi, exec_condition: str, looping: int,
@@ -251,7 +396,7 @@ class Music(AcaciaExpr):
     def get_instrument(self, channel: int) -> str:
         """Get MC sound of channel."""
         ins_id = self.channel_instrument.get(channel)
-        return self.ID2INSTRUMENT.get(ins_id, self.DEFAULT_INSTRUMENT)
+        return self.ID2INSTRUMENT[ins_id]
 
     def get_volume(self, channel: int, velocity: int) -> float:
         """Get MC volume (0~1) according to channel and velocity."""
@@ -276,6 +421,29 @@ class Music(AcaciaExpr):
         )
         self.cur_chunk_size += 1
 
+def _set_instrument(func: BinaryFunction):
+    """
+    music.set_instrument(id: int-literal, sound: str):
+        Set instrument mapping
+    
+    Set the sound of MIDI instrument `id` to Minecraft sound `sound`.
+    Example:
+        # Set sound of ID 2 instrument ()
+        music.set_instrument(2, "note.harp")
+    """
+    # Parse args
+    arg_id = func.arg_require("id", BuiltinIntType)
+    if not isinstance(arg_id, IntLiteral):
+        func.arg_error('id', 'should be a literal')
+    id_ = arg_id.value
+    if id_ >= 128 or id_ < 0:
+        func.arg_error('id', 'must in 0~127')
+    arg_sound = func.arg_require("sound", BuiltinStringType)
+    func.assert_no_arg()
+    # Modify
+    Music.ID2INSTRUMENT[id_] = arg_sound.value
+    return result_none([], func.compiler)
+
 def acacia_build(compiler):
     global mido, register_loop
     try:
@@ -287,6 +455,7 @@ def acacia_build(compiler):
     register_loop = schedule.attribute_table.lookup("register_loop")
     compiler.add_type(MusicType)
     return {
-        "Music": compiler.types[MusicType]
+        "Music": compiler.types[MusicType],
+        "set_instrument": BinaryFunction(_set_instrument, compiler)
     }
 
