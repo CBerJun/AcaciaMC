@@ -58,6 +58,7 @@ class Parser:
         self.current_indent += Config.indent
         while self.current_token.type != TokenType.end_marker:
             # Check line_begin and indent
+            self._skip_empty_lines()
             got_indent = self.current_token.value
             self.eat(TokenType.line_begin)
             if self.current_indent != got_indent:
@@ -65,13 +66,11 @@ class Parser:
                     ErrorType.WRONG_INDENT,
                     got=got_indent, expect=self.current_indent
                 )
-            self._skip_empty_lines()
             if self.current_token.type is TokenType.end_marker:
                 break
             # Parse the structure
             stmt = func()
-            if stmt is not None:
-                stmts.append(stmt)
+            stmts.append(stmt)
             # every time statement method ends, current_token is
             # either line_begin or end_marker
             # when indent num is less than expected, end loop
@@ -584,10 +583,20 @@ class Parser:
     def module(self):
         # parse a Module
         pos = self.current_pos
-        # `statement_block` indent the block once, which is what we are not
-        # expecting, so we dedent once here.
-        self.current_indent -= Config.indent
-        stmts = self.statement_block()
+        stmts = []
+        while self.current_token.type != TokenType.end_marker:
+            # Check line_begin and indent
+            self._skip_empty_lines()
+            got_indent = self.current_token.value
+            self.eat(TokenType.line_begin)
+            if self.current_indent != got_indent:
+                self.error(
+                    ErrorType.WRONG_INDENT,
+                    got=got_indent, expect=self.current_indent
+                )
+            if self.current_token.type is TokenType.end_marker:
+                break
+            stmts.append(self.statement())
         return Module(stmts, **pos)
     
     def argument_table(self, type_required=True):
