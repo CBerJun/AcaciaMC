@@ -71,6 +71,12 @@ argparser.add_argument(
     help = 'encoding of file (default "utf-8")'
 )
 
+argparser.add_argument(
+    '--verbose',
+    action = 'store_true',
+    help = 'show full traceback message when encountering unexpected errors'
+)
+
 args = argparser.parse_args()
 
 # --- ARGUMENT HANDLE ---
@@ -136,4 +142,7 @@ try:
 except CompileError as err:
     error(str(err))
 except Exception as err:
-    error('unexpected error when compiling: %s' % err)
+    if args.verbose:
+        raise
+    else:
+        error('unexpected error when compiling: %s' % err)
