@@ -222,23 +222,25 @@ class FString(AcaciaExpr):
 def _tell(func: BinaryFunction):
     # tell(text: str|fstring, target: str = "@a") -> nonetype
     # tell the `target` the `text` using /tellraw
+    cmds = []
     # arg parse
     arg_text = func.arg_require('text', (BuiltinStringType, FStringType))
     ## convert str to fstring
     if isinstance(arg_text, String):
-        arg_text = func.compiler.types[FStringType].call(
+        arg_text, _cmds = func.compiler.types[FStringType].call(
             args = (arg_text,), keywords = {}
         )
+        cmds.extend(_cmds)
     arg_target = func.arg_optional(
         'target', String('@a', func.compiler), BuiltinStringType
     )
     func.assert_no_arg()
     # add to tellraw
-    cmds = deepcopy(arg_text.dependencies)
+    cmds.extend(arg_text.dependencies)
     cmds.append('tellraw %s %s' % (
         arg_target.value, arg_text.export_json_str()
     ))
-    return result_none(cmds, func.compiler)
+    return result_cmds(cmds, func.compiler)
 
 # title modes
 # NOTE these are just random numbers...
@@ -258,7 +260,8 @@ def _title(func: BinaryFunction):
     # )
     # use /titleraw for output
     # fade_in, stay_time and fade_out are in ticks for configuring
-    # arg parse
+    cmds = []
+    # Arg parse
     arg_text = func.arg_require('text', (BuiltinStringType, FStringType))
     arg_target = func.arg_optional(
         'target', String('@a', func.compiler), BuiltinStringType
@@ -278,9 +281,10 @@ def _title(func: BinaryFunction):
     func.assert_no_arg()
     ## convert str to fstring
     if isinstance(arg_text, String):
-        arg_text = func.compiler.types[FStringType].call(
+        arg_text, _cmds = func.compiler.types[FStringType].call(
             args = (arg_text,), keywords = {}
         )
+        cmds.extend(_cmds)
     ## check arg int literal
     if not isinstance(arg_fade_in, IntLiteral):
         func.arg_error('fade_in', 'should be a literal')
@@ -293,24 +297,23 @@ def _title(func: BinaryFunction):
     if mode not in (_TITLE, _SUBTITLE, _ACTIONBAR):
         func.arg_error('mode', 'invalid mode: %s' % mode)
     # Start
-    res = []
     ## set config
     target = arg_target.value
     conf = (arg_fade_in.value, arg_stay_time.value, arg_fade_out.value)
     if conf != _DEF_TITLE_CONFIG:
         # only set config when it's not the default one
-        res.append('titleraw %s times %d %d %d' % ((target,) + conf))
+        cmds.append('titleraw %s times %d %d %d' % ((target,) + conf))
     ## titleraw
-    res.extend(arg_text.dependencies)
-    res.append('titleraw %s %s %s' % (
+    cmds.extend(arg_text.dependencies)
+    cmds.append('titleraw %s %s %s' % (
         target, mode, arg_text.export_json_str()
     ))
     ## reset config
     if conf != _DEF_TITLE_CONFIG:
         # only reset when config is not the default one
-        res.append('titleraw %s reset' % target)
+        cmds.append('titleraw %s reset' % target)
     ## return
-    return result_none(res, func.compiler)
+    return result_cmds(cmds, func.compiler)
 
 def _title_clear(func: BinaryFunction):
     # title_clear(target: str = "@a")
@@ -320,7 +323,7 @@ def _title_clear(func: BinaryFunction):
     )
     func.assert_no_arg()
     # Write
-    return result_none(['titleraw %s clear' % arg_target.value], func.compiler)
+    return result_cmds(['titleraw %s clear' % arg_target.value], func.compiler)
 
 # builder
 

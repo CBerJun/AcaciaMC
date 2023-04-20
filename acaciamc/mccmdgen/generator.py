@@ -263,8 +263,7 @@ class Generator(ASTVisitor):
         self.register_symbol(node.target, value)
     
     def visit_ExprStatement(self, node: ExprStatement):
-        expr = self.visit(node.value)
-        self.current_file.extend(expr.export_novalue())
+        self.visit(node.value)
     
     def visit_Pass(self, node: Pass):
         pass
@@ -595,7 +594,7 @@ class Generator(ASTVisitor):
     
     # call
 
-    def visit_Call(self, node: Call) -> CallResult:
+    def visit_Call(self, node: Call):
         # find called function
         func = self.visit(node.func)
         # process given args and keywords
@@ -604,8 +603,11 @@ class Generator(ASTVisitor):
             args.append(self.visit(value))
         for arg, value in node.keywords.items():
             keywords[arg] = self.visit(value)
-        # call it
-        return func.call(args, keywords)
+        # Call it
+        res, cmds = func.call(args, keywords)
+        # Write commands
+        self.current_file.extend(cmds)
+        return res
     
     def call_inline_func(self, func: InlineFunction, args, keywords: dict):
         # We visit the AST node every time an inline function is called

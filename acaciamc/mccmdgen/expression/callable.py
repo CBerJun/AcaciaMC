@@ -37,8 +37,6 @@ class AcaciaFunction(AcaciaExpr):
                     ErrorType.UNSUPPORTED_ARG_TYPE,
                     arg = arg, arg_type = type_.name
                 )
-        # decide result class
-        self.result_class = self.compiler.get_call_result(type(returns))
         # allocate a var for result value
         self.result_var = returns.new_var()
         # file:MCFunctionFile the target file of function
@@ -50,7 +48,6 @@ class AcaciaFunction(AcaciaExpr):
         # call the function with given `args` and `keywords`
         # args:iterable[AcaciaExpr] Positioned args
         # keywords:dict{str<arg>:AcaciaExpr} Keyword args
-        # <return>:CallResult return value of func call
         res = []
         # Parse args
         args = self.arg_handler.match(args, keywords)
@@ -61,11 +58,7 @@ class AcaciaFunction(AcaciaExpr):
         if self.file is not None:
             res.append(self.file.call())
         # Store result
-        return self.result_class(
-            dependencies = res,
-            result_var = self.result_var,
-            compiler = self.compiler
-        )
+        return self.result_var, res
 
 class InlineFunction(AcaciaExpr):
     def __init__(self, node, args, arg_types, arg_defaults,
@@ -74,17 +67,12 @@ class InlineFunction(AcaciaExpr):
         super().__init__(compiler.types[BuiltinFunctionType], compiler)
         self.node = node
         self.result_var = returns.new_var()
-        self.result_class = self.compiler.get_call_result(type(returns))
-        t = node.arg_table
         self.arg_handler = ArgumentHandler(
             args, arg_types, arg_defaults, compiler)
     
     def call(self, args, keywords: dict):
         self.compiler.current_generator.call_inline_func(self, args, keywords)
-        return self.result_class(
-            dependencies=[], result_var=self.result_var,
-            compiler=self.compiler
-        )
+        return self.result_var, []
 
 class BinaryFunction(AcaciaExpr):
     # These are the functions that are written in Python,
@@ -110,7 +98,16 @@ class BinaryFunction(AcaciaExpr):
     def call(self, args, keywords: dict):
         self._calling_args = list(args)
         self._calling_keywords = keywords.copy()
-        return self.implementation(self)
+        # We need to return tuple[AcaciaExpr, list[str]],
+        # but we allow binary function implementation to only return 1
+        # `AcaciaExpr` as the result, omitting the commands to run
+        res = self.implementation(self)
+        if isinstance(res, tuple):
+            return res
+        elif isinstance(res, AcaciaExpr):
+            return res, []
+        else:
+            raise ValueError("Invalid return of binary func implementation")
     
     # these are utils for implementation to parse arg more easily
     # the `type_` args are optional to check the type of args

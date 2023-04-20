@@ -52,16 +52,17 @@ class Type(AcaciaExpr):
             self.compiler.error(
                 ErrorType.CANT_CREATE_INSTANCE, type_ = self.name
             )
-        inst = new.call(args, keywords)
+        inst, cmds = new.call(args, keywords)
         # Call initializer of instance if exists
         initializer = inst.attribute_table.lookup('__init__')
         if initializer is not None:
-            ret = initializer.call(args, keywords)
+            ret, _cmds = initializer.call(args, keywords)
             if not isinstance(ret.type, BuiltinNoneType):
                 self.compiler.error(
                     ErrorType.INITIALIZER_RESULT, type_ = self.name
                 )
-        return inst
+            cmds.extend(_cmds)
+        return inst, cmds
 
 # e.g. the type of "type"
 class BuiltinTypeType(Type):
@@ -93,15 +94,10 @@ class BuiltinIntType(Type):
                 # NOTE since boolean just use 0 to store False,
                 # 1 to store True, just "cast" it to IntVar
                 dependencies, bool_var = to_BoolVar(arg)
-                return IntCallResult(
-                    dependencies = dependencies,
-                    result_var = IntVar(
-                        objective = bool_var.objective,
-                        selector = bool_var.selector,
-                        compiler = self.compiler
-                    ),
-                    compiler = self.compiler
-                )
+                return IntVar(
+                    objective=bool_var.objective, selector=bool_var.selector,
+                    compiler=self.compiler
+                ), dependencies
         self.attribute_table.set(
             '__new__', BinaryFunction(_new, self.compiler)
         )
@@ -136,7 +132,7 @@ class BuiltinModuleType(Type):
 # Import these later to prevent circular import
 from .callable import BinaryFunction
 from .boolean import BoolVar, BoolLiteral, to_BoolVar
-from .integer import IntCallResult, IntVar, IntLiteral
+from .integer import IntVar, IntLiteral
 from .none import NoneVar
 
 BUILTIN_TYPES = (

@@ -320,12 +320,20 @@ class Music(AcaciaExpr):
                     main=cmd
                 ) for cmd in IntLiteral(-looping, func.compiler)
                              .export(self.timer))
-            return result_none(cmds, func.compiler)
+            return result_cmds(cmds, func.compiler)
         # Register this to be called every tick
-        register_loop.call((BinaryFunction(_gt_loop, self.compiler),), {})
+        _res, cmds = register_loop.call(
+            args=(BinaryFunction(_gt_loop, self.compiler),),
+            keywords={}
+        )
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
+        def _init(func: BinaryFunction):
+            """.__init__(): Register dependencies"""
+            return result_cmds(cmds, func.compiler)
+        self.attribute_table.set("__init__",
+                                 BinaryFunction(_init, self.compiler))
         def _play(func: BinaryFunction):
             """
             .play(timer: int = 0)
@@ -338,13 +346,13 @@ class Music(AcaciaExpr):
                 IntLiteral(0, func.compiler), BuiltinIntType)
             func.assert_no_arg()
             cmds = arg_timer.export(self.timer)
-            return result_none(cmds, func.compiler)
+            return result_cmds(cmds, func.compiler)
         self.attribute_table.set("play", BinaryFunction(_play, self.compiler))
         def _stop(func: BinaryFunction):
             """.stop(): Stop the music"""
             func.assert_no_arg()
             cmds = IntLiteral(GT_LEN + 2, func.compiler).export(self.timer)
-            return result_none(cmds, func.compiler)
+            return result_cmds(cmds, func.compiler)
         self.attribute_table.set("stop", BinaryFunction(_stop, self.compiler))
 
     def main_loop(self):
@@ -442,7 +450,7 @@ def _set_instrument(func: BinaryFunction):
     func.assert_no_arg()
     # Modify
     Music.ID2INSTRUMENT[id_] = arg_sound.value
-    return result_none([], func.compiler)
+    return NoneVar(func.compiler)
 
 def acacia_build(compiler):
     global mido, register_loop

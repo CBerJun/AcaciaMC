@@ -7,9 +7,3 @@ from .boolean import *
 from .integer import *
 from .string import *
 from .none import *
-
-BUILTIN_CALLRESULTS = {
-    BuiltinIntType: IntCallResult,
-    BuiltinBoolType: BoolCallResult,
-    BuiltinNoneType: NoneCallResult
-}

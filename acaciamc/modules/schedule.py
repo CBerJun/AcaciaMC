@@ -67,13 +67,13 @@ class Task(AcaciaExpr):
         self._target_args, self._target_keywords = [], {}
         def _timer_reset(func: BinaryFunction):
             cmds = IntLiteral(-1, compiler).export(self.timer)
-            return result_none(cmds, compiler)
+            return result_cmds(cmds, compiler)
         def _after(func: BinaryFunction):
             """.after(delay: int): Run the target after `delay`"""
             delay = func.arg_require("delay", BuiltinIntType)
             func.assert_no_arg()
             cmds = delay.export(self.timer)
-            return result_none(cmds, compiler)
+            return result_cmds(cmds, compiler)
         def _cancel(func: BinaryFunction):
             """.cancel(): Cancel the schedule"""
             func.assert_no_arg()
@@ -99,8 +99,7 @@ class Task(AcaciaExpr):
         )
         # Write tick.mcfunction
         self.compiler.file_tick.write_debug("# schedule.Task")
-        result = target.call(other_arg, other_kw)
-        cmds = result.export_novalue()
+        _res, cmds = target.call(other_arg, other_kw)
         self.compiler.file_tick.extend(
             export_execute_subcommands(
                 ["if score %s matches 0" % self.timer], main=cmd
@@ -139,8 +138,7 @@ def _register_loop(func: BinaryFunction):
     # Tick loop
     func.compiler.file_tick.write_debug("# schedule.register_loop")
     ## Call on times up AND reset timer
-    result = target.call(other_arg, other_kw)
-    cmds = result.export_novalue()
+    _res, cmds = target.call(other_arg, other_kw)
     cmds.extend(arg_interval.export(timer))
     func.compiler.file_tick.extend(
         export_execute_subcommands(
@@ -151,7 +149,7 @@ def _register_loop(func: BinaryFunction):
     ## Let the timer -1
     func.compiler.file_tick.extend(timer.isub(IntLiteral(1, func.compiler)))
     # Result
-    return result_none(init_cmds, func.compiler)
+    return result_cmds(init_cmds, func.compiler)
 
 def acacia_build(compiler):
     compiler.add_type(TaskType)

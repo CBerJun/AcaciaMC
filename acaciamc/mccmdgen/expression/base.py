@@ -8,7 +8,7 @@ __all__ = [
     # Utils
     'export_execute_subcommands', 'ArgumentHandler',
     # Base class
-    'AcaciaExpr', 'VarValue', 'CallResult'
+    'AcaciaExpr', 'VarValue'
 ]
 
 ### --- UTILS --- ###
@@ -90,10 +90,6 @@ def _operator_class(cls):
 class _AcaciaExprMeta(type):
     def __new__(cls, *args, **kwargs):
         cls_instance = super().__new__(cls, *args, **kwargs)
-        cls_instance._init_class()
-        # _operator_class changes the operator methods;
-        # so call method `_init_class` before decorating
-        # to do some initializations
         return _operator_class(cls_instance)
 
 class AcaciaExpr(metaclass=_AcaciaExprMeta):
@@ -119,37 +115,23 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
     #    `Compiler.types[<Type class>]` to get `Type` instance
     #  - Define at least one subclass of `AcaciaExpr`, which represents the
     #    objects of this type.
-    #    Every subclasses should check whether they need to override the
-    #    `export_novalue` method. Make sure to check the default definition and
-    #    comments of this method below.
-    #    NOTE a special case is that, `CallResult` has implemented
-    #    this method for you, so it's not necessary to consider this
-    #    for CallResults
+    #    `call` is a special method that would be called when this expression
+    #    is called in Acacia.
     # Extra things for "storable" types to implement:
     #  - at least one (usually 1) class that is a subclass of VarValue,
     #    to represent this kind of value that is stored in Minecraft
     #    [Reason]: "variables" always hold a muttable thing. Therefore,
     #    only "storable" types can be assigned to variables.
-    #  - at least one (usually 1) class that is a subclass of CallResult,
-    #    to represent this kind of value when it is used as a function result
-    #    The reason is same as the reason of VarValue above
-    #    Remember to use `Compiler.add_call_result` to register CallResults
     #  - `export` method, for assigning the value to another VarValue
     #    (of the same type)
     #  - the class that defines this type (subclass of Type) should have
-    #    a `new` method, to allow creating a new VarValue (of the same type)
+    #    a `new_var` method, to allow creating a new VarValue (of this type)
     # Take builtin `int` as an example:
     #  `IntVar`, which holds a Minecraft score, is implemented (1st rule)
-    #  `IntCallResult`, which holds an int function result, is implemented
-    #  (2nd rule)
-    #  All the AcaciaExprs of `int` type implements `export` (3rd rule)
-    #  `BuiltinIntType` does have a `new` method, which create new `IntVar`s
-    #  (4th rule)
+    #  All the AcaciaExprs of `int` type implements `export` (2nd rule)
+    #  `BuiltinIntType` does have a `new_var` method, which creates
+    #  a new `IntVar` (3rd rule)
     # --- CONTRIBUTOR GUIDE END ---
-    # Here are the methods that have special meanings:
-    #  - `call`: When calling an AcaciaExpr, this method is called
-    #  - `_init_class`: Used to add attributes/methods about operators,
-    #    (before the decorator works) (See `_AcaciaExprMeta`)
     def __init__(self, type, compiler):
         # compiler:Compiler master
         # type:Type type of expression
@@ -157,37 +139,21 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
         self.type = type
         self.attribute_table = AttributeTable()
     
-    @classmethod
-    def _init_class(cls):
-        # See metaclass _AcaciaExprMeta
-        pass
-    
     def call(self, args, keywords):
-        # call this expression
+        # Call this expression
+        # return:tuple[AcaciaExpr, list[str]]
+        #  1st element: Result of this call
+        #  2nd element: Commands to run
         # not implemented -> uncallable
         self.compiler.error(ErrorType.UNCALLABLE, expr_type = self.type.name)
     
-    def export(self, var):
+    def export(self, var) -> list[str]:
         # var:VarValue
-        # return a list of str, which are commands that assigns
+        # Return a list of str, which are commands that assigns
         # value of self to that var
         # Since we need a VarValue here, only "storable" types need
         # to implement this
         raise NotImplementedError
-    
-    def export_novalue(self):
-        # NOTE this must be implemented by subclasses
-        # this method should return a list of str, which are commands that
-        # is exported when self is used as an ExprStatement (just an
-        # expression)
-        # e.g.:
-        #  a = 1
-        #  a + 1
-        # Here `a + 1` is an ExprStatement, and `IntOpGroup.export_novalue`
-        # is called so that compiler knows what commands to generate for this
-        # line.
-        # Default: Generates no command for this `ExprStatement`
-        return []
 
 class ArgumentHandler:
     # a tool to match the arguments against the given definition
@@ -258,26 +224,3 @@ class VarValue(AcaciaExpr):
     # e.g. |"x": "y"| -> IntVar("y", "x") -> Assignable
     # e.g. bool -> Type -> Unassignable
     pass
-
-class CallResult(AcaciaExpr):
-    # call result of an AcaciaFunction
-    # This is like a VarValue with dependencies
-    # "storable" types must implement a subclass of this
-    # These classes are automatically called by ./callable.py,
-    # so they should always receive these args:
-    #  `dependencies`, `result_var`, `compiler`
-    def __init__(
-        self, dependencies: list, result_var: VarValue, type, compiler
-    ):
-        super().__init__(type, compiler)
-        self.dependencies = dependencies
-        self.result_var = result_var
-    
-    def export(self, var: VarValue):
-        return self.dependencies + self.result_var.export(var)
-    
-    def export_novalue(self):
-        return self.dependencies + self.result_var.export_novalue()
-    
-    def __str__(self):
-        return str(self.result_var)

@@ -12,8 +12,7 @@ import operator as builtin_op
 
 __all__ = [
     # Expressions
-    'BoolLiteral', 'BoolVar', 'NotBoolVar', 'BoolCompare',
-    'AndGroup', 'BoolCallResult',
+    'BoolLiteral', 'BoolVar', 'NotBoolVar', 'BoolCompare', 'AndGroup',
     # Factory functions
     'new_compare', 'new_and_group', 'new_or_expression',
     # Utils
@@ -34,7 +33,6 @@ __all__ = [
 #   NOTE always use factory method `new_compare`
 # - AndGroup: store several bool expressions that are connected with `and`
 #   NOTE always use factory method `new_and_group`
-# - BoolCallResult: boolean result value of a function
 
 # NOTE Q: WHERE IS AN `or` EXPRESSION STORED???
 # A: `or` expressions are all converted into other types of expressions
@@ -161,10 +159,6 @@ class BoolCompare(AcaciaExpr):
         ))
         return res
     
-    def export_novalue(self):
-        # using a compare directly -> just consider left and right
-        return self.left.export_novalue() + self.right.export_novalue()
-
     def deepcopy(self):
         return BoolCompare(
             self.left, self.operator, self.right,
@@ -357,14 +351,6 @@ class AndGroup(AcaciaExpr):
                 res_main, 'scoreboard players set %s %d' % (var, TRUE)
             )
         ]
-    
-    def export_novalue(self):
-        # consider `self.dependencies` and `self.compare_operands` is ok
-        return reduce(
-            builtin_op.add, # connect lists
-            map(lambda cp: cp.export_novalue(), self.compare_operands),
-            initial = self.dependencies
-        )
 
     def _add_operand(self, operand: AcaciaExpr):
         # add an operand to AndGroup
@@ -372,9 +358,6 @@ class AndGroup(AcaciaExpr):
             self.main.append('if score %s matches 1' % operand)
         elif isinstance(operand, NotBoolVar):
             self.main.append('if score %s matches 0' % operand)
-        elif isinstance(operand, BoolCallResult):
-            self.dependencies.extend(operand.dependencies)
-            self._add_operand(operand.result_var)
         elif isinstance(operand, BoolCompare):
             self.compare_operands.add(operand)
         elif isinstance(operand, AndGroup):
@@ -463,20 +446,6 @@ def new_or_expression(operands, compiler) -> AcaciaExpr:
     # invert result (-> `not (not a and not b and not c)`)
     return res.not_()
 
-class BoolCallResult(CallResult):
-    def __init__(self, dependencies: list, result_var: BoolVar, compiler):
-        super().__init__(
-            dependencies, result_var,
-            compiler.types[BuiltinBoolType], compiler
-        )
-    
-    # --- UNARY OP ---
-    def not_(self):
-        return NotBoolVar(
-            self.result_var.objective, self.result_var.selector,
-            compiler = self.compiler
-        )
-
 # --- Utils ---
 def to_BoolVar(expr: AcaciaExpr):
     # make any bool expr become an BoolVar,
@@ -486,8 +455,6 @@ def to_BoolVar(expr: AcaciaExpr):
     # return[1]: the final IntVar that is used
     if isinstance(expr, BoolVar):
         return (), expr
-    elif isinstance(expr, BoolCallResult):
-        return tuple(expr.dependencies), expr.result_var
     else:
         tmp = expr.type.new_var(tmp = True)
         return expr.export(tmp), tmp

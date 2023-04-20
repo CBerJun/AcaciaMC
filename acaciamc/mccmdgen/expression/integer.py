@@ -9,7 +9,7 @@ import operator as builtin_op
 
 __all__ = [
     # Expression
-    'IntLiteral', 'IntVar', 'IntOpGroup', 'IntCallResult',
+    'IntLiteral', 'IntVar', 'IntOpGroup',
     # Utils
     'to_IntVar'
 ]
@@ -26,9 +26,6 @@ def _to_mcop(operator: str):
 # - IntLiteral: a literal integer like `3` (for const folding)
 # - IntVar: describe a value stored in a Minecraft score
 #   which is usually an Acacia variable
-# - IntCallResult: result value of a function that returns int
-#   This is quite similar to an IntVar, because result value is stored
-#   in an IntVar; this class just adds some dependencies to call the function
 # - IntOpGroup: describe complicated expressions with operators
 
 # Q: WHY NOT just use one class to show everything???
@@ -39,7 +36,7 @@ def _to_mcop(operator: str):
 #    So the purpose is to optimize the output
 
 # This shows the priority of these classes
-# IntOpGroup > IntCallResult = IntVar > IntLiteral
+# IntOpGroup > IntVar > IntLiteral
 # A class can only handle operation with other objects with lower priority
 # e.g. Literal can only handle operations with Literal
 # If a class can't handle an operation `self (operator xxx) other`,
@@ -92,7 +89,7 @@ class IntLiteral(AcaciaExpr):
                     ErrorType.CONST_ARITHMETIC, message = str(err)
                 )
             return res
-        elif isinstance(other, (IntOpGroup, IntVar, IntCallResult)):
+        elif isinstance(other, (IntOpGroup, IntVar)):
             return NotImplemented
         raise TypeError
     
@@ -144,7 +141,7 @@ class IntVar(VarValue):
         if isinstance(other, IntOpGroup):
             # VarValues can't handle Exprs
             return NotImplemented # var.expr -> expr.__rxxx__
-        elif isinstance(other, (IntLiteral, IntVar, IntCallResult)):
+        elif isinstance(other, (IntLiteral, IntVar)):
             res = IntOpGroup(self, compiler = self.compiler)
             return getattr(res, name)(other)
         raise TypeError
@@ -195,10 +192,6 @@ class IntVar(VarValue):
             return ['scoreboard players operation %s %s= %s' % (
                 self, operator, other
             )]
-        elif isinstance(other, IntCallResult):
-            res = deepcopy(other.dependencies)
-            res.extend(self._iadd_sub(other.result_var, operator))
-            return res
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator = operator)
         raise TypeError
@@ -214,10 +207,6 @@ class IntVar(VarValue):
             return ['scoreboard players operation %s %s= %s' % (
                 self, operator, other
             )]
-        elif isinstance(other, IntCallResult):
-            res = deepcopy(other.dependencies)
-            res.extend(self._imul_div_mod(other.result_var, operator))
-            return res
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator)
         raise TypeError
@@ -249,36 +238,6 @@ class IntVar(VarValue):
     def imod(self, other):
         return self._imul_div_mod(other, '%')
 
-class IntCallResult(CallResult):
-    # Return value of a function that returns int
-    def __init__(self, dependencies: list, result_var: IntVar, compiler):
-        super().__init__(
-            dependencies, result_var,
-            compiler.types[BuiltinIntType], compiler
-        )
-    
-    @classmethod
-    def _init_class(cls):
-        # See base class `CallResult`
-        # this method build operator methods; What operator methods do is:
-        # Upgrade self to an IntOpGroup and use it to do operation
-        def _handle(name):
-            # name is method name (e.g. __add__)
-            def _wrapped(self, *args, **kwargs):
-                res = IntOpGroup(self, compiler = self.compiler)
-                res = getattr(res, name)(*args, **kwargs)
-                return res
-            return _wrapped
-        for name in (
-            # __pos__ can be optimized so it is not here
-            '__neg__',
-            '__add__', '__sub__', '__mul__', '__floordiv__', '__mod__',
-            '__radd__', '__rsub__', '__rmul__', '__rfloordiv__', '__rmod__'
-        ):
-            setattr(cls, name, _handle(name))
-
-    def __pos__(self): return self
-
 class IntOpGroup(AcaciaExpr):
     # An IntOpGroup stores how an integer is changed by storing
     # unformatted commands where the target positions of scores are preserved.
@@ -303,11 +262,6 @@ class IntOpGroup(AcaciaExpr):
             self.write('scoreboard players set {this} %s' % init)
         elif isinstance(init, IntVar):
             self.write('scoreboard players operation {this} = %s' % init)
-        elif isinstance(init, IntCallResult):
-            self.write(
-                *init.dependencies,
-                'scoreboard players operation {this} = %s' % init
-            )
         elif init is not None:
             raise ValueError
     
@@ -325,11 +279,6 @@ class IntOpGroup(AcaciaExpr):
             res.extend(subexpr.export(subvar))
         res.extend(map(lambda s: s.format(*subvars, this = var), self.main))
         return res
-    
-    def export_novalue(self):
-        # XXX here export_novalue just use export,
-        # so redundant commands might be generated
-        return self.export(self.type.new(tmp = True))
     
     def _add_lib(self, lib) -> int:
         # register a dependency (which is also an Expr)
@@ -384,9 +333,6 @@ class IntOpGroup(AcaciaExpr):
             res.write('scoreboard players operation {this} %s= %s' % (
                 operator, other
             ))
-        elif isinstance(other, IntCallResult):
-            res.write(*other.dependencies)
-            res = res._add_sub(other.result_var, operator)
         elif isinstance(other, IntOpGroup):
             res.write('scoreboard players operation {this} %s= {%d}' % (
                 operator, res._add_lib(other)
@@ -408,9 +354,6 @@ class IntOpGroup(AcaciaExpr):
             res.write('scoreboard players operation {this} %s= %s' % (
                 operator, other
             ))
-        elif isinstance(other, IntCallResult):
-            res.write(*other.dependencies)
-            res = res._mul_div_mod(other.result_var, operator)
         elif isinstance(other, IntOpGroup):
             res.write('scoreboard players operation {this} %s= {%d}' % (
                 operator, res._add_lib(other)
@@ -435,13 +378,13 @@ class IntOpGroup(AcaciaExpr):
 
     def _r_add_mul(self, other, name):
         # a (+ or *) b is b (+ or *) a
-        if isinstance(other, (IntLiteral, IntVar, IntCallResult)):
+        if isinstance(other, (IntLiteral, IntVar)):
             return getattr(self, name)(other)
         raise TypeError
     
     def _r_sub_div_mod(self, other, name):
         # convert `other` to Expr and use that Expr to handle this operation
-        if isinstance(other, (IntLiteral, IntVar, IntCallResult)):
+        if isinstance(other, (IntLiteral, IntVar)):
             return getattr(
                 IntOpGroup(other, compiler = self.compiler), name
             )(self)
@@ -468,8 +411,6 @@ def to_IntVar(expr: AcaciaExpr):
     # return[1]: the final IntVar that is used
     if isinstance(expr, IntVar):
         return (), expr
-    elif isinstance(expr, IntCallResult):
-        return tuple(expr.dependencies), expr.result_var
     else:
         tmp = expr.type.new_var(tmp = True)
         return expr.export(tmp), tmp

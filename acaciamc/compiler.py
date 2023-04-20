@@ -44,8 +44,6 @@ class Compiler:
         # call `do_init` after creating all builtin instances
         for type_instance in self.types.values():
             type_instance.do_init()
-        # define `call_result_classes` dict
-        self.call_result_classes = BUILTIN_CALLRESULTS.copy()
         self.current_generator = None # the Generator that is running
         self._int_consts = {} # see method `add_int_const`
         self._lib_count = 0 # always equal to len(self.libs)
@@ -136,19 +134,6 @@ class Compiler:
         type_instance = type_(compiler = self)
         type_instance.do_init()
         self.types[type_] = type_instance
-    
-    def add_call_result(self, call_result: type, type_: type):
-        # call_result:subclass of CallResult
-        # type:subclass of Type
-        # register a `call_result` class of `type_` type
-        self.call_result_classes[type_] = call_result
-    
-    def get_call_result(self, type_: type):
-        # get CallResult of `type_` type
-        # type:subclass of Type
-        if type_ in self.call_result_classes:
-            return self.call_result_classes[type_]
-        self.error(ErrorType.UNSUPPORTED_RESULT_TYPE, result_type = type_.name)
     
     # -- About allocation --
     
