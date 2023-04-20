@@ -393,7 +393,7 @@ class AndGroup(AcaciaExpr):
         res.inverted = not res.inverted
         return res
 
-def new_and_group(operands, compiler) -> AcaciaExpr:
+def new_and_group(operands: list, compiler) -> AcaciaExpr:
     # factory function of AndGroup
     ## Purpose 1. check whether operands are valid
     # make sure there is at least 1 operand
@@ -438,7 +438,7 @@ def new_or_expression(operands, compiler) -> AcaciaExpr:
                 operand = repr(operand.type.name)
             )
         return operand.not_()
-    inverted_operands = map(_map, operands)
+    inverted_operands = list(map(_map, operands))
     # connect them with `and` (-> `not a and not b and not c`)
     res = new_and_group(
         operands = inverted_operands, compiler = compiler
