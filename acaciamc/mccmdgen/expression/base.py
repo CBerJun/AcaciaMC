@@ -160,12 +160,17 @@ class ArgumentHandler:
     # this class also creates a VarValue for every args
     # (when calling function, arguments are passed using these vars)
     # used by AcaciaFunction
-    def __init__(self, args, arg_types, arg_defaults, compiler):
+    def __init__(self, args, arg_types: dict, arg_defaults: dict, compiler):
         # args, arg_types, arg_defaults: same as these in ast.FunctionDef
         # these arguments decide the pattern of this callable
         self.args = args
         self.arg_types = arg_types
         self.arg_defaults = arg_defaults
+        # Throw away arguments that have no default value in
+        # `arg_defaults`.
+        for arg, value in self.arg_defaults.copy().items():
+            if value is None:
+                del self.arg_defaults[arg]
         self.ARG_LEN = len(self.args)
         self.compiler = compiler
 
