@@ -21,6 +21,10 @@ class SymbolTable:
         # lookup a name; if not found, return None
         return self._table.get(name)
 
+    def is_defined(self, name: str):
+        # return whether the name is defined in this table
+        return name in self._table
+
 class ScopedSymbolTable(SymbolTable):
     # A ScopedSymbolTable is created for a new scope
     # (e.g. function definition, etc.)

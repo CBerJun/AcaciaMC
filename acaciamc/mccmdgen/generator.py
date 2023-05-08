@@ -114,6 +114,11 @@ class Generator(ASTVisitor):
         elif isinstance(target_node, Attribute):
             # get AttributeTable and register
             object_ = self.visit(target_node.object)
+            # The attribute must exists when assigning to it.
+            if not object_.attribute_table.is_defined(target_node.attr):
+                self.compiler.error(ErrorType.HAS_NO_ATTRIBUTE,
+                                    value_type=object_.type.name,
+                                    attr=target_node.attr)
             object_.attribute_table.set(target_node.attr, target_value)
         else: raise TypeError
     
