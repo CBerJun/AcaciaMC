@@ -17,7 +17,8 @@ class MusicType(Type):
         execute_condition: str = "as @a at @s",
         note_offset: int = 0,
         chunk_size: int = 500,
-        speed: int = 100
+        speed: int = 100,
+        volume: int = 100
     )
 
     A music to generate from MIDI file `path`.
@@ -33,6 +34,7 @@ class MusicType(Type):
     every tick. `chunk_size` determines how many commands there will be
     in 1 file.
     `speed` affects the speed of music in percentage.
+    `volume` affects the volume of music in percentage.
     """
     name = "Music"
 
@@ -61,16 +63,22 @@ class MusicType(Type):
                 "chunk_size", IntLiteral(500, func.compiler), BuiltinIntType)
             arg_speed = func.arg_optional(
                 "speed", IntLiteral(100, func.compiler), BuiltinIntType)
+            arg_volume = func.arg_optional(
+                "volume", IntLiteral(100, func.compiler), BuiltinIntType)
             if not isinstance(arg_note, IntLiteral):
                 func.arg_error("note_offset", "must be a constant")
             if not isinstance(arg_chunk, IntLiteral):
                 func.arg_error("chunk_size", "must be a constant")
             if not isinstance(arg_speed, IntLiteral):
                 func.arg_error("speed", "must be a constant")
+            if not isinstance(arg_volume, IntLiteral):
+                func.arg_error("volume", "must be a constant")
             if arg_chunk.value < 1:
                 func.arg_error("chunk_size", "must be positive")
             if arg_speed.value < 1:
                 func.arg_error("speed", "must be positive")
+            if arg_volume.value < 1:
+                func.arg_error("volume", "must be positive")
             func.assert_no_arg()
             try:
                 midi = mido.MidiFile(arg_path.value)
@@ -82,9 +90,10 @@ class MusicType(Type):
             looping = arg_loop_intv.value if arg_loop.value else -1
             chunk_size = arg_chunk.value
             speed = arg_speed.value / 100
+            volume = arg_volume.value / 100
             return Music(
                 midi, exec_condition, looping, note_offset,
-                chunk_size, speed, func.compiler
+                chunk_size, speed, volume, func.compiler
             )
 
         self.attribute_table.set("__new__",
@@ -94,7 +103,6 @@ class Music(AcaciaExpr):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
     # tick.
     # CONFIGS
-    DEFAULT_VOLUME = 100 # 0~127
     ID2INSTRUMENT = {
         # Piano
         0: 'note.harp',
@@ -244,9 +252,13 @@ class Music(AcaciaExpr):
         126: 'note.hat',
         127: 'note.snare'
     }
+    CHANNEL_VOLUME = {
+        i: 1.0 for i in range(16)
+    }
 
     def __init__(self, midi, exec_condition: str, looping: int,
-                 note_offset: int, chunk_size: int, speed: float, compiler):
+                 note_offset: int, chunk_size: int, speed: float,
+                 volume: float, compiler):
         super().__init__(compiler.types[MusicType], compiler)
         self.midi = midi
         self.execute_condition = exec_condition
@@ -271,14 +283,22 @@ class Music(AcaciaExpr):
         # Channel info
         self.channel_volume = {} # channel id to volume (0-127)
         self.channel_instrument = {} # channel id to instrument id
+        ## Default instrument: 0~8 & 9~15: Piano (0); 9: Drum set (127)
+        ## Default volumn: 100
+        for i in range(16):
+            self.channel_instrument[i] = 0
+            self.channel_volume[i] = 100
+        self.channel_instrument[9] = 127
         # Timer:
         #   when 0 <= timer <= music length, the music is playing
         #   when timer > music length, the music has ended
         #   when timer < 0, it's the countdown of starting playing
         self.timer = self.compiler.types[BuiltinIntType].new_var()
+        # Volume
+        self.user_volume = volume
         # Create file
         self.files = []
-        # file_sep_mt: in which GT we seperate the file
+        # file_sep_gt: in which GT we seperate the file
         self.file_sep_gt = []
         self.cur_chunk_size = 0 # Commands written in current file
         self.new_file() # Initial file
@@ -380,8 +400,8 @@ class Music(AcaciaExpr):
             track.pop(0)
         # Time increment
         self.mt += 1
-        # bpm * mt_per_beat is MT per minute. Divide it by 1200 to get mt
-        # per MT, and multiply it by `user_speed` at last
+        # bpm * mt_per_beat is MT per minute. Divide it by 1200 to get MT
+        # per GT, and multiply it by `user_speed` at last
         self.gt += 1 / (self.bpm * self.mt_per_beat * self.user_speed / 1200)
         self.gt_int = round(self.gt)
         # Update last_gt_int
@@ -403,13 +423,14 @@ class Music(AcaciaExpr):
     
     def get_instrument(self, channel: int) -> str:
         """Get MC sound of channel."""
-        ins_id = self.channel_instrument.get(channel)
+        ins_id = self.channel_instrument[channel]
         return self.ID2INSTRUMENT[ins_id]
 
     def get_volume(self, channel: int, velocity: int) -> float:
         """Get MC volume (0~1) according to channel and velocity."""
-        channel_v = self.channel_volume.get(channel, self.DEFAULT_VOLUME)
-        return velocity * channel_v / 127 / 127
+        channel_v = (self.channel_volume[channel]
+                     * self.CHANNEL_VOLUME[channel])
+        return velocity * channel_v / 127 / 127 * self.user_volume
 
     def get_pitch(self, note: int) -> float:
         """Get MC pitch from MIDI note"""
@@ -433,16 +454,17 @@ def _set_instrument(func: BinaryFunction):
     """
     music.set_instrument(id: int-literal, sound: str):
         Set instrument mapping
-    
-    Set the sound of MIDI instrument `id` to Minecraft sound `sound`.
+
+    Set the sound of MIDI instrument `id` to Minecraft
+    sound `sound`.
     Example:
-        # Set sound of ID 2 instrument ()
-        music.set_instrument(2, "note.harp")
+        # Set MC sound of ID 127 instrument to `note.hat`
+        music.set_instrument(127, "note.hat")
     """
     # Parse args
     arg_id = func.arg_require("id", BuiltinIntType)
     if not isinstance(arg_id, IntLiteral):
-        func.arg_error('id', 'should be a literal')
+        func.arg_error('id', 'must be a constant')
     id_ = arg_id.value
     if id_ >= 128 or id_ < 0:
         func.arg_error('id', 'must in 0~127')
@@ -450,6 +472,30 @@ def _set_instrument(func: BinaryFunction):
     func.assert_no_arg()
     # Modify
     Music.ID2INSTRUMENT[id_] = arg_sound.value
+    return NoneVar(func.compiler)
+
+def _channel_volume(func: BinaryFunction):
+    """
+    music.channel_volume(channel: int-literal, volume: int-literal)
+
+    Modify volume of specified channel.
+    `volume` is in percentage, 100 stands for 100%.
+    """
+    # Parse args
+    arg_channel = func.arg_require("channel", BuiltinIntType)
+    arg_volume = func.arg_require("volume", BuiltinIntType)
+    if not isinstance(arg_channel, IntLiteral):
+        func.arg_error('channel', 'must be a constant')
+    if not isinstance(arg_volume, IntLiteral):
+        func.arg_error('volume', 'must be a constant')
+    channel = arg_channel.value
+    if channel >= 16 or channel < 0:
+        func.arg_error('channel', 'must in 0~15')
+    volume = arg_volume.value
+    if volume < 0:
+        func.arg_error('volume', "can't be negative")
+    # Modify
+    Music.CHANNEL_VOLUME[channel] = volume / 100
     return NoneVar(func.compiler)
 
 def acacia_build(compiler):
@@ -464,6 +510,6 @@ def acacia_build(compiler):
     compiler.add_type(MusicType)
     return {
         "Music": compiler.types[MusicType],
-        "set_instrument": BinaryFunction(_set_instrument, compiler)
+        "set_instrument": BinaryFunction(_set_instrument, compiler),
+        "channel_volume": BinaryFunction(_channel_volume, compiler)
     }
-
