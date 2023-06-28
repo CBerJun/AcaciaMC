@@ -1,6 +1,6 @@
 # Int objects in Acacia
 from .base import *
-from .types import BuiltinIntType
+from .types import IntType, DataType
 from ...error import *
 from ...constants import INT_MIN, INT_MAX
 
@@ -48,7 +48,7 @@ class IntLiteral(AcaciaExpr):
     # "constant folding" which calculate the value of constant expressions
     # while compiling (e.g. compiler can convert 2 + 3 to 5)
     def __init__(self, value: int, compiler):
-        super().__init__(compiler.types[BuiltinIntType], compiler)
+        super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
         self.value = value
         # check overflow
         if not INT_MIN <= value <= INT_MAX:
@@ -110,7 +110,7 @@ class IntVar(VarValue):
         self, objective: str, selector: str, compiler, with_quote = True
     ):
         # with_quote:bool whether to add quote to selector
-        super().__init__(compiler.types[BuiltinIntType], compiler)
+        super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
         self.objective = objective
         self.selector = selector
         self.with_quote = with_quote
@@ -222,7 +222,7 @@ class IntVar(VarValue):
             '*': builtin_op.mul, '/': builtin_op.floordiv, '%': builtin_op.mod
         }[operator](self, other)
         ## Export
-        tmp = self.type.new_var(tmp = True)
+        tmp = self.data_type.new_var(tmp=True)
         res = value.export(tmp)
         res.extend(tmp.export(self))
         return res
@@ -253,7 +253,7 @@ class IntOpGroup(AcaciaExpr):
     # Sometimes temporary scores are needed, those are stored in attribute
     # `libs`, where other IntOpGroups are stored (recursively)
     def __init__(self, init, compiler):
-        super().__init__(compiler.types[BuiltinIntType], compiler)
+        super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
         self.main = [] # list[str] (commands)
         self.libs = [] # list[IntOpGroup] (dependencies)
         self._current_lib_index = 0 # always equals to len(self.libs)
@@ -265,16 +265,17 @@ class IntOpGroup(AcaciaExpr):
         elif init is not None:
             raise ValueError
     
+    @export_need_tmp
     def export(self, var: IntVar) -> list:
         # export expression and assign value of this expression to `var`
-        # return tuple of commands
+        # return list of commands
         res = []
         # subvars:list[IntVar] Allocate a tmp int for every IntOpGroups
         # in self.libs and export them to this var;
         # finally format self.main with them ({x} means value of self.libs[x])
         subvars = []
         for subexpr in self.libs:
-            subvar = self.type.new_var(tmp = True)
+            subvar = self.data_type.new_var(tmp=True)
             subvars.append(subvar)
             res.extend(subexpr.export(subvar))
         res.extend(map(lambda s: s.format(*subvars, this = var), self.main))
@@ -412,5 +413,5 @@ def to_IntVar(expr: AcaciaExpr):
     if isinstance(expr, IntVar):
         return (), expr
     else:
-        tmp = expr.type.new_var(tmp = True)
+        tmp = expr.data_type.new_var(tmp=True)
         return expr.export(tmp), tmp

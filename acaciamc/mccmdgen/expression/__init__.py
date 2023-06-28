@@ -7,3 +7,5 @@ from .boolean import *
 from .integer import *
 from .string import *
 from .none import *
+from .entity_template import *
+from .entity import *

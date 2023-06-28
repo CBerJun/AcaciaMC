@@ -39,6 +39,7 @@ class TokenType(enum.Enum):
     equal = '='
     arrow = '->'
     point = '.'
+    at = '@'
     # expressions
     ## literal
     integer = 'INTEGER' # value:int = this integer
@@ -54,6 +55,9 @@ class TokenType(enum.Enum):
     def_ = 'def'
     interface = 'interface'
     inline = 'inline'
+    entity = 'entity'
+    extends = 'extends'
+    self = 'self'
     if_ = 'if'
     elif_ = 'elif'
     else_ = 'else'

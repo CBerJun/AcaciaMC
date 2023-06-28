@@ -40,14 +40,11 @@ class MusicType(Type):
 
     def do_init(self):
         def _new(func: BinaryFunction):
-            arg_path = func.arg_require("path", BuiltinStringType)
+            arg_path = func.arg_require("path", StringType)
             arg_loop = func.arg_optional(
-                "looping",
-                BoolLiteral(False, func.compiler), BuiltinBoolType
-            )
+                "looping", BoolLiteral(False, func.compiler), BoolType)
             arg_loop_intv = func.arg_optional(
-                "loop_interval", IntLiteral(50, func.compiler), BuiltinIntType
-            )
+                "loop_interval", IntLiteral(50, func.compiler), IntType)
             if not isinstance(arg_loop, BoolLiteral):
                 func.arg_error("looping", "must be a constant")
             if not isinstance(arg_loop_intv, IntLiteral):
@@ -55,16 +52,16 @@ class MusicType(Type):
             arg_exec = func.arg_optional(
                 "execute_condition",
                 String("as @a at @s", func.compiler),
-                BuiltinStringType
+                StringType
             )
             arg_note = func.arg_optional(
-                "note_offset", IntLiteral(0, func.compiler), BuiltinIntType)
+                "note_offset", IntLiteral(0, func.compiler), IntType)
             arg_chunk = func.arg_optional(
-                "chunk_size", IntLiteral(500, func.compiler), BuiltinIntType)
+                "chunk_size", IntLiteral(500, func.compiler), IntType)
             arg_speed = func.arg_optional(
-                "speed", IntLiteral(100, func.compiler), BuiltinIntType)
+                "speed", IntLiteral(100, func.compiler), IntType)
             arg_volume = func.arg_optional(
-                "volume", IntLiteral(100, func.compiler), BuiltinIntType)
+                "volume", IntLiteral(100, func.compiler), IntType)
             if not isinstance(arg_note, IntLiteral):
                 func.arg_error("note_offset", "must be a constant")
             if not isinstance(arg_chunk, IntLiteral):
@@ -259,7 +256,7 @@ class Music(AcaciaExpr):
     def __init__(self, midi, exec_condition: str, looping: int,
                  note_offset: int, chunk_size: int, speed: float,
                  volume: float, compiler):
-        super().__init__(compiler.types[MusicType], compiler)
+        super().__init__(DataType.from_type_cls(MusicType, compiler), compiler)
         self.midi = midi
         self.execute_condition = exec_condition
         self.note_offset = note_offset
@@ -293,7 +290,7 @@ class Music(AcaciaExpr):
         #   when 0 <= timer <= music length, the music is playing
         #   when timer > music length, the music has ended
         #   when timer < 0, it's the countdown of starting playing
-        self.timer = self.compiler.types[BuiltinIntType].new_var()
+        self.timer = self.compiler.types[IntType].new_var()
         # Volume
         self.user_volume = volume
         # Create file
@@ -363,7 +360,7 @@ class Music(AcaciaExpr):
             playing.
             """
             arg_timer = func.arg_optional("timer",
-                IntLiteral(0, func.compiler), BuiltinIntType)
+                IntLiteral(0, func.compiler), IntType)
             func.assert_no_arg()
             cmds = arg_timer.export(self.timer)
             return result_cmds(cmds, func.compiler)
@@ -462,13 +459,13 @@ def _set_instrument(func: BinaryFunction):
         music.set_instrument(127, "note.hat")
     """
     # Parse args
-    arg_id = func.arg_require("id", BuiltinIntType)
+    arg_id = func.arg_require("id", IntType)
     if not isinstance(arg_id, IntLiteral):
         func.arg_error('id', 'must be a constant')
     id_ = arg_id.value
     if id_ >= 128 or id_ < 0:
         func.arg_error('id', 'must in 0~127')
-    arg_sound = func.arg_require("sound", BuiltinStringType)
+    arg_sound = func.arg_require("sound", StringType)
     func.assert_no_arg()
     # Modify
     Music.ID2INSTRUMENT[id_] = arg_sound.value
@@ -482,8 +479,8 @@ def _channel_volume(func: BinaryFunction):
     `volume` is in percentage, 100 stands for 100%.
     """
     # Parse args
-    arg_channel = func.arg_require("channel", BuiltinIntType)
-    arg_volume = func.arg_require("volume", BuiltinIntType)
+    arg_channel = func.arg_require("channel", IntType)
+    arg_volume = func.arg_require("volume", IntType)
     if not isinstance(arg_channel, IntLiteral):
         func.arg_error('channel', 'must be a constant')
     if not isinstance(arg_volume, IntLiteral):

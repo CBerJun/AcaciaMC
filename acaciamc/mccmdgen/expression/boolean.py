@@ -1,13 +1,12 @@
 # Generate commands of bool expressions
 from .base import *
 from .integer import *
-from .types import BuiltinIntType, BuiltinBoolType
+from .types import IntType, BoolType, DataType
 from ...ast import Operator
 from ...error import *
 from ...constants import INT_MAX, INT_MIN
 
 from copy import deepcopy
-from functools import reduce
 import operator as builtin_op
 
 __all__ = [
@@ -40,7 +39,7 @@ __all__ = [
 
 class BoolLiteral(AcaciaExpr):
     def __init__(self, value: bool, compiler):
-        super().__init__(compiler.types[BuiltinBoolType], compiler)
+        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.value = value
     
     def export(self, var):
@@ -62,13 +61,16 @@ class BoolLiteral(AcaciaExpr):
         return res
 
 class BoolVar(VarValue):
-    def __init__(self, objective: str, selector: str, compiler):
-        super().__init__(compiler.types[BuiltinBoolType], compiler)
+    def __init__(self, objective: str, selector: str,
+                 compiler, with_quote=True):
+        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.objective = objective
         self.selector = selector
+        self.with_quote = with_quote
     
     def __str__(self):
-        return '"%s" "%s"' % (self.selector, self.objective)
+        return (('"%s" "%s"' if self.with_quote else '%s "%s"')
+                % (self.selector, self.objective))
 
     def export(self, var) -> list:
         # var:BoolVar
@@ -83,13 +85,14 @@ class BoolVar(VarValue):
 
 class NotBoolVar(AcaciaExpr):
     def __init__(self, objective: str, selector: str, compiler):
-        super().__init__(compiler.types[BuiltinBoolType], compiler)
+        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.objective = objective
         self.selector = selector
     
     def __str__(self):
         return '"%s" "%s"' % (self.selector, self.objective)
     
+    @export_need_tmp
     def export(self, var: BoolVar):
         return [
             'scoreboard players set %s 0' % var,
@@ -112,16 +115,14 @@ class BoolCompare(AcaciaExpr):
         right: AcaciaExpr, compiler
     ):
         # The factory method is `new_compare` below!
-        super().__init__(compiler.types[BuiltinBoolType], compiler)
+        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.left = left
         self.operator = operator
         self.right = right
         ## make sure operands are available
-        lt, rt = left.type, right.type
-        if not (
-            isinstance(lt, BuiltinIntType) and
-            isinstance(rt, BuiltinIntType)
-        ):
+        lt, rt = left.data_type, right.data_type
+        if not (lt.raw_matches(IntType)
+                and rt.raw_matches(IntType)):
             compiler.error(
                 ErrorType.INVALID_OPERAND,
                 operator = {
@@ -132,7 +133,7 @@ class BoolCompare(AcaciaExpr):
                     Operator.equal_to: '==',
                     Operator.unequal_to: '!='
                 }[operator],
-                operand = '%r, %r' % (lt.name, rt.name)
+                operand = '%r, %r' % (str(lt), str(rt))
             )
         ## NOTE if one of self.left and self.right is IntLiteral,
         ## always make sure that IntLiteral on the right
@@ -148,6 +149,7 @@ class BoolCompare(AcaciaExpr):
                 Operator.unequal_to: Operator.unequal_to
             }[self.operator]
     
+    @export_need_tmp
     def export(self, var: BoolVar):
         # set `res` to dependencies that as_execute returns
         res, subcmds = self.as_execute()
@@ -258,7 +260,7 @@ def new_compare(
 class AndGroup(AcaciaExpr):
     def __init__(self, operands, compiler):
         # operands:iterable[(boolean)AcaciaExpr]
-        super().__init__(compiler.types[BuiltinBoolType], compiler)
+        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.main = [] # list of subcommands of /execute (See `export`)
         self.dependencies = [] # commands that runs before self.main
         # compare_operands: operands that are BoolCompare; they are converted
@@ -270,6 +272,7 @@ class AndGroup(AcaciaExpr):
         for operand in operands:
             self._add_operand(operand)
     
+    @export_need_tmp
     def export(self, var: BoolVar):
         # handle problem of reversing
         TRUE = 0 if self.inverted else 1
@@ -365,7 +368,7 @@ class AndGroup(AcaciaExpr):
             if operand.inverted:
                 # `a and not (b and c)` needs a tmp var:
                 # tmp = `b and c`, self = `a and not tmp`
-                tmp = self.type.new_var(tmp = True)
+                tmp = self.data_type.new_var(tmp = True)
                 self.dependencies.extend(operand.export(tmp))
                 self._add_operand(tmp.not_())
             else:
@@ -401,10 +404,10 @@ def new_and_group(operands: list, compiler) -> AcaciaExpr:
         raise ValueError
     # make sure all operands are booleans
     for operand in operands:
-        if not isinstance(operand.type, BuiltinBoolType):
+        if not operand.data_type.raw_matches(BoolType):
             compiler.error(
-                ErrorType.INVALID_OPERAND, operator = 'and',
-                operand = repr(operand.type.name)
+                ErrorType.INVALID_OPERAND, operator='and',
+                operand=repr(str(operand.data_type))
             )
     ## Purpose 2. to do these optimizations:
     literals = filter(
@@ -432,10 +435,10 @@ def new_or_expression(operands, compiler) -> AcaciaExpr:
     # create an `or` expression
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
     def _map(operand):
-        if not isinstance(operand.type, BuiltinBoolType):
+        if not operand.data_type.raw_matches(BoolType):
             compiler.error(
-                ErrorType.INVALID_OPERAND, operator = 'or',
-                operand = repr(operand.type.name)
+                ErrorType.INVALID_OPERAND, operator='or',
+                operand=repr(str(operand.data_type))
             )
         return operand.not_()
     inverted_operands = list(map(_map, operands))
@@ -456,5 +459,5 @@ def to_BoolVar(expr: AcaciaExpr):
     if isinstance(expr, BoolVar):
         return (), expr
     else:
-        tmp = expr.type.new_var(tmp = True)
+        tmp = expr.data_type.new_var(tmp = True)
         return expr.export(tmp), tmp

@@ -1,5 +1,12 @@
 # Visualize the Abstract Grammar Tree of code
 
+# Add `acaciamc` directory to path
+import os
+import sys
+sys.path.append(os.path.realpath(
+    os.path.join(__file__, os.pardir, os.pardir)
+))
+
 from acaciamc.tokenizer import *
 from acaciamc.parser import *
 from acaciamc.error import *
@@ -145,4 +152,15 @@ x = 10
 
 '''
 
-test(definition_test)
+entity_test = '''
+entity X:
+    x: int
+    inline def get() -> int:
+        result self.x
+
+entity Y extends X:
+    def get():
+        result self@X.get() + 1
+'''
+
+test(entity_test)

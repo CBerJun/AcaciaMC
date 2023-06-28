@@ -50,6 +50,7 @@ class AST:
 # these classes are for classifying
 class Statement(AST): pass
 class Expression(AST): pass
+class AnyTypeSpec(AST): pass
 
 # details
 
@@ -69,6 +70,16 @@ class ArgumentTable(AST): # arguments used in function definition
         self.args.append(name)
         self.types[name] = type
         self.default[name] = default
+
+class TypeSpec(AnyTypeSpec): # specify type of value `int`
+    def __init__(self, content: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.content = content
+
+class EntityTypeSpec(AnyTypeSpec): # specify entity template `entity(Temp)`
+    def __init__(self, template: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.template = template
 
 class ExprStatement(Statement): # a statement that is an expression
     def __init__(self, value: AST, lineno, col):
@@ -96,7 +107,7 @@ class While(Statement): # while statement
 class FuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: Expression, lineno, col
+        body: list, returns: AnyTypeSpec, lineno, col
     ):
         super().__init__(lineno, col)
         self.name = name
@@ -107,7 +118,7 @@ class FuncDef(Statement):
 class InlineFuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: Expression, lineno, col
+        body: list, returns: AnyTypeSpec, lineno, col
     ):
         super().__init__(lineno, col)
         self.name = name
@@ -120,6 +131,31 @@ class InterfaceDef(Statement):
         super().__init__(lineno, col)
         self.path = path
         self.body = body
+
+class EntityTemplateDef(Statement):
+    def __init__(self, name: str, parents: list, body: list, lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.parents = parents
+        self.body = body
+
+class EntityField(Statement):
+    def __init__(self, name: str, type_: AnyTypeSpec, lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.type = type_
+
+class EntityMethod(Statement):
+    def __init__(self, content: Statement, lineno, col):
+        # content is FuncDef or InlineFuncDef
+        super().__init__(lineno, col)
+        self.content = content
+
+class EntityMeta(Statement):
+    def __init__(self, name: str, value: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.value = value
 
 class Assign(Statement): # normal assign
     def __init__(self, target: Expression, value: Expression, lineno, col):
@@ -182,6 +218,9 @@ class Literal(Expression): # a literal constant
         super().__init__(lineno, col)
         self.value = literal
 
+class Self(Expression):
+    pass
+
 class Identifier(Expression): # an identifier
     def __init__(self, name: str, lineno, col):
         super().__init__(lineno, col)
@@ -215,6 +254,12 @@ class Attribute(Expression): # attr of an expr
         super().__init__(lineno, col)
         self.object = object_
         self.attr = attr
+
+class EntityCast(Expression): # Template@some_entity
+    def __init__(self, object_: Expression, template: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.object = object_
+        self.template = template
 
 class CompareOp(Expression): # ==, !=, >, <, >=, <=
     def __init__(

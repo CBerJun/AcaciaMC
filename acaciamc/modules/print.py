@@ -47,7 +47,7 @@ class _FStrParser:
     
     def add_expr(self, expr: AcaciaExpr):
         # Format an expression to string
-        if isinstance(expr.type, BuiltinIntType):
+        if expr.data_type.raw_matches(IntType):
             if isinstance(expr, IntLiteral):
                 # optimize for literals
                 self.add_text(str(expr.value))
@@ -55,7 +55,7 @@ class _FStrParser:
                 dependencies, var = to_IntVar(expr)
                 self.dependencies.extend(dependencies)
                 self.add_score(var.objective, var.selector)
-        elif isinstance(expr.type, BuiltinBoolType):
+        elif expr.data_type.raw_matches(BoolType):
             if isinstance(expr, BoolLiteral):
                 # optimize for literals
                 self.add_text('1' if expr.value else '0')
@@ -69,7 +69,7 @@ class _FStrParser:
             self.json.extend(expr.json)
         else:
             raise _FStrError('Type "%s" can not be formatted as a string' \
-                             % expr.type.name)
+                             % expr.data_type)
     
     def expr_from_id(self, name: str) -> AcaciaExpr:
         # Get the expr from an format
@@ -138,7 +138,7 @@ class _FStrParser:
                 if not isinstance(expr, String):
                     raise _FStrError(
                         'Type "%s" is not supported as localization key' \
-                        % expr.type.name)
+                        % expr.data_type)
                 self.add_localization(expr.value)
             else: # default mode
                 self.add_expr(expr)
@@ -165,7 +165,7 @@ class FStringType(Type):
     def do_init(self):
         def _new(func: BinaryFunction):
             # constructor of fstring type
-            arg_pattern = func.arg_require('_pattern', BuiltinStringType)
+            arg_pattern = func.arg_require('_pattern', StringType)
             arg_fargs, arg_fkws = func.arg_raw()
             try:
                 dependencies, json = _FStrParser(
@@ -184,7 +184,9 @@ class FString(AcaciaExpr):
     def __init__(self, dependencies: list, json: list, compiler):
         # dependencies:list[str] commands ran before json rawtext
         # json:list JSON rawtext without {"rawtext": ...}
-        super().__init__(compiler.types[FStringType], compiler)
+        super().__init__(
+            DataType.from_type_cls(FStringType, compiler), compiler
+        )
         self.dependencies = dependencies
         self.json = json
     
@@ -224,7 +226,7 @@ def _tell(func: BinaryFunction):
     # tell the `target` the `text` using /tellraw
     cmds = []
     # arg parse
-    arg_text = func.arg_require('text', (BuiltinStringType, FStringType))
+    arg_text = func.arg_require('text', (StringType, FStringType))
     ## convert str to fstring
     if isinstance(arg_text, String):
         arg_text, _cmds = func.compiler.types[FStringType].call(
@@ -232,7 +234,7 @@ def _tell(func: BinaryFunction):
         )
         cmds.extend(_cmds)
     arg_target = func.arg_optional(
-        'target', String('@a', func.compiler), BuiltinStringType
+        'target', String('@a', func.compiler), StringType
     )
     func.assert_no_arg()
     # add to tellraw
@@ -262,21 +264,21 @@ def _title(func: BinaryFunction):
     # fade_in, stay_time and fade_out are in ticks for configuring
     cmds = []
     # Arg parse
-    arg_text = func.arg_require('text', (BuiltinStringType, FStringType))
+    arg_text = func.arg_require('text', (StringType, FStringType))
     arg_target = func.arg_optional(
-        'target', String('@a', func.compiler), BuiltinStringType
+        'target', String('@a', func.compiler), StringType
     )
     arg_mode = func.arg_optional(
-        'mode', String(_TITLE, func.compiler), BuiltinStringType
+        'mode', String(_TITLE, func.compiler), StringType
     )
     arg_fade_in = func.arg_optional(
-        'fade_in', IntLiteral(_FADE_IN, func.compiler), BuiltinIntType
+        'fade_in', IntLiteral(_FADE_IN, func.compiler), IntType
     )
     arg_stay_time = func.arg_optional(
-        'stay_time', IntLiteral(_STAY_TIME, func.compiler), BuiltinIntType
+        'stay_time', IntLiteral(_STAY_TIME, func.compiler), IntType
     )
     arg_fade_out = func.arg_optional(
-        'fade_out', IntLiteral(_FADE_OUT, func.compiler), BuiltinIntType
+        'fade_out', IntLiteral(_FADE_OUT, func.compiler), IntType
     )
     func.assert_no_arg()
     ## convert str to fstring
@@ -319,7 +321,7 @@ def _title_clear(func: BinaryFunction):
     # title_clear(target: str = "@a")
     # Parse arg
     arg_target = func.arg_optional(
-        'target', String('@a', func.compiler), BuiltinStringType
+        'target', String('@a', func.compiler), StringType
     )
     func.assert_no_arg()
     # Write

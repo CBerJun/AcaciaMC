@@ -7,7 +7,7 @@ import argparse
 import os
 import shutil
 
-desc = '''
+DESCRIPTION = '''
 Compiler of Acacia, a language that dedicates
 to simplize the command system of Minecraft
 '''
@@ -19,62 +19,55 @@ def error(msg):
 # --- SET ARGPARSER ---
 
 argparser = argparse.ArgumentParser(
-    prog = 'acacia',
-    description = desc,
+    prog='acacia', description=DESCRIPTION,
 )
-
 argparser.add_argument(
     'file',
-    help = 'the file to compile'
+    help='the file to compile'
 )
-
 argparser.add_argument(
-    '-o', '--out',
-    metavar = 'PATH',
-    help = 'output directory'
+    '-o', '--out', metavar='PATH',
+    help='output directory'
 )
-
 argparser.add_argument(
-    '-s', '--scoreboard',
-    metavar = 'OBJECTIVE',
-    help = 'the scoreboard that Acacia uses to store data (default "acacia")'
+    '-s', '--scoreboard', metavar='OBJECTIVE',
+    help='the scoreboard that Acacia uses to store data (default "acacia")'
 )
-
 argparser.add_argument(
-    '-f', '--function-folder',
-    metavar = 'NAME',
-    help = 'the subfolder of `functions` in data pack that Acacia uses to '
+    '-f', '--function-folder', metavar='NAME',
+    help='the subfolder of `functions` in data pack that Acacia uses to '
         'store output .mcfunction files'
 )
-
 argparser.add_argument(
-    '-i', '--indent',
-    type = int,
-    metavar = 'NUM',
-    help = 'count of spaces that an indented block should have'
+    '-n', '--entity-name', metavar="NAME",
+    help='entity name prefix'
 )
-
+argparser.add_argument(
+    '-t', '--entity-tag', metavar="TAG",
+    help='entity tag prefix'
+)
+argparser.add_argument(
+    '-i', '--indent', type=int, metavar='NUM',
+    help='count of spaces that an indented block should have'
+)
 argparser.add_argument(
     '-d', '--debug-comments',
-    action = 'store_true',
-    help = 'add debugging comments to output files'
+    action='store_true',
+    help='add debugging comments to output files'
 )
-
 argparser.add_argument(
     '--override-old',
-    action = 'store_true',
-    help = 'remove the old output contents (EVERYTHING IN DIRECTORY!)'
+    action='store_true',
+    help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
 )
-
 argparser.add_argument(
-    '--encoding',
-    help = 'encoding of file (default "utf-8")'
+    '--encoding', metavar="CODEC",
+    help='encoding of file (default "utf-8")'
 )
-
 argparser.add_argument(
     '--verbose',
-    action = 'store_true',
-    help = 'show full traceback message when encountering unexpected errors'
+    action='store_true',
+    help='show full traceback message when encountering unexpected errors'
 )
 
 args = argparser.parse_args()
@@ -110,6 +103,10 @@ if args.scoreboard:
 if args.function_folder:
     check_id(args.function_folder, 'function folder')
     Config.function_folder = args.function_folder
+if args.entity_name:
+    Config.entity_name = args.entity_name
+if args.entity_tag:
+    Config.entity_tag = args.entity_tag
 if args.encoding is not None:
     encoding = args.encoding
 else:

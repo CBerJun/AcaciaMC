@@ -2,25 +2,44 @@
 from .base import *
 from .types import *
 from ...error import *
+from .. import generator
 
-__all__ = ['AcaciaFunction', 'InlineFunction', 'BinaryFunction']
+__all__ = ['AcaciaFunction', 'InlineFunction', 'BinaryFunction',
+           'BoundMethod', 'BoundMethodDispatcher']
 
-# There are 3 types of functions:
+# There are 5 types of functions:
 # - AcaciaFunction: functions that are written in Acacia
 # - InlineFunction: functions written in Acacia that
 #   are annotated with `inline`
 # - BinaryFunction: functions that are written in Python,
 #   which is usually a builtin function
+# - BoundMethod: methods that are bound to an entity
+#   and we are sure which implementation we are calling
+#   (e.g. entity A: def foo(): ...
+#         entity B extends A: def foo(): ...
+#         b = B()
+#         A@b.foo()  # Definitely A.foo called
+#   )
+# - BoundMethodDispatcher: methods that are bound to an
+#   entity and we are not sure which implementation
+#   we are calling.
+#   (e.g. entity A: def foo(): ...
+#         entity B extends A: def foo(): ...
+#         def bar(a: entity(A)):
+#             a.foo()  # Is it A.foo or B.foo?
+#   )
 
 class AcaciaFunction(AcaciaExpr):
-    def __init__(
-        self, args, arg_types, arg_defaults, returns: Type, compiler
-    ):
+    def __init__(self, name: str, args, arg_types, arg_defaults,
+                 returns: DataType, compiler):
         # args:list[str<an argument>]
         # types:dict{str<arg name>: Type<arg type>}
         # defaults:dict{str<arg name>: AcaciaExpr|None<default value>}
         # returns:Type Return type
-        super().__init__(compiler.types[BuiltinFunctionType], compiler)
+        super().__init__(
+            DataType.from_type_cls(FunctionType, compiler), compiler
+        )
+        self.name = name
         self.arg_handler = ArgumentHandler(
             args, arg_types, arg_defaults, self.compiler)
         # create a VarValue for every args according to their types
@@ -62,17 +81,21 @@ class AcaciaFunction(AcaciaExpr):
 
 class InlineFunction(AcaciaExpr):
     def __init__(self, node, args, arg_types, arg_defaults,
-                 returns: Type, compiler):
+                 returns: DataType, compiler):
         # We store the InlineFuncDef node directly
-        super().__init__(compiler.types[BuiltinFunctionType], compiler)
+        super().__init__(
+            DataType.from_type_cls(FunctionType, compiler), compiler
+        )
         self.node = node
+        self.name = node.name
         self.result_var = returns.new_var()
         self.arg_handler = ArgumentHandler(
             args, arg_types, arg_defaults, compiler)
-    
+
     def call(self, args, keywords: dict):
-        self.compiler.current_generator.call_inline_func(self, args, keywords)
-        return self.result_var, []
+        cmds = self.compiler.current_generator.call_inline_func(
+            self, args, keywords)
+        return self.result_var, cmds
 
 class BinaryFunction(AcaciaExpr):
     # These are the functions that are written in Python,
@@ -92,7 +115,9 @@ class BinaryFunction(AcaciaExpr):
         # The implementation should then parse the arguments using the
         # methods in this class (such as `arg_require`). At last, it needs
         # to give a result which could be any `AcaciaExpr`
-        super().__init__(compiler.types[BuiltinFunctionType], compiler)
+        super().__init__(
+            DataType.from_type_cls(FunctionType, compiler), compiler
+        )
         self.implementation = implementation
     
     def call(self, args, keywords: dict):
@@ -115,24 +140,29 @@ class BinaryFunction(AcaciaExpr):
     
     def _check_arg_type(self, arg: str, value: AcaciaExpr, type_):
         # check type of arg
-        # type_:None|<subclass of Type>|tuple(<subclass of Type>)
+        # type_:None|<subclass of Type>|tuple(<subclass of Type>)|
+        #       DataType|tuple(DataType)
         if type_ is None:
             return
-        '''# check if `type_` is available
-        if issubclass(type_, tuple):
+        # Convert Type to DataType
+        if isinstance(type_, type) and issubclass(type_, Type):
+            type_ = DataType.from_type_cls(type_, self.compiler)
+        # Make `type_` a tuple
+        if isinstance(type_, tuple):
+            nt = []
             for t in type_:
-                if not issubclass(t, Type):
-                    raise TypeError
-        elif not issubclass(type_, Type):
-            raise TypeError'''
-        if not isinstance(value.type, type_):
-            if isinstance(type_, type) and issubclass(type_, Type):
-                expect = type_.name
-            else:
-                expect = ', '.join(map(lambda t: t.name, type_))
+                if issubclass(t, Type):
+                    nt.append(DataType.from_type_cls(t, self.compiler))
+                else:
+                    nt.append(t)
+            type_ = tuple(nt)
+        else:
+            type_ = (type_,)
+        if not any(map(lambda dt: dt.is_type_of(value), type_)):
+            # If all the DataType can't match the `value`, raise error
             self.compiler.error(
-                ErrorType.WRONG_ARG_TYPE, arg = arg,
-                expect = expect, got = value.type.name
+                ErrorType.WRONG_ARG_TYPE, arg=arg,
+                expect=', '.join(map(str, type_)), got=str(value.data_type)
             )
     
     def _find_arg(self, name: str) -> AcaciaExpr:
@@ -195,3 +225,84 @@ class BinaryFunction(AcaciaExpr):
             ErrorType.INVALID_BIN_FUNC_ARG,
             arg = arg, message = message
         )
+
+class BoundMethod(AcaciaExpr):
+    def __init__(self, object_: AcaciaExpr, method_name: str,
+                 definition: AcaciaExpr, compiler):
+        super().__init__(
+            DataType.from_type_cls(FunctionType, compiler), compiler
+        )
+        self.name = method_name
+        self.object = object_
+        self.definition = definition
+
+    def call(self, args, keywords):
+        if isinstance(self.definition, AcaciaFunction):
+            result, cmds = self.definition.call(args, keywords)
+        elif isinstance(self.definition, InlineFunction):
+            old_self = self.compiler.current_generator.self_value
+            self.compiler.current_generator.self_value = self.object
+            result, cmds = self.definition.call(args, keywords)
+            self.compiler.current_generator.self_value = old_self
+        # `BinaryFunction`s cannot be method implementation
+        # because we are not sure about their result data type
+        else:
+            raise TypeError("Unexpected target function %r" % self.definition)
+        return result, cmds
+
+class BoundMethodDispatcher(AcaciaExpr):
+    def __init__(self, object_: AcaciaExpr, method_name: str,
+                 result_var: VarValue, compiler):
+        super().__init__(
+            DataType.from_type_cls(FunctionType, compiler), compiler
+        )
+        self.name = method_name
+        self.object = object_
+        # possible_implementations: list[tuple[<template>, BoundMethod]]
+        self.possible_implementations = []
+        # files: list[tuple[<args>, <keywords>, <file>]]
+        self.files = []
+        self.result_var = result_var
+
+    def _give_implementation(
+            self, args, keywords: dict,
+            file: "generator.MCFunctionFile",
+            template: AcaciaExpr, bound_method: BoundMethod
+        ):
+        try:
+            result, cmds = bound_method.call(args, keywords)
+        except Error:
+            if template is self.object.template:
+                raise  # required function
+            return
+        cmds.extend(result.export(self.result_var))
+        file.write_debug("# To implementation in %s" % template.name)
+        file.extend(
+            export_execute_subcommands(
+                ["if entity @s[tag=%s]" % template.runtime_tag],
+                main=cmd
+            )
+            for cmd in cmds
+        )
+
+    def add_implementation(self, template, definition: AcaciaExpr):
+        if template.is_subtemplate_of(self.object.template):
+            bound_method = BoundMethod(
+                self.object, self.name, definition, self.compiler)
+            self.possible_implementations.append((template, bound_method))
+            for args, keywords, file in self.files:
+                self._give_implementation(args, keywords,
+                                          file, template, bound_method)
+
+    def call(self, args, keywords):
+        file = generator.MCFunctionFile()
+        self.files.append((args, keywords, file))
+        self.compiler.add_file(file)
+        file.write_debug("## Method dispatcher for %s.%s()"
+                         % (self.object.template.name, self.name))
+        for template, bound_method in self.possible_implementations:
+            self._give_implementation(args, keywords,
+                                      file, template, bound_method)
+        return self.result_var, [export_execute_subcommands(
+            ["as %s" % self.object], main=file.call()
+        )]

@@ -142,6 +142,12 @@ class Parser:
         self.eat(TokenType.bar)
         return RawScore(objective, selector, **pos)
 
+    def self(self):
+        # self := SELF
+        pos = self.current_pos
+        self.eat(TokenType.self)
+        return Self(**pos)
+
     def expr_l0(self):
         # level 0 expression := (LPAREN expr RPAREN) | literal |
         #   identifier | raw_score
@@ -159,15 +165,18 @@ class Parser:
             return node
         elif self.current_token.type is TokenType.bar:
             return self.raw_score()
+        elif self.current_token.type is TokenType.self:
+            return self.self()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
 
     def expr_l1(self):
-        # arg := (IDENTIFIER EQUAL)? expr
         # level 1 expression := expr_l0 (
         #   (POINT IDENTIFIER)
         #   | (LPAREN (arg COMMA)* arg? RPAREN)
+        #   | AT expr_l0
         # )*
+        # arg := (IDENTIFIER EQUAL)? expr
         node = self.expr_l0()
         def _attribute(node: Expression):
             # make `node` an Attribute
@@ -212,12 +221,20 @@ class Parser:
                 lineno = node.lineno, col = node.col
             )
         
+        def _entity_cast(node: Expression):
+            self.eat(TokenType.at)
+            object_ = self.expr_l0()
+            return EntityCast(object_, template=node,
+                              lineno=node.lineno, col=node.col)
+        
         # start
         while True:
             if self.current_token.type is TokenType.point:
                 node = _attribute(node)
             elif self.current_token.type is TokenType.lparen:
                 node = _call(node)
+            elif self.current_token.type is TokenType.at:
+                node = _entity_cast(node)
             else:
                 return node
     
@@ -414,7 +431,7 @@ class Parser:
     
     def def_stmt(self):
         # def_stmt := INLINE? DEF IDENTIFIER argument_table
-        #   (ARROW expr)? COLON statement_block
+        #   (ARROW type_spec)? COLON statement_block
         pos = self.current_pos
         is_inline = self.current_token.type is TokenType.inline
         if is_inline:
@@ -427,11 +444,58 @@ class Parser:
         returns = None
         if self.current_token.type is TokenType.arrow:
             self.eat()
-            returns = self.expr()
+            returns = self.type_spec()
         self.eat(TokenType.colon)
         stmts = self.statement_block()
         ast_class = InlineFuncDef if is_inline else FuncDef
         return ast_class(name, arg_table, stmts, returns, **pos)
+
+    def _entity_body(self):
+        # Used by entity statement
+        pos = self.current_pos
+        if self.current_token.type is TokenType.identifier:
+            # field_decl
+            name = self.current_token.value
+            self.eat() # eat IDENTIFIER
+            self.eat(TokenType.colon)
+            type_ = self.type_spec()
+            return EntityField(name, type_, **pos)
+        elif self.current_token.type is TokenType.at:
+            # meta_decl
+            self.eat() # eat `@`
+            name = self.current_token.value
+            self.eat(TokenType.identifier)
+            self.eat(TokenType.colon)
+            value = self.expr()
+            return EntityMeta(name, value, **pos)
+        elif self.current_token.type is TokenType.pass_:
+            return self.pass_stmt()
+        else:
+            # method_decl
+            content = self.def_stmt()
+            return EntityMethod(content, **pos)
+
+    def entity_stmt(self):
+        # entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
+        #   (COMMA expr)*)? COLON entity_body_block
+        # field_decl := IDENTIFIER COLON type_spec
+        # method_decl := def_stmt
+        # meta_decl := AT IDENTIFIER COLON expr
+        # entity_body := method_decl | field_decl | meta_decl | pass_stmt
+        pos = self.current_pos
+        self.eat(TokenType.entity)
+        name = self.current_token.value
+        self.eat(TokenType.identifier)
+        parents = []
+        if self.current_token.type is TokenType.extends:
+            self.eat() # eat EXTENDS
+            parents.append(self.expr())
+            while self.current_token.type is TokenType.comma:
+                self.eat() # eat COMMA
+                parents.append(self.expr())
+        self.eat(TokenType.colon)
+        body = self._block(self._entity_body)
+        return EntityTemplateDef(name, parents, body, **pos)
 
     def command_stmt(self):
         # command_stmt := COMMAND
@@ -520,7 +584,8 @@ class Parser:
         #     (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
         #     TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
         #   )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
-        #   command_stmt | result_stmt | import_stmt | from_import_stmt
+        #   command_stmt | result_stmt | import_stmt |
+        #   from_import_stmt | entity_stmt
         # )
         # Statements that start with special token
         TOK2STMT = {
@@ -530,6 +595,7 @@ class Parser:
             TokenType.interface: self.interface_stmt,
             TokenType.def_: self.def_stmt,
             TokenType.inline: self.def_stmt,
+            TokenType.entity: self.entity_stmt,
             TokenType.command: self.command_stmt,
             TokenType.result: self.result_stmt,
             TokenType.import_: self.import_stmt,
@@ -552,7 +618,7 @@ class Parser:
         def _check_assign_target(node):
             # check if the assign target is valid
             if not isinstance(node, (Attribute, Identifier, RawScore)):
-                self.error(ErrorType.INVALID_ASSIGN_TARGET)
+                self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
         
         # assignable := attribute | identifier | raw_score
         if self.current_token.type is TokenType.equal:
@@ -601,7 +667,7 @@ class Parser:
     
     def argument_table(self, type_required=True):
         # parse an ArgumentTable
-        # type_decl := COLON expr
+        # type_decl := COLON type_spec
         # default_decl := EQUAL expr
         # When `type_required`:
         #   arg_decl := IDENTIFIER ((type_decl | default_decl)
@@ -619,7 +685,7 @@ class Parser:
             type_ = None
             if self.current_token.type is TokenType.colon:
                 self.eat()
-                type_ = self.expr()
+                type_ = self.type_spec()
             # read default
             default = None
             if self.current_token.type is TokenType.equal:
@@ -639,3 +705,18 @@ class Parser:
                 break # no comma -> end
         self.eat(TokenType.rparen)
         return arg_table
+
+    def type_spec(self):
+        # type_spec := expr | (ENTITY (LPAREN expr RPAREN)?)
+        pos = self.current_pos
+        if self.current_token.type is TokenType.entity:
+            self.eat() # Eat `entity`
+            if self.current_token.type is TokenType.lparen:
+                self.eat() # Eat `(`
+                template = self.expr()
+                self.eat(TokenType.rparen)
+            else:
+                template = None
+            return EntityTypeSpec(template, **pos)
+        else:
+            return TypeSpec(self.expr(), **pos)

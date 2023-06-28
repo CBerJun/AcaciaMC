@@ -1,6 +1,6 @@
 # Modules in Acacia
 from .base import *
-from .types import BuiltinModuleType
+from .types import ModuleType, DataType
 from ..symbol import *
 from ...error import *
 
@@ -12,7 +12,9 @@ class BinaryModule(AcaciaExpr):
     # A BinaryModule that is implemented in Python
     def __init__(self, path: str, compiler):
         # path: .py file path
-        super().__init__(compiler.types[BuiltinModuleType], compiler)
+        super().__init__(
+            DataType.from_type_cls(ModuleType, compiler), compiler
+        )
         self.path = path
         # get the module from `path`
         try:
@@ -47,5 +49,7 @@ class AcaciaModule(AcaciaExpr):
     # An AcaciaModule that is implemented in Acacia
     def __init__(self, table: SymbolTable, compiler):
         # table: the attributes from the module
-        super().__init__(compiler.types[BuiltinModuleType], compiler)
+        super().__init__(
+            DataType.from_type_cls(ModuleType, compiler), compiler
+        )
         self.attribute_table = AttributeTable.from_other(table)

@@ -49,19 +49,32 @@ class Compiler:
         self._lib_count = 0 # always equal to len(self.libs)
         # vars to record the resources that are applied
         self._score_max = 0 # max id of score allocated
+        self._scoreboard_max = 0 # max id of scoreboard allocated
+        self._entity_max = 0 # max id of entity name allocated
+        self._entity_tag_max = 0 # max id of entity tag allocated
         self._free_tmp_score = [] # free tmp scores (see method `allocate_tmp`)
         self._current_file = None # str; Path of current parsing file
         self._cached_modules = {} # loaded modules are cached here
         self._loading_files = [] # paths of Acacia modules that are loading
 
-        # --- BUILTIN SYMBOL TABLE ---
+        # --- BUILTINS ---
         self.builtins = SymbolTable()
+        self.base_template = EntityTemplate(
+            name="Object",
+            field_types={}, field_metas={},
+            methods={}, parents=[], metas={}, compiler=self
+        )
         # builtin types
         for name, cls in (
-            ('int', BuiltinIntType),
-            ('bool', BuiltinBoolType)
+            ('int', IntType),
+            ('bool', BoolType)
         ):
             self.builtins.set(name, self.types[cls])
+        # builtin names
+        for name, value in (
+            ('Object', self.base_template),
+        ):
+            self.builtins.set(name, value)
 
         # --- START COMPILE ---
         ## comment on load.mcfunction
@@ -85,9 +98,17 @@ class Compiler:
         if self._int_consts:
             # only comment when there are constants used
             self.file_init.write_debug('# Load constants')
-        for num, var in self._int_consts.items():
-            self.file_init.write('scoreboard players set %s %d' % (var, num))
-    
+            for num, var in self._int_consts.items():
+                self.file_init.write(
+                    'scoreboard players set %s %d' % (var, num))
+        if self._scoreboard_max >= 1:
+            self.file_init.write_debug('# Additional scoreboards')
+            for i in range(1, self._scoreboard_max + 1):
+                self.file_init.write(
+                    'scoreboard objectives add "%s%d" dummy' %
+                    (Config.scoreboard, i)
+                )
+
     def output(self, path: str):
         # output result to `path`
         # e.g. when `path` is "a/b", main file is
@@ -175,10 +196,27 @@ class Compiler:
         if var is not None:
             return var
         # apply one and register
-        var = self.types[BuiltinIntType].new_var()
+        var = self.types[IntType].new_var()
         self._int_consts[value] = var
         return var
     
+    def add_scoreboard(self) -> str:
+        self._scoreboard_max += 1
+        return Config.scoreboard + str(self._scoreboard_max)
+
+    def allocate_entity_name(self) -> str:
+        # Return a new entity name
+        self._entity_max += 1
+        return Config.entity_name + str(self._entity_max)
+
+    def allocate_entity_tag(self) -> str:
+        # Return a new entity tag
+        self._entity_tag_max += 1
+        return Config.entity_tag + str(self._entity_tag_max)
+
+    def add_tmp_entity(self, entity: TaggedEntity):
+        self.current_generator.current_tmp_entities.append(entity)
+
     # -- End allocation --
 
     def find_module(self, meta: ModuleMeta) -> str:

@@ -46,7 +46,7 @@ class TaskType(Type):
 
     def do_init(self):
         def _new(func: BinaryFunction):
-            target = func.arg_require("target", BuiltinFunctionType)
+            target = func.arg_require("target", FunctionType)
             other_arg, other_kw = func.arg_raw()
             return Task(target, other_arg, other_kw, self.compiler)
         self.attribute_table.set(
@@ -59,10 +59,12 @@ class Task(AcaciaExpr):
         target: The function to call
         other_arg & other_kw: Arguments to pass to `target`
         """
-        super().__init__(compiler.types[TaskType], compiler)
+        super().__init__(
+            DataType.from_type_cls(TaskType, compiler), compiler
+        )
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
-        self.timer = compiler.types[BuiltinIntType].new_var()
+        self.timer = compiler.types[IntType].new_var()
         # self._target_args, self._target_keywords: args to pass to `target`
         self._target_args, self._target_keywords = [], {}
         def _timer_reset(func: BinaryFunction):
@@ -70,7 +72,7 @@ class Task(AcaciaExpr):
             return result_cmds(cmds, compiler)
         def _after(func: BinaryFunction):
             """.after(delay: int): Run the target after `delay`"""
-            delay = func.arg_require("delay", BuiltinIntType)
+            delay = func.arg_require("delay", IntType)
             func.assert_no_arg()
             cmds = delay.export(self.timer)
             return result_cmds(cmds, compiler)
@@ -122,9 +124,9 @@ def _register_loop(func: BinaryFunction):
     Call a function repeatly every `interval` ticks with `args` and `kwargs`.
     """
     # Parse args
-    target = func.arg_require("target", BuiltinFunctionType)
+    target = func.arg_require("target", FunctionType)
     arg_interval = func.arg_optional(
-        "interval", IntLiteral(1, func.compiler), BuiltinIntType
+        "interval", IntLiteral(1, func.compiler), IntType
     )
     if not isinstance(arg_interval, IntLiteral):
         func.arg_error("interval", "must be a constant")
@@ -132,7 +134,7 @@ def _register_loop(func: BinaryFunction):
         func.arg_error("interval", "must be positive")
     other_arg, other_kw = func.arg_raw()
     # Allocate an int for timer
-    timer = func.compiler.types[BuiltinIntType].new_var()
+    timer = func.compiler.types[IntType].new_var()
     # Initialize
     init_cmds = IntLiteral(0, func.compiler).export(timer)
     # Tick loop

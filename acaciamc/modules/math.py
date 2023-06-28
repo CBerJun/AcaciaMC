@@ -6,8 +6,8 @@ def _randintc(func: BinaryFunction):
     # randintc(min: int-literal, max: int-literal) -> int
     # get a random integer between [`min`, `max`]
     # Parse arg
-    arg_min = func.arg_require('min', BuiltinIntType)
-    arg_max = func.arg_require('max', BuiltinIntType)
+    arg_min = func.arg_require('min', IntType)
+    arg_max = func.arg_require('max', IntType)
     func.assert_no_arg()
     if not isinstance(arg_min, IntLiteral):
         func.arg_error('min', 'must be a constant')
@@ -22,8 +22,8 @@ def _pow(func: BinaryFunction):
     # pow(x: int, y: int) -> int
     # return x to the power of y
     # Parse args
-    arg_x = func.arg_require('x', BuiltinIntType)
-    arg_y = func.arg_require('y', BuiltinIntType)
+    arg_x = func.arg_require('x', IntType)
+    arg_y = func.arg_require('y', IntType)
     func.assert_no_arg()
     if not isinstance(arg_y, IntLiteral):
         # Fallback to `_math._pow`
@@ -54,7 +54,7 @@ def _min(func: BinaryFunction):
     if not args:
         func.compiler.error(ErrorType.ANY, '"min" needs at least 1 argument')
     for arg in args:
-        if not isinstance(arg.type, BuiltinIntType):
+        if not arg.data_type.raw_matches(IntType):
             func.compiler.error(
                 ErrorType.ANY, '"min" arguments should all be int'
             )
@@ -80,7 +80,7 @@ def _max(func: BinaryFunction):
     if not args:
         func.compiler.error(ErrorType.ANY, '"max" needs at least 1 argument')
     for arg in args:
-        if not isinstance(arg.type, BuiltinIntType):
+        if not arg.data_type.raw_matches(IntType):
             func.compiler.error(
                 ErrorType.ANY, '"max" arguments should all be int'
             )

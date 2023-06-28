@@ -7,6 +7,7 @@ from ...error import *
 __all__ = [
     # Utils
     'export_execute_subcommands', 'ArgumentHandler',
+    'export_need_tmp',
     # Base class
     'AcaciaExpr', 'VarValue'
 ]
@@ -17,10 +18,32 @@ def export_execute_subcommands(subcmds: list, main: str) -> str:
     # convert a list of /execute subcommands into a command
     # e.g. cmds = ['if xxx', 'as xxx'], main = 'say ...'
     #  returns: 'execute if xxx as xxx run say ...'
-    if not bool(subcmds):
+    if main.strip().startswith("#"):
+        # A comment
+        return main
+    if not subcmds:
         # optimization: if no subcommand given
         return main
-    return 'execute ' + ' '.join(subcmds) + ' run ' + main
+    return " ".join(("execute", *subcmds, "run", main))
+
+def export_need_tmp(func):
+    # Decorator for `AcaciaExpr.export`.
+    # Usually when we do `A.export(B)`, the value of `A` is dumped to
+    # `B` directly without a temporary value.
+    # This decorator add a temporary value `T`, first `A.export(T)`,
+    # then `T.export(B)`.
+    # This is to prevent changing the value of `B` too early.
+    # WITHOUT a temporary value, take `a = 1 + a` as an example,
+    # we let `a` = 1 first, and then plus `a` itself to it, which is 1
+    # now, so whatever `a` is before assigning, it becomes 2 now.
+    def _decorated(self, var: VarValue):
+        assert isinstance(self, AcaciaExpr)
+        temp = self.data_type.new_var(tmp=True)
+        cmds = []
+        cmds.extend(func(self, temp))
+        cmds.extend(temp.export(var))
+        return cmds
+    return _decorated
 
 def _operator_class(cls):
     # class decorator that do the following things to operator methods:
@@ -64,7 +87,7 @@ def _operator_class(cls):
                 ErrorType.INVALID_OPERAND,
                 operator = show_name,
                 operand = ', '.join(
-                    repr(x.type.name) \
+                    repr(str(x.data_type)) \
                     for x in (self, ) + args + tuple(kwargs.values())
                 )
             )
@@ -132,11 +155,11 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
     #  `BuiltinIntType` does have a `new_var` method, which creates
     #  a new `IntVar` (3rd rule)
     # --- CONTRIBUTOR GUIDE END ---
-    def __init__(self, type, compiler):
+    def __init__(self, type_, compiler):
         # compiler:Compiler master
         # type:Type type of expression
         self.compiler = compiler
-        self.type = type
+        self.data_type = type_
         self.attribute_table = AttributeTable()
     
     def call(self, args, keywords):
@@ -145,21 +168,20 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
         #  1st element: Result of this call
         #  2nd element: Commands to run
         # not implemented -> uncallable
-        self.compiler.error(ErrorType.UNCALLABLE, expr_type = self.type.name)
+        self.compiler.error(ErrorType.UNCALLABLE,
+                            expr_type=str(self.data_type))
     
     def export(self, var) -> list[str]:
         # var:VarValue
         # Return a list of str, which are commands that assigns
         # value of self to that var
         # Since we need a VarValue here, only "storable" types need
-        # to implement this
+        # to implement this.
+        # The method can be decorated with `export_need_tmp`.
         raise NotImplementedError
 
 class ArgumentHandler:
     # a tool to match the arguments against the given definition
-    # this class also creates a VarValue for every args
-    # (when calling function, arguments are passed using these vars)
-    # used by AcaciaFunction
     def __init__(self, args, arg_types: dict, arg_defaults: dict, compiler):
         # args, arg_types, arg_defaults: same as these in ast.FunctionDef
         # these arguments decide the pattern of this callable
@@ -187,12 +209,10 @@ class ArgumentHandler:
         def _check_arg_type(arg: str, value: AcaciaExpr):
             # check if `arg` got the correct type of `value`
             t = self.arg_types[arg]
-            if (t is not None) and (value.type is not t):
+            if (t is not None) and (not t.matches(value.data_type)):
                 self.compiler.error(
-                    ErrorType.WRONG_ARG_TYPE,
-                    arg = arg,
-                    expect = self.arg_types[arg].name,
-                    got = value.type.name
+                    ErrorType.WRONG_ARG_TYPE, arg=arg,
+                    expect=str(t), got=str(value.data_type)
                 )
         # positioned
         for i, value in enumerate(args):

@@ -78,6 +78,8 @@ class Generator(ASTVisitor):
         # result_var: the var that stores result value
         # only exists when passing functions
         self.result_var = None
+        # self_value: The entity keyword `self` represents
+        self.self_value = None
         # processing_node is prepared for showing errors
         # to know which AST we are passing (so that lineno and col are known)
         self.processing_node = self.node
@@ -85,6 +87,9 @@ class Generator(ASTVisitor):
         # current_tmp_scores: tmp scores allocated on current statement
         # see method `visit`
         self.current_tmp_scores = []
+        # current_tmp_entities: just like `current_tmp_scores`, but
+        # store tmp `EntityVar`s.
+        self.current_tmp_entities = []
 
     def parse(self):
         # parse the AST and generate commands
@@ -117,22 +122,18 @@ class Generator(ASTVisitor):
             # The attribute must exists when assigning to it.
             if not object_.attribute_table.is_defined(target_node.attr):
                 self.compiler.error(ErrorType.HAS_NO_ATTRIBUTE,
-                                    value_type=object_.type.name,
+                                    value_type=str(object_.data_type),
                                     attr=target_node.attr)
             object_.attribute_table.set(target_node.attr, target_value)
         else: raise TypeError
     
-    def get_result_type(self, node: Expression) -> Type:
-        # Get result Type according to AST
+    def get_result_type(self, node: AnyTypeSpec) -> DataType:
+        # Get result DataType according to AST
         if node is None:
-            return self.compiler.types[BuiltinNoneType]
+            return DataType.from_type(
+                self.compiler.types[NoneType], self.compiler)
         else:
-            returns = self.visit(node)
-            if not isinstance(returns.type, BuiltinTypeType):
-                self.compiler.error(
-                    ErrorType.INVALID_RESULT_TYPE, got = returns.type.name
-                )
-            return returns
+            return self.visit(node)
     
     def write_debug(self, comment: str, target: MCFunctionFile = None):
         # write debug comment to current_file
@@ -152,15 +153,20 @@ class Generator(ASTVisitor):
             )
     
     @contextlib.contextmanager
+    def set_mcfunc_file(self, file: MCFunctionFile):
+        old = self.current_file
+        self.current_file = file
+        yield
+        self.current_file = old
+
+    @contextlib.contextmanager
     def new_mcfunc_file(self, path: str = None):
         # Create a new mcfunction file
         f = MCFunctionFile(path)
-        old = self.current_file
-        self.current_file = f
-        yield f
-        if f.has_content():
-            self.compiler.add_file(f)
-        self.current_file = old
+        with self.set_mcfunc_file(f):
+            yield f
+            if f.has_content():
+                self.compiler.add_file(f)
     
     @contextlib.contextmanager
     def new_scope(self):
@@ -171,6 +177,13 @@ class Generator(ASTVisitor):
         yield s
         self.current_scope = old
 
+    @contextlib.contextmanager
+    def set_result_var(self, var: VarValue):
+        old = self.result_var
+        self.result_var = var
+        yield
+        self.result_var = old
+
     # --- VISITORS ---
     
     def visit(self, node: AST, **kwargs):
@@ -179,14 +192,17 @@ class Generator(ASTVisitor):
         self.processing_node = node
         self.node_depth += 1 # used by self.write_debug
         if isinstance(node, Statement):
-            # NOTE self.current_tmp_scores is modified by Compiler, to tell
-            # the tmp scores that are allocated in this statement
-            # so that we can free them when the statement ends
+            # NOTE `current_tmp_scores` and `current_tmp_entities` are
+            # modified by `Compiler`, to tell the tmp scores that are
+            # allocated in this statement so that we can free them when
+            # the statement ends.
             # Therefore, only update tmp scores when node is a Statement
             old_tmp_scores = self.current_tmp_scores
             self.current_tmp_scores = []
+            old_tmp_entities = self.current_tmp_entities
+            self.current_tmp_entities = []
         # write debug
-        if not isinstance(node, (Expression, ArgumentTable)):
+        if not isinstance(node, (Expression, ArgumentTable, AnyTypeSpec)):
             self.write_debug(type(node).__name__)
         # visit the node
         res = super().visit(node, **kwargs)
@@ -194,10 +210,13 @@ class Generator(ASTVisitor):
         self.processing_node = old_node
         self.node_depth -= 1
         if isinstance(node, Statement):
-            # delete used vars
+            # free used vars
             for score in self.current_tmp_scores:
                 self.compiler.free_tmp(*score)
+            for entity in self.current_tmp_entities:
+                self.current_file.extend(entity.clear())
             self.current_tmp_scores = old_tmp_scores
+            self.current_tmp_entities = old_tmp_entities
         return res
     
     def visit_Module(self, node: Module):
@@ -216,33 +235,22 @@ class Generator(ASTVisitor):
         if target is None:
             ## apply a var according to type
             try:
-                target = value.type.new_var()
+                target = value.data_type.new_var()
             except NotImplementedError:
-                self.compiler.error(
-                    ErrorType.UNSUPPORTED_VAR_TYPE,
-                    var_type = value.type.name
-                )
+                self.compiler.error(ErrorType.UNSUPPORTED_VAR_TYPE,
+                                    var_type=str(value.data_type))
             ## register the var to symbol table
             self.register_symbol(node.target, target)
         else: # for existed name, check if it is assignable
             self.check_assignable(target)
         # check type
-        if target.type is not value.type:
+        if not target.data_type.matches(value.data_type):
             self.compiler.error(
                 ErrorType.WRONG_ASSIGN_TYPE,
-                expect = target.type.name, got = value.type.name
+                expect=str(target.data_type), got=str(value.data_type)
             )
         # assign
-        # NOTE to avoid problems of changing var too early,
-        # (e.g. a = 1 + a, we will let a = 1 first, and then plus 1
-        # so whatever a is before assigning, it becomes 2 now)
-        # we need a temporary var
-        # (assign to tmp first and move it to target)
-        # TODO analyze if expression uses target var
-        # sometimes a temporary var is not needed
-        tmp = target.type.new_var(tmp = True)
-        self.current_file.extend(value.export(tmp))
-        self.current_file.extend(tmp.export(target))
+        self.current_file.extend(value.export(target))
     
     def visit_AugmentedAssign(self, node: AugmentedAssign):
         # visit nodes
@@ -280,10 +288,10 @@ class Generator(ASTVisitor):
             # expressions in commands need to be parsed
             if section[0] is StringMode.expression:
                 expr = self.visit(section[1])
-                if not isinstance(expr.type, BuiltinStringType):
+                if not expr.data_type.raw_matches(StringType):
                     self.compiler.error(
                         ErrorType.INVALID_CMD_FORMATTING,
-                        expr_type = expr.type.name
+                        expr_type=str(expr.data_type)
                     )
                 cmd += expr.value
             elif section[0] is StringMode.text:
@@ -294,10 +302,9 @@ class Generator(ASTVisitor):
     def visit_If(self, node: If):
         # condition
         condition = self.visit(node.condition)
-        if not isinstance(condition.type, BuiltinBoolType):
-            self.compiler.error(
-                ErrorType.WRONG_IF_CONDITION, got = condition.type.name
-            )
+        if not condition.data_type.raw_matches(BoolType):
+            self.compiler.error(ErrorType.WRONG_IF_CONDITION,
+                                got=str(condition.data_type))
         # optimization: if condition is a constant, just run the code
         if isinstance(condition, BoolLiteral):
             run_node = node.body if condition.value is True else node.else_body
@@ -331,10 +338,9 @@ class Generator(ASTVisitor):
     def visit_While(self, node: While):
         # condition
         condition = self.visit(node.condition)
-        if not isinstance(condition.type, BuiltinBoolType):
-            self.compiler.error(
-                ErrorType.WRONG_WHILE_CONDITION, got = condition.type.name
-            )
+        if not condition.data_type.raw_matches(BoolType):
+            self.compiler.error(ErrorType.WRONG_WHILE_CONDITION,
+                                got=str(condition.data_type))
         # optimization: if condition is always False, ommit
         if isinstance(condition, BoolLiteral):
             if condition.value is False:
@@ -396,48 +402,58 @@ class Generator(ASTVisitor):
             if type_node is None:
                 if default_node is not None:
                     # type is ommited, default value given
-                    types[arg] = defaults[arg].type
+                    types[arg] = defaults[arg].data_type
             else: # type is given
                 types[arg] = self.visit(type_node)
-                # make sure specified type is a type
-                # e.g. `def f(a: 1)`
-                if not isinstance(types[arg].type, BuiltinTypeType):
-                    self.compiler.error(
-                        ErrorType.INVALID_ARG_TYPE,
-                        arg = arg, arg_type = types[arg].type.name
-                    )
                 # make sure default value matches type
                 # e.g. `def f(a: int = True)`
-                if (defaults[arg] is not None and \
-                    defaults[arg].type is not types[arg]):
+                if (defaults[arg] is not None
+                    and not types[arg].is_type_of(defaults[arg])):
                     self.compiler.error(
                         ErrorType.UNMATCHED_ARG_DEFAULT_TYPE,
-                        arg = arg, arg_type = types[arg],
-                        default_type = defaults[arg].type
+                        arg=arg, arg_type=str(types[arg]),
+                        default_type=str(defaults[arg].data_type)
                     )
         return args, types, defaults
-    
-    def visit_FuncDef(self, node: FuncDef):
+
+    def visit_TypeSpec(self, node: TypeSpec):
+        type_ = self.visit(node.content)
+        return DataType.from_type(type_, self.compiler)
+
+    def visit_EntityTypeSpec(self, node: EntityTypeSpec):
+        if node.template is None:
+            # When template is omitted, use builtin `Object` template
+            template = self.compiler.base_template
+        else:
+            template = self.visit(node.template)
+        return DataType.from_entity(template, self.compiler)
+
+    def _func_expr(self, node: FuncDef) -> AcaciaFunction:
+        # Return the function object to a function definition,
+        # WITHOUT parsing the body.
         # get return type (of Type type)
         returns = self.get_result_type(node.returns)
         # parse arg
         args, types, defaults = self.visit(node.arg_table)
         # create function
-        func = AcaciaFunction(
-            args = args,
-            arg_types = types,
-            arg_defaults = defaults,
-            returns = returns,
-            compiler = self.compiler
+        return AcaciaFunction(
+            name=node.name, args=args, arg_types=types, arg_defaults=defaults,
+            returns=returns, compiler=self.compiler
         )
-        self.current_scope.set(node.name, func)
-        # read body
-        old_res_var = self.result_var
-        self.result_var = func.result_var
-        with self.new_scope():
+
+    def handle_inline_func(self, node: InlineFuncDef) -> InlineFunction:
+        # Return the inline function object to a function definition
+        returns = self.get_result_type(node.returns)
+        args, types, defaults = self.visit(node.arg_table)
+        return InlineFunction(node, args, types, defaults,
+                              returns, self.compiler)
+
+    def visit_FuncDef(self, node: FuncDef):
+        func = self._func_expr(node)
+        with self.new_scope(), self.set_result_var(func.result_var):
             # Register arguments to scope
-            for arg in args:
-                self.current_scope.set(arg, func.arg_vars[arg])
+            for arg, var in func.arg_vars.items():
+                self.current_scope.set(arg, var)
             # Write file
             with self.new_mcfunc_file() as body_file:
                 self.write_debug('Function definition of %s()' % node.name)
@@ -449,27 +465,24 @@ class Generator(ASTVisitor):
                 func.file = body_file
             else:
                 self.write_debug('No commands generated')
-        # resume environment
-        self.result_var = old_res_var
-    
-    def visit_InlineFuncDef(self, node: InlineFuncDef):
-        returns = self.get_result_type(node.returns)
-        args, types, defaults = self.visit(node.arg_table)
-        func = InlineFunction(node, args, types, defaults,
-                              returns, self.compiler)
         self.current_scope.set(node.name, func)
-    
+        return func
+
+    def visit_InlineFuncDef(self, node: InlineFuncDef):
+        func = self.handle_inline_func(node)
+        self.current_scope.set(node.name, func)
+
     def visit_Result(self, node: Result):
         # check
         if self.result_var is None:
             self.compiler.error(ErrorType.RESULT_OUT_OF_SCOPE)
         # visit expr and check type
         expr = self.visit(node.value)
-        if expr.type is not self.result_var.type:
+        if not self.result_var.data_type.is_type_of(expr):
             self.compiler.error(
                 ErrorType.WRONG_RESULT_TYPE,
-                expect = self.result_var.type.name,
-                got = expr.type.name
+                expect=str(self.result_var.data_type),
+                got=str(expr.data_type)
             )
         # write file
         self.current_file.extend(expr.export(self.result_var))
@@ -494,6 +507,92 @@ class Generator(ASTVisitor):
         for name, value in module.attribute_table:
             self.current_scope.set(name, value)
 
+    def visit_EntityTemplateDef(self, node: EntityTemplateDef):
+        field_types = {}  # Field name to `DataType`
+        field_metas = {}  # Field name to field meta 
+        methods = {}  # Method name to function `AcaciaExpr`
+        metas = {}  # Meta name to value
+        # Handle parents
+        parents = []
+        for parent_ast in node.parents:
+            parent = self.visit(parent_ast)
+            if not parent.data_type.raw_matches(ETemplateType):
+                self.compiler.error(ErrorType.INVALID_ETEMPLATE,
+                                    got=str(parent.data_type))
+            parents.append(parent)
+        # If parent is not specified, use builtin `Object`
+        if not parents:
+            parents.append(self.compiler.base_template)
+        # 1st Pass: get all the attributes and give every non-inline
+        # method a `MCFunctionFile` without parsing its body.
+        methods_2ndpass: list[tuple[AcaciaFunction, FuncDef]] = []
+        for decl in node.body:
+            res = self.visit(decl)
+            if isinstance(decl, EntityField):
+                # `res` is (field type, field meta)
+                field_types[decl.name], field_metas[decl.name] = res
+            elif isinstance(decl, EntityMethod):
+                # `res` is `AcaciaFunction` or `InlineFunction`
+                methods[decl.content.name] = res
+                if isinstance(res, AcaciaFunction):
+                    methods_2ndpass.append((res, decl.content))
+            elif isinstance(decl, EntityMeta):
+                # `res` is (mata name, mata value)
+                key, value = res
+                if key in metas:
+                    self.compiler.error(ErrorType.REPEAT_ENTITY_META,
+                                        meta=key)
+                metas[key] = value
+        # generate the template before 2nd pass, since `self` value
+        # needs the template specified.
+        template = EntityTemplate(node.name, field_types, field_metas,
+                                  methods, parents, metas, self.compiler)
+        # 2nd Pass: parse the non-inline method bodies.
+        for method, ast in methods_2ndpass:
+            with self.new_scope():
+                # Register arguments to scope
+                for arg, var in method.arg_vars.items():
+                    self.current_scope.set(arg, var)
+                # Handle `self`
+                old_self = self.self_value
+                self.self_value = EntityReference(
+                    "@s", template, self.compiler)
+                # Write file
+                with self.set_mcfunc_file(method.file), \
+                     self.set_result_var(method.result_var):
+                    self.write_debug('Entity method definition of %s.%s()' %
+                                     (node.name, ast.name))
+                    for stmt in ast.body:
+                        self.visit(stmt)
+                # Resume `self`
+                self.self_value = old_self
+        # Register
+        self.current_scope.set(node.name, template)
+
+    def visit_EntityField(self, node: EntityField):
+        data_type = self.visit(node.type)
+        try:
+            field_meta = data_type.new_entity_field()
+        except NotImplementedError:
+            self.compiler.error(ErrorType.UNSUPPORTED_FIELD_TYPE,
+                                field_type=str(data_type))
+        return data_type, field_meta
+
+    def visit_EntityMethod(self, node: EntityMethod):
+        content = node.content
+        if isinstance(content, FuncDef):
+            func = self._func_expr(content)
+            # Give this function a file
+            file = MCFunctionFile()
+            func.file = file
+            self.compiler.add_file(file)
+        elif isinstance(content, InlineFuncDef):
+            func = self.handle_inline_func(content)
+        return func
+
+    def visit_EntityMeta(self, node: EntityMeta):
+        return node.name, self.visit(node.value)
+
     ### --- visit Expression ---
     # literal
     
@@ -510,6 +609,12 @@ class Generator(ASTVisitor):
             return NoneLiteral(compiler = self.compiler)
         raise TypeError
     
+    def visit_Self(self, node: Self):
+        v = self.self_value
+        if v is None:
+            self.compiler.error(ErrorType.SELF_OUT_OF_SCOPE)
+        return v
+
     # assignable & bindable
     # check_undef:bool if True, raise Error when the assignable is
     # not found in SymbolTable; if False, return None when not found
@@ -529,7 +634,7 @@ class Generator(ASTVisitor):
         if res is None and check_undef:
             self.compiler.error(
                 ErrorType.HAS_NO_ATTRIBUTE,
-                value_type = value.type.name, attr = node.attr,
+                value_type=str(value.data_type), attr=node.attr,
             )
         # return product
         return res
@@ -539,13 +644,11 @@ class Generator(ASTVisitor):
         objective = self.visit(node.objective)
         selector = self.visit(node.selector)
         if not isinstance(objective, String):
-            self.compiler.error(
-                ErrorType.INVALID_RAWSCORE_OBJECTIVE, got = objective.type.name
-            )
+            self.compiler.error(ErrorType.INVALID_RAWSCORE_OBJECTIVE,
+                                got=str(objective.data_type))
         if not isinstance(selector, String):
-            self.compiler.error(
-                ErrorType.INVALID_RAWSCORE_SELECTOR, got = selector.type.name
-            )
+            self.compiler.error(ErrorType.INVALID_RAWSCORE_SELECTOR,
+                                got=str(selector.data_type))
         return IntVar(
             objective.value, selector.value,
             compiler = self.compiler, with_quote = False
@@ -624,10 +727,30 @@ class Generator(ASTVisitor):
             for arg, value in arg2value.items():
                 self.current_scope.set(arg, value)
             # Visit body
-            old_result = self.result_var
-            self.result_var = func.result_var
-            self.write_debug("Start of inline function")
-            for stmt in func.node.body:
-                self.visit(stmt)
-            self.write_debug("End of inline function")
-            self.result_var = old_result
+            file = MCFunctionFile()
+            with self.set_mcfunc_file(file), \
+                 self.set_result_var(func.result_var):
+                self.write_debug("Start of inline function")
+                for stmt in func.node.body:
+                    self.visit(stmt)
+                self.write_debug("End of inline function")
+        return file.commands
+
+    # entity cast
+
+    def visit_EntityCast(self, node: EntityCast):
+        object_ = self.visit(node.object)
+        template = self.visit(node.template)
+        # Make sure `object_` is an entity
+        if not object_.data_type.is_entity:
+            self.compiler.error(ErrorType.INVALID_CAST_ENTITY,
+                                got=str(object_.data_type))
+        # Make sure `template` is a template
+        if not template.data_type.raw_matches(ETemplateType):
+            self.compiler.error(ErrorType.INVALID_ETEMPLATE,
+                                got=str(template.data_type))
+        # Make sure `template` is a super template of `object_`
+        if not object_.template.is_subtemplate_of(template):
+            self.compiler.error(ErrorType.INVALID_CAST)
+        # Go
+        return object_.cast_to(template)

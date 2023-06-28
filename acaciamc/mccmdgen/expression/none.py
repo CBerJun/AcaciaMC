@@ -1,13 +1,13 @@
 # None definition for Acacia
 from .base import *
-from .types import BuiltinNoneType
+from .types import NoneType, DataType
 
 __all__ = ['NoneVar', 'NoneLiteral', 'result_cmds']
 
 # None is used when function returns nothing
 class NoneVar(VarValue):
     def __init__(self, compiler):
-        super().__init__(compiler.types[BuiltinNoneType], compiler)
+        super().__init__(DataType.from_type_cls(NoneType, compiler), compiler)
     
     def export(self, var):
         # This does nothing but won't raise NotImplementedError
@@ -22,7 +22,7 @@ def result_cmds(dependencies: list, compiler):
 class NoneLiteral(AcaciaExpr):
     # Represents a literal None
     def __init__(self, compiler):
-        super().__init__(compiler.types[BuiltinNoneType], compiler)
+        super().__init__(DataType.from_type_cls(NoneType, compiler), compiler)
     
     def export(self, var):
         return []
