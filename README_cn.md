@@ -27,7 +27,7 @@ b = (10 + 20) * a - 5
 定义函数:
 ```
 def foo(x: int, y = True) -> int:
-    pass # 这里写函数体代码
+    pass  # 这里写函数体代码
 # 下面这些都是合法的调用:
 foo(1)
 z = foo(2, False)
@@ -37,7 +37,7 @@ z = foo(x=3)
 控制语句:
 ```
 def is_prime(x: int) -> bool:
-    # 检测`x`是不是质数
+    #* 检测`x`是不是质数 *#
     mod = 2
     result True
     while mod <= x / 2:
@@ -71,12 +71,12 @@ a = 1
     tellraw @a {
     ...
     }
-*/ # 多行命令!
+*/  # 多行命令!
 ```
 
 它甚至能够帮你简化命令:
 ```
-player -> "@p[tag=player]" # 定义绑定量（类似C语言的宏定义`#define`）
+player -> "@p[tag=player]"  # 定义绑定量
 /tp ${player} 11 45 14
 /execute at ${player} run setblock ~ ~ ~ grass
 ```
@@ -94,19 +94,22 @@ sum_between(-5, 5, delta=2)
 
 下面是为 `sum_between` 函数生成的命令:
 ```mcfunction
-# 第一次运行时
+# 第一次运行时设置常量
 scoreboard players set "acacia5" "acacia" 2
 ```
 ```mcfunction
 # "acacia1"，"acacia2" 和 "acacia3" 都是函数的参数
-scoreboard players operation "acacia6" "acacia" = "acacia2" "acacia"
-scoreboard players operation "acacia6" "acacia" -= "acacia1" "acacia"
-scoreboard players operation "acacia6" "acacia" /= "acacia3" "acacia"
-scoreboard players add "acacia6" "acacia" 1
-scoreboard players operation "acacia4" "acacia" = "acacia1" "acacia"
-scoreboard players operation "acacia4" "acacia" += "acacia2" "acacia"
-scoreboard players operation "acacia4" "acacia" *= "acacia6" "acacia"
-scoreboard players operation "acacia4" "acacia" /= "acacia5" "acacia"
+# "acacia4" 是函数返回值
+scoreboard players operation "acacia5" "acacia" = "acacia2" "acacia"
+scoreboard players operation "acacia5" "acacia" -= "acacia1" "acacia"
+scoreboard players operation "acacia5" "acacia" /= "acacia3" "acacia"
+scoreboard players add "acacia5" "acacia" 1
+scoreboard players operation "acacia7" "acacia" = "acacia5" "acacia"
+scoreboard players operation "acacia6" "acacia" = "acacia1" "acacia"
+scoreboard players operation "acacia6" "acacia" += "acacia2" "acacia"
+scoreboard players operation "acacia6" "acacia" *= "acacia7" "acacia"
+scoreboard players operation "acacia6" "acacia" /= "acacia5" "acacia"
+scoreboard players operation "acacia4" "acacia" = "acacia6" "acacia"
 ```
 这些运算的顺序都被 Acacia 安排得妥妥的。
 

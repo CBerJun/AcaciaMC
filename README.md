@@ -29,7 +29,7 @@ b = (10 + 20) * a - 5
 Function definitions:
 ```
 def foo(x: int, y = True) -> int:
-    pass # code here...
+    pass  # code here...
 # These are all OK:
 foo(1)
 z = foo(2, False)
@@ -39,7 +39,7 @@ z = foo(x=3)
 Flow control statements:
 ```
 def is_prime(x: int) -> bool:
-    # Test if `x` is a prime number
+    #* Test if `x` is a prime number *#
     mod = 2
     result True
     while mod <= x / 2:
@@ -52,7 +52,7 @@ Various builtin modules:
 ```
 import print
 money = 10
-# Send "Hello, world!" in char to everyone
+# Send "Hello, world!" in chat to everyone
 print.tell("Hello world!")
 # Show "Money: (Value of variable `money`)" on actionbar to everyone
 print.title(print.format("Money: %0", money), mode=print.ACTIONBAR)
@@ -73,12 +73,12 @@ a = 1
     tellraw @a {
     ...
     }
-*/ # Multi-line command!
+*/  # Multi-line command!
 ```
 
 It can even simplify commands:
 ```
-player -> "@p[tag=player]" # defining macro
+player -> "@p[tag=player]"  # binding
 /tp ${player} 11 45 14
 /execute at ${player} run setblock ~ ~ ~ grass
 ```
@@ -96,19 +96,22 @@ sum_between(-5, 5, delta=2)
 
 These commands are generated for function `sum_between`:
 ```mcfunction
-# On initial run
+# Set constants on initial run
 scoreboard players set "acacia5" "acacia" 2
 ```
 ```mcfunction
 # "acacia1", "acacia2" and "acacia3" are the arguments
-scoreboard players operation "acacia6" "acacia" = "acacia2" "acacia"
-scoreboard players operation "acacia6" "acacia" -= "acacia1" "acacia"
-scoreboard players operation "acacia6" "acacia" /= "acacia3" "acacia"
-scoreboard players add "acacia6" "acacia" 1
-scoreboard players operation "acacia4" "acacia" = "acacia1" "acacia"
-scoreboard players operation "acacia4" "acacia" += "acacia2" "acacia"
-scoreboard players operation "acacia4" "acacia" *= "acacia6" "acacia"
-scoreboard players operation "acacia4" "acacia" /= "acacia5" "acacia"
+# "acacia4" is result value
+scoreboard players operation "acacia5" "acacia" = "acacia2" "acacia"
+scoreboard players operation "acacia5" "acacia" -= "acacia1" "acacia"
+scoreboard players operation "acacia5" "acacia" /= "acacia3" "acacia"
+scoreboard players add "acacia5" "acacia" 1
+scoreboard players operation "acacia7" "acacia" = "acacia5" "acacia"
+scoreboard players operation "acacia6" "acacia" = "acacia1" "acacia"
+scoreboard players operation "acacia6" "acacia" += "acacia2" "acacia"
+scoreboard players operation "acacia6" "acacia" *= "acacia7" "acacia"
+scoreboard players operation "acacia6" "acacia" /= "acacia5" "acacia"
+scoreboard players operation "acacia4" "acacia" = "acacia6" "acacia"
 ```
 The order of the operations are well-organized by Acacia compiler.
 

@@ -1,15 +1,14 @@
 #*
- * General test file for Acacia
+ * Generic test file for Acacia
  * This file gives you a brief picture of Acacia,
  * while itself is a legal Acacia program.
  *
- * Compile this with:
+ * Acacia is written in Python and version 3.3+ is required.
+ * No third-party Python package is needed.
+ * Compile this (i.e. turn it into MC behavior pack functions) with:
  *   cd path/to/acacia
- *   python3 main.py -d test/brief.aca
+ *   python main.py -d test/brief.aca
  * "-d" is to show the debugging comments in output files.
- *
- * It can be interpreted using Python (version above 3.3)
- * No third-party package is required.
  *#
 
 #* Variables *#
@@ -17,16 +16,21 @@
 x = 10
 # Following `+` operator should be calculated during compile time
 # `0x` and `0b` can be used to refer to hexadecimal and binary number
-x = 0XF2e + 0b11 # `int` type
-y = True # `bool` type
+x = 0xF2E + 0b11  # `int` type
+y = True  # `bool` type
 
 #* Fancy operators *#
+# Integer operations: + - * / %
 number = (x % -2) * (x + 3)
+# Boolean operations: and or not
 boolean = y and (x > 10) or (x < 0)
 
-#* Macro defining (aka. Binding) *#
+#* Binding *#
 scoreboard -> "scb"
-# The following occurances of `scoreboard` all refers to `"scb"`
+# Some values in Acacia are not representable in Minecraft and are only
+# for your convenience (e.g. strings). "=" Assignments really creates
+# and modifies the values in Minecraft, so its unavailable for these
+# kinds of values. In such cases we use binding instead.
 player -> "@a[tag=player]"
 
 #* Control statements *#
@@ -35,7 +39,7 @@ if x > 5:
     x *= 2
 # `x` will be doubled only when it's larger than 5
 
-## While statement
+## While loop statement
 sum = 0
 while x > 0:
     sum += x
@@ -45,38 +49,19 @@ while x > 0:
 # a lot of commands. Minecraft limits the amount of commands that one
 # function could trigger to 10000. Be careful when using loops.
 
-#* Compatible with the original command system *#
-## Accessing scoreboards
-# "|" selector ":" objective "|" is referring to selector's score on objective
-x = |"@p": "score"| + 10
-|"CBerJun": scoreboard| = 3
-x = |player: "data"|
-
-## Accessing Raw Command
-/say Hello, world!
-# Using macros with commands
-/tp ${player} 11 45 14
-/scoreboard players add ${player} ${scoreboard} 10
-/*
-tellraw @a {"rawtext":[
-    {"text": "Hello "},
-    {"text": "world!"}
-]}
-*/
-
 #* Great builtin modules! *#
 #*
- * The builtin modules are actually seperated from the compiler itself,
+ * The builtin modules are actually separated from the compiler itself,
  * which means: everyone can create their own Acacia module!
  * These builtin modules are written in Python at acaciamc/modules
  *#
 # To indicate that you are using `print` module
 import print
-# Tell every players "Hello world!"
+# Tell all players "Hello world!"
 print.tell("Hello world!", "@a")
 # Show title "Chapter I" on the nearest player's screen, for 10 seconds
 print.title("Chapter I", "@p", stay_time=200)
-# Show everyone the value of `x` in the form of "Value of X: ..." above actionbar
+# Show everyone the value of `x` in the form "Value of X: ..." above actionbar
 print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
 # Introduction to other builtin modules can be found in test/module.aca
 # Not only these modules written in Python are supported, Acacia code
@@ -85,7 +70,7 @@ print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
 #* Functions *#
 # Type of argument or its default value must be specified
 def max(a: int, b = int.MAX) -> int:
-                    # int.MAX is referring to 2147483647
+                    # int.MAX refers to 2147483647
     #* Return the larger one between a and b *#
     if a >= b:
         result a
@@ -100,21 +85,21 @@ def is_larger(a: int, b: int) -> bool:
 
 if not is_larger(x, 4):
     x = 2
-# Comments and empty lines does not affect parsing an indented block
+# Comments and empty lines does not affect an indented block
     x = 1 + max(x, 10)
-# This Elif statement is optimized (1 < 10 is always True)
+# This elif statement is optimized (1 < 10 is always True)
 elif 1 < 10:
     x = 100
 else:
-    pass # Empty block
+    pass  # Empty block
 
 #* Inline functions *#
 #*
- # Inline functions have great differences from normal ones.
+ * Inline functions have great differences from normal ones.
  * They are like bindings because they are both just an "alia" to make
  * code simpler.
  * Inline functions are:
- *  1. Expanded when called. Every time they get called, their code is
+ *  1. Expanded when called. Every time they get called, their body is
  *  parsed once. Therefore, type of argument can be omitted.
  *  2. Arguments are delivered directly, not assigned. The arguments
  *  are sent in the same way as bindings, while the normal functions
@@ -125,18 +110,18 @@ else:
 inline def my_print(text="Hello!"):
     #* @param text: str *#
     print.tell("Acacia: " + text)
-my_print() # Acacia: Hello!
-my_print("Inline functions!") # Acacia: Inline functions!
+my_print()  # Acacia: Hello!
+my_print("Inline functions!")  # Acacia: Inline functions!
 
 inline def set_var(x: int):
     x = 10
-set_var(x) # `x` is 10 now
+set_var(x)  # `x` is 10 now
 
 #* Exported interfaces *#
 # These interfaces are exported for later use in Minecraft
 interface a:
     # Local variables are unreachable outside scope
-    local = 20 < x <= 100 # Chained comparison operators!
+    local = 20 < x <= 100  # Chained comparison operators!
     # Do something...
 # Now we can use the `a` interface in Minecraft through /function
 # command (when using default compile options, it is stored at
@@ -146,9 +131,29 @@ interface a:
 interface b.c:
     /say b.c called
 
+#* Compatible with the original command system *#
+## Accessing scoreboards
+# "|" selector ":" objective "|" is referring to selector's score on objective
+x = |"@p": "score"| + 10
+|"CBerJun": scoreboard| = 3
+x = |player: "data"|
+
+## Accessing Raw Command
+/say Hello, world!
+# Using binding with commands
+/tp ${player} 11 45 14
+/scoreboard players add ${player} ${scoreboard} 10
+/*
+tellraw @a {"rawtext":[
+    {"text": "Hello "},
+    {"text": "world!"}
+]}
+*/
+
 #* Line continuation using backslash *#
 x = \
     10 + int(y)
-    # convert bool to int, also referring to the builtin integer type
+    # `int` converts boolean to integer.
+    # It also refers to the builtin integer type.
 
 # ENJOY!!!
