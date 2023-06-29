@@ -5,6 +5,7 @@ __all__ = ['ErrorType', 'Error']
 class ErrorType(enum.Enum):
     # Tokenizer
     INVALID_CHAR = 'Invalid character: "{char}"'
+    INTEGER_REQUIRED = 'Expected base {base} integer'
     INT_OVERFLOW = 'Integer overflows'
     UNCLOSED_LONG_COMMENT = 'Unclosed multi-line comment'
     UNCLOSED_LONG_COMMAND = 'Unclosed multi-line command'

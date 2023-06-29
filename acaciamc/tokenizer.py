@@ -327,24 +327,27 @@ class Tokenizer:
         ## decide base
         base = 10
         peek = self.peek()
-        if self.current_char == '0' and (
-            peek is not None and peek.upper() in 'BOX'
-        ):
-            if peek == 'B': base = 2
-            elif peek == 'O': base = 8
-            elif peek == 'X': base = 16
-            # skip 2 chars ("0x" "0b" "0o")
-            self.forward()
-            self.forward()
+        if self.current_char == '0' and peek is not None:
+            peek = peek.upper()
+            if peek in "BOX":
+                if peek == 'B':
+                    base = 2
+                elif peek == 'O':
+                    base = 8
+                elif peek == 'X':
+                    base = 16
+                # skip 2 chars ("0x" "0b" "0o")
+                self.forward()
+                self.forward()
         ## read
         valid_chars = '0123456789ABCDEF'[:base]
-        while (self.current_char is not None) and \
-            (self.current_char.upper() in valid_chars):
+        while ((self.current_char is not None)
+               and (self.current_char.upper() in valid_chars)):
             res += self.current_char
             self.forward()
         ## convert to int
-        if not res: # if number is empty
-            self.error(ErrorType.INVALID_CHAR, char = self.current_char)
+        if not res:  # if integer is empty
+            self.error(ErrorType.INTEGER_REQUIRED, base=base)
         value = int(res, base = base)
         
         return Token(
