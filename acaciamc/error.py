@@ -28,6 +28,7 @@ class ErrorType(enum.Enum):
     # Command Generator
     NAME_NOT_DEFINED = 'Name "{name}" is not defined'
     HAS_NO_ATTRIBUTE = '"{value_type}" objects have no attribute "{attr}"'
+    MODULE_NO_ATTRIBUTE = 'Module "{module}" does not have attribute "{attr}"'
     INVALID_OPERAND = 'Invalid operand(s) for "{operator}": {operand}'
     UNSUPPORTED_VAR_TYPE = 'Can\'t define variables of "{var_type}" type; ' \
         'To define alias to expressions, use "alia -> expr"'
@@ -77,7 +78,7 @@ class ErrorType(enum.Enum):
         'result type "{expect}" as its parent, not "{got}"'
     # Compiler
     IO = 'I/O Error: {message}'
-    MODULE_NOT_FOUND = 'Module not found: "{name}"'
+    MODULE_NOT_FOUND = 'Module not found: "{module}"'
     CIRCULAR_PARSE = 'File {file_!r} seems to call itself'
     # Any; should only be used by binary modules
     ANY = '{message}'

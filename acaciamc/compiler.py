@@ -268,7 +268,7 @@ class Compiler:
         """Parse and get a module and its path."""
         path = self.find_module(meta)
         if path is None:
-            self.error(ErrorType.MODULE_NOT_FOUND, name=meta.last_name)
+            self.error(ErrorType.MODULE_NOT_FOUND, module=str(meta))
         # Get the module accoding to path
         for p in self._cached_modules:
             # Return cached if exists

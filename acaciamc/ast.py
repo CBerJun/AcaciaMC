@@ -37,6 +37,12 @@ class ModuleMeta:
         self.last_name = last_name
         self.parents = list(parents)
 
+    def __str__(self) -> str:
+        return ("." * self.leading_dots
+                + ".".join(self.parents)
+                + ("." if self.parents else "")
+                + self.last_name)
+
 # This is to export `StringMode` from tokenizer
 from acaciamc.tokenizer import StringMode
 

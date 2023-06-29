@@ -503,7 +503,8 @@ class Generator(ASTVisitor):
         for name, alia in node.id2name.items():
             value = module.attribute_table.lookup(name)
             if value is None:
-                self.compiler.error(ErrorType.MODULE_NO_ATTRIBUTE, name=name)
+                self.compiler.error(ErrorType.MODULE_NO_ATTRIBUTE,
+                                    attr=name, module=str(node.meta))
             self.current_scope.set(alia, value)
 
     def visit_FromImportAll(self, node: FromImportAll):
