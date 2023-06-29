@@ -1,1 +1,1 @@
-# The Acacia Compiler
+"""The Acacia compiler."""

@@ -1,8 +1,9 @@
-# Strings of Acacia
-from .base import *
-from .types import StringType, DataType
+"""Builtin string."""
 
 __all__ = ['String']
+
+from .base import *
+from .types import StringType, DataType
 
 class String(AcaciaExpr):
     def __init__(self, value: str, compiler):
@@ -10,10 +11,7 @@ class String(AcaciaExpr):
             DataType.from_type_cls(StringType, compiler), compiler
         )
         self.value = value
-    
-    def __add__(self, other):
-        # connect strings
-        # other:String
-        return String(
-            value = self.value + other.value, compiler = self.compiler
-        )
+
+    def __add__(self, other: "String"):
+        """Adding strings will connect them."""
+        return String(self.value + other.value, self.compiler)

@@ -1,11 +1,11 @@
-# Builtin string formatting and printing module for Acacia
-from acaciamc.mccmdgen.expression import *
-from acaciamc.error import *
+"""print - String formatting and printing module."""
 
+from typing import List
 from copy import deepcopy
 import json
 
-# FString
+from acaciamc.mccmdgen.expression import *
+from acaciamc.error import *
 
 class _FStrError(Exception):
     def __str__(self):
@@ -13,40 +13,40 @@ class _FStrError(Exception):
 
 class _FStrParser:
     def __init__(self, pattern: str, args, keywords):
-        # parse an fstring with `pattern` and `args` and `keywords`
-        # as formatted expressions
+        """Parse an fstring with `pattern` and `args` and `keywords`
+        as formatted expressions."""
         self.pattern = pattern
         self.args = args
         self.keywords = keywords
         self.dependencies = []
-        self.json = [] # the result
-    
+        self.json = []  # the result
+
     def next_char(self) -> str:
-        # move to next char
+        """Move to next char."""
         if not self.pattern:
             return None
         ret = self.pattern[0]
         self.pattern = self.pattern[1:]
         return ret
-    
+
     def add_text(self, text: str):
         # if the last component in json is text, too,
         # we add these text to it
         if bool(self.json) and self.json[-1].get('text'):
             self.json[-1]['text'] += text
-        else: # fallback
+        else:  # fallback
             self.json.append({"text": text})
-    
+
     def add_score(self, objective: str, selector: str):
         self.json.append({
             "score": {"objective": objective, "name": selector}
         })
-    
+
     def add_localization(self, key: str):
         self.json.append({"translate": key})
-    
+
     def add_expr(self, expr: AcaciaExpr):
-        # Format an expression to string
+        """Format an expression to string."""
         if expr.data_type.raw_matches(IntType):
             if isinstance(expr, IntLiteral):
                 # optimize for literals
@@ -68,12 +68,13 @@ class _FStrParser:
         elif isinstance(expr, FString):
             self.json.extend(expr.json)
         else:
-            raise _FStrError('Type "%s" can not be formatted as a string' \
+            raise _FStrError('Type "%s" can not be formatted as a string'
                              % expr.data_type)
-    
+
     def expr_from_id(self, name: str) -> AcaciaExpr:
-        # Get the expr from an format
-        # e.g. "0" -> args[0]; "key" -> keywords["key"]
+        """Get the expr from an format
+        e.g. "0" -> args[0]; "key" -> keywords["key"]
+        """
         if name.isdecimal():
             index = int(name)
             try:
@@ -85,7 +86,7 @@ class _FStrParser:
         else:
             raise _FStrError('Invalid format expression: %r' % name)
         return expr
-    
+
     def parse(self):
         char = ''
         while True:
@@ -103,13 +104,13 @@ class _FStrParser:
                 self.add_text('%')
                 continue
             # 1. After '%' can be a character indicating the mode
-            if second == 'k': # Valid mode
+            if second == 'k':  # Valid mode
                 mode = second
                 third = self.next_char()
                 if third is None:
                     self.add_text(char + mode)
                     continue
-            else: # No mode specified
+            else:  # No mode specified
                 mode = ''
                 third = second
             # 2. Parse which expression is being used here
@@ -132,34 +133,37 @@ class _FStrParser:
                 self.add_text(char + mode + third)
                 continue
             # 3. Handle the `expr` we got
-            if mode == 'k': # localization
+            if mode == 'k':  # localization
                 # An original `str` (not fstring) is required for
                 # localization key
                 if not isinstance(expr, String):
                     raise _FStrError(
-                        'Type "%s" is not supported as localization key' \
+                        'Type "%s" is not supported as localization key'
                         % expr.data_type)
                 self.add_localization(expr.value)
-            else: # default mode
+            else:  # default mode
                 self.add_expr(expr)
         return self.dependencies, self.json
 
 class FStringType(Type):
-    # formatted string type
-    # format(_pattern: str, *args, **kwargs)
-    # So far, `args` and `kwargs` may be int, bool, str and fstring
-    # NOTE booleans are formatted as "0" and "1"
-    # in _pattern:
-    #  "%%" -> character "%"
-    #  "%{" integer "}" -> args[integer]
-    #  "%" one-digit-number -> alia to `"%{" one-digit-number "}"`
-    #  "%{" id "}" -> kwargs[id] (id is an valid Acacia identifier)
-    # Additionally, you can add following character after the first "%":
-    #  "k": Use localization key
-    #  (omitted): Default mode, format the expression as string
-    # Examples:
-    #  format("Val1: %0; Val2: %{name}; Name: %{1}", val1, val2, name=x)
-    #  format("Find %k{diamond} for me please!", diamond="item.diamond.name")
+    """
+    format(_pattern: str, *args, **kwargs)
+
+    Formatted string type.
+    So far, `args` and `kwargs` may be int, bool, str and fstring
+    NOTE Booleans are formatted as "0" and "1".
+    in _pattern:
+     "%%" -> character "%"
+     "%{" integer "}" -> args[integer]
+     "%" one-digit-number -> alia to `"%{" one-digit-number "}"`
+     "%{" id "}" -> kwargs[id] (id is an valid Acacia identifier)
+    Additionally, you can add following character after the first "%":
+     "k": Use localization key
+     (omitted): Default mode, format the expression as string
+    Examples:
+     format("Val1: %0; Val2: %{name}; Name: %{1}", val1, val2, name=x)
+     format("Find %k{diamond} please!", diamond="item.diamond.name")
+    """
     name = 'fstring'
 
     def do_init(self):
@@ -180,31 +184,31 @@ class FStringType(Type):
         )
 
 class FString(AcaciaExpr):
-    # an formatted string in JSON format
-    def __init__(self, dependencies: list, json: list, compiler):
-        # dependencies:list[str] commands ran before json rawtext
-        # json:list JSON rawtext without {"rawtext": ...}
+    """A formatted string in JSON format."""
+    def __init__(self, dependencies: List[str], json: list, compiler):
+        # dependencies: commands to run before json rawtext is used
+        # json: JSON rawtext without {"rawtext": ...}
         super().__init__(
             DataType.from_type_cls(FStringType, compiler), compiler
         )
         self.dependencies = dependencies
         self.json = json
-    
+
     def export_json_str(self) -> str:
         return json.dumps({"rawtext": self.json})
-    
+
     def add_text(self, text: str):
         # add text to fstring
         if bool(self.json) and self.json[-1].get('text'):
             self.json[-1]['text'] += text
-        else: # fallback
+        else:  # fallback
             self.json.append({"text": text})
-    
+
     def deepcopy(self):
         return FString(
             deepcopy(self.dependencies), deepcopy(self.json), self.compiler
         )
-    
+
     def __add__(self, other):
         # connect strings
         res = self.deepcopy()
@@ -213,24 +217,26 @@ class FString(AcaciaExpr):
         elif isinstance(other, FString):
             # connect json
             res.json.extend(other.json)
-        else: raise TypeError
+        else:
+            raise TypeError
         return res
-    
+
     def __radd__(self, other):
         return self.__add__(other)
 
 # output functions
 
 def _tell(func: BinaryFunction):
-    # tell(text: str|fstring, target: str = "@a") -> nonetype
-    # tell the `target` the `text` using /tellraw
+    """tell(text: str|fstring, target: str = "@a")
+    Tell the `target` the `text` using /tellraw.
+    """
     cmds = []
     # arg parse
     arg_text = func.arg_require('text', (StringType, FStringType))
     ## convert str to fstring
     if isinstance(arg_text, String):
         arg_text, _cmds = func.compiler.types[FStringType].call(
-            args = (arg_text,), keywords = {}
+            args=[arg_text], keywords={}
         )
         cmds.extend(_cmds)
     arg_target = func.arg_optional(
@@ -244,8 +250,7 @@ def _tell(func: BinaryFunction):
     ))
     return result_cmds(cmds, func.compiler)
 
-# title modes
-# NOTE these are just random numbers...
+# Title modes
 _TITLE = 'title'
 _SUBTITLE = 'subtitle'
 _ACTIONBAR = 'actionbar'
@@ -253,15 +258,18 @@ _ACTIONBAR = 'actionbar'
 _FADE_IN = 10
 _STAY_TIME = 70
 _FADE_OUT = 20
-_DEF_TITLE_CONFIG = (_FADE_IN, _STAY_TIME, _FADE_OUT) # default config
+_DEF_TITLE_CONFIG = (_FADE_IN, _STAY_TIME, _FADE_OUT)
 
 def _title(func: BinaryFunction):
-    # title(
-    #   text: str|fstring, target: str = "@a", mode: str = TITLE,
-    #   fade_in: int-literal, stay_time: int-literal, fade_out: int-literal
-    # )
-    # use /titleraw for output
-    # fade_in, stay_time and fade_out are in ticks for configuring
+    """title(
+        text: str|fstring, target: str = "@a", mode: str = TITLE,
+        fade_in: int-literal = 10,
+        stay_time: int-literal = 70,
+        fade_out: int-literal = 20
+    )
+    Use /titleraw for showing `text`.
+    `fade_in`, `stay_time` and `fade_out` are in ticks.
+    """
     cmds = []
     # Arg parse
     arg_text = func.arg_require('text', (StringType, FStringType))
@@ -284,7 +292,7 @@ def _title(func: BinaryFunction):
     ## convert str to fstring
     if isinstance(arg_text, String):
         arg_text, _cmds = func.compiler.types[FStringType].call(
-            args = (arg_text,), keywords = {}
+            args=[arg_text], keywords={}
         )
         cmds.extend(_cmds)
     ## check arg int literal
@@ -318,7 +326,9 @@ def _title(func: BinaryFunction):
     return result_cmds(cmds, func.compiler)
 
 def _title_clear(func: BinaryFunction):
-    # title_clear(target: str = "@a")
+    """title_clear(target: str = "@a")
+    Clear `target`'s title text.
+    """
     # Parse arg
     arg_target = func.arg_optional(
         'target', String('@a', func.compiler), StringType
@@ -326,8 +336,6 @@ def _title_clear(func: BinaryFunction):
     func.assert_no_arg()
     # Write
     return result_cmds(['titleraw %s clear' % arg_target.value], func.compiler)
-
-# builder
 
 def acacia_build(compiler):
     compiler.add_type(FStringType)

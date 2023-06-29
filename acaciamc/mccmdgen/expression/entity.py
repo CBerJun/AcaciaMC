@@ -1,14 +1,21 @@
 """Entity of Acacia."""
 
-from ...constants import Config
-from ...error import *
+__all__ = ['TaggedEntity', 'EntityReference']
+
+from typing import Tuple, TYPE_CHECKING, List, Optional
+
+from acaciamc.constants import Config
+from acaciamc.error import *
 from .base import *
 from .types import DataType
 
-__all__ = ['TaggedEntity', 'EntityReference']
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
+    from .entity_template import EntityTemplate
 
 class _EntityBase(AcaciaExpr):
-    def __init__(self, template, compiler, cast_to=None):
+    def __init__(self, template: "EntityTemplate", compiler,
+                 cast_to: Optional["EntityTemplate"] = None):
         super().__init__(DataType.from_entity(template, compiler), compiler)
         self.cast_template = cast_to
         self.template = template
@@ -17,7 +24,7 @@ class _EntityBase(AcaciaExpr):
     def __str__(self) -> str:
         raise NotImplementedError
 
-    def cast_to(self, template):
+    def cast_to(self, template: "EntityTemplate"):
         raise NotImplementedError
 
     def export(self, var: "TaggedEntity"):
@@ -26,7 +33,8 @@ class _EntityBase(AcaciaExpr):
         return cmds
 
 class EntityReference(_EntityBase):
-    def __init__(self, selector: str, template, compiler, cast_to=None):
+    def __init__(self, selector: str, template: "EntityTemplate",
+                 compiler, cast_to: Optional["EntityTemplate"] = None):
         self.selector = selector
         super().__init__(template, compiler, cast_to)
 
@@ -39,7 +47,8 @@ class EntityReference(_EntityBase):
         )
 
 class TaggedEntity(_EntityBase, VarValue):
-    def __init__(self, template, compiler, cast_to=None):
+    def __init__(self, template: "EntityTemplate", compiler: "Compiler",
+                 cast_to: Optional["EntityTemplate"] = None):
         self.tag = compiler.allocate_entity_tag()
         super().__init__(template, compiler, cast_to)
 
@@ -47,10 +56,13 @@ class TaggedEntity(_EntityBase, VarValue):
         return TaggedEntity(self.template, self.compiler, template)
 
     @classmethod
-    def from_template(cls, template, compiler):
-        # Create an entity from the template. Return a 2-tuple.
-        # Element 0: the `EntityVar` instance
-        # Element 1: `list[str]` that contains initial commands to run
+    def from_template(cls, template: "EntityTemplate", compiler
+                      ) -> Tuple["TaggedEntity", List[str]]:
+        """Create an entity from the template.
+        Return a 2-tuple.
+        Element 0: the `TaggedEntity`
+        Element 1: initial commands to run
+        """
         name = compiler.allocate_entity_name()
         inst = cls(template, compiler)
         # Analyze template meta
@@ -73,7 +85,7 @@ class TaggedEntity(_EntityBase, VarValue):
         ]
 
     @classmethod
-    def from_empty(cls, template, compiler):
+    def from_empty(cls, template: "EntityTemplate", compiler):
         # Create an entity reference (a tag), pointing to no entity.
         return cls(template, compiler)
 
@@ -81,6 +93,6 @@ class TaggedEntity(_EntityBase, VarValue):
         # Return selector of this entity
         return "@e[tag=%s]" % self.tag
 
-    def clear(self) -> list[str]:
+    def clear(self) -> List[str]:
         # Clear the reference to entity that the tag is pointing to.
         return ["tag %s remove %s" % (self, self.tag)]

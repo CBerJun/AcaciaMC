@@ -1,17 +1,18 @@
-# Modules in Acacia
-from .base import *
-from .types import ModuleType, DataType
-from ..symbol import *
-from ...error import *
-
-import importlib.util
+"""Modules."""
 
 __all__ = ['BinaryModule', 'AcaciaModule']
 
+import importlib.util
+
+from .base import *
+from .types import ModuleType, DataType
+from acaciamc.mccmdgen.symbol import *
+from acaciamc.error import *
+
 class BinaryModule(AcaciaExpr):
-    # A BinaryModule that is implemented in Python
+    """A binary module that is implemented in Python."""
     def __init__(self, path: str, compiler):
-        # path: .py file path
+        """`path` is .py file path."""
         super().__init__(
             DataType.from_type_cls(ModuleType, compiler), compiler
         )
@@ -22,7 +23,7 @@ class BinaryModule(AcaciaExpr):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         except Exception as err:
-            compiler.error(ErrorType.IO, message = str(err))
+            self.compiler.error(ErrorType.IO, message=str(err))
         # Call `acacia_build`
         # binary modules should define a callable object named `acacia_build`,
         # which accepts 1 argument `compiler` and should return a dict:
@@ -41,12 +42,12 @@ class BinaryModule(AcaciaExpr):
             if not isinstance(value, AcaciaExpr):
                 self._module_error('acacia_build value should be AcaciaExpr')
             self.attribute_table.set(name, value)
-    
+
     def _module_error(self, message: str):
         raise ValueError(repr(self.path) + ': ' + message)
 
 class AcaciaModule(AcaciaExpr):
-    # An AcaciaModule that is implemented in Acacia
+    """An Acacia module that is implemented in Acacia."""
     def __init__(self, table: SymbolTable, compiler):
         # table: the attributes from the module
         super().__init__(

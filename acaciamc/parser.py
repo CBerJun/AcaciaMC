@@ -1,59 +1,62 @@
-# Parser for Acacia
-from .error import *
-from .tokenizer import *
-from .ast import *
-from .constants import *
+"""Parser for Acacia."""
 
 __all__ = ['Parser']
+
+from typing import Callable, Optional
+
+from acaciamc.error import *
+from acaciamc.tokenizer import *
+from acaciamc.ast import *
+from acaciamc.constants import *
 
 class Parser:
     def __init__(self, tokenizer: Tokenizer):
         self.tokenizer = tokenizer
         self.FILE = tokenizer.FILE
         self.current_token = self.tokenizer.get_next_token()
-        # next_token: when using method `peek`, next token is reserved here
         self.next_token = None
         self.current_indent = 0
-    
+
     @property
     def current_pos(self):
         return {
             "lineno": self.current_token.lineno,
             "col": self.current_token.col
         }
-    
-    def error(self, err_type: ErrorType, lineno = None, col = None, **kwargs):
+
+    def error(self, err_type: ErrorType, lineno=None, col=None, **kwargs):
         lineno = self.current_pos['lineno'] if lineno is None else lineno
         col = self.current_pos['col'] if col is None else col
-        raise Error(
-            err_type,
-            lineno = lineno, col = col, file = self.FILE,
-            **kwargs
-        )
-    
-    def eat(self, expect_token_type: TokenType = None):
-        # move to next token
-        # if expect_token_type is given, also check type of the old token
-        if (expect_token_type is not None) and \
-            (self.current_token.type != expect_token_type):
-            self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
+        raise Error(err_type,
+                    lineno=lineno, col=col, file=self.FILE,
+                    **kwargs)
+
+    def eat(self, expect_token_type: Optional[TokenType] = None):
+        """Move to next token.
+        If `expect_token_type` is given, also check type of the old
+        token.
+        """
+        if ((expect_token_type is not None) and
+            (self.current_token.type != expect_token_type)):
+            self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
         if self.next_token is None:
             self.current_token = self.tokenizer.get_next_token()
         else:
             self.current_token = self.next_token
             self.next_token = None
-    
+
     def peek(self):
-        # peek the next token and store at self.next_token
+        """Peek the next token and store at `self.next_token`."""
         if self.next_token is None:
             # only generate when not generated yet
             self.next_token = self.tokenizer.get_next_token()
-    
-    def _block(self, func):
-        # read a block of structures
-        # func:function the structure; should return None or AST
-        # every time when `func` ends, self.current_char should fall on
-        # either line_begin or end_marker
+
+    def _block(self, func: Callable[[], Statement]):
+        """Read a block of structures.
+        `func` reads the structure and should return the result AST.
+        Every time when `func` ends, `self.current_char` should fall on
+        either a `line_begin` or an `end_marker`.
+        """
         stmts = []
         self.current_indent += Config.indent
         while self.current_token.type != TokenType.end_marker:
@@ -80,7 +83,7 @@ class Parser:
             #     b
             # # Empty line
             #     bc
-            # So we do _skip_empty_lines here
+            # So we do `_skip_empty_lines` here
             if self.current_token.type is TokenType.line_begin:
                 if self.current_token.value < self.current_indent:
                     break
@@ -89,28 +92,28 @@ class Parser:
         if not stmts:
             self.error(ErrorType.EMPTY_BLOCK)
         return stmts
-    
+
     def _skip_empty_lines(self):
-        # skip empty lines and put current_token on the line_begin
-        # of first valid line
+        """Skip empty lines and put `self.current_token` on the
+        `line_begin` of first valid line.
+        """
         self.peek()
-        while (self.current_token.type is self.next_token.type is \
-            TokenType.line_begin
-        ):
+        while (self.current_token.type
+               is self.next_token.type
+               is TokenType.line_begin):
             self.eat()
             self.peek()
-    
+
     def statement_block(self):
-        # read a block of statements
+        """Read a block of statements."""
         return self._block(self.statement)
-    
+
     # Following are different AST generators
     ## Expression generator
 
     def literal(self):
-        # read a Literal (literal int, bool, str)
+        """literal := INTEGER | STRING | TRUE | FALSE | NONE"""
         tok_type = self.current_token.type
-        value = NotImplemented
         if tok_type in (TokenType.integer, TokenType.string):
             value = self.current_token.value
             self.eat()
@@ -120,20 +123,19 @@ class Parser:
         elif tok_type is TokenType.none:
             value = None
             self.eat()
-        if value is NotImplemented:
+        else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
         return Literal(value, **self.current_pos)
-    
+
     def identifier(self):
-        # identifier := IDENTIFIER
+        """identifier := IDENTIFIER"""
         pos = self.current_pos
         token = self.current_token
         self.eat(TokenType.identifier)
         return Identifier(token.value, **pos)
-    
+
     def raw_score(self):
-        # read a RawScore
-        # raw_score := BAR expr COLON expr BAR
+        """raw_score := BAR expr COLON expr BAR"""
         pos = self.current_pos
         self.eat(TokenType.bar)
         selector = self.expr()
@@ -143,14 +145,16 @@ class Parser:
         return RawScore(objective, selector, **pos)
 
     def self(self):
-        # self := SELF
+        """self := SELF"""
         pos = self.current_pos
         self.eat(TokenType.self)
         return Self(**pos)
 
     def expr_l0(self):
-        # level 0 expression := (LPAREN expr RPAREN) | literal |
-        #   identifier | raw_score
+        """
+        level 0 expression := (LPAREN expr RPAREN) | literal |
+          identifier | raw_score
+        """
         if self.current_token.type in (
             TokenType.integer, TokenType.true,
             TokenType.false, TokenType.string, TokenType.none
@@ -168,15 +172,17 @@ class Parser:
         elif self.current_token.type is TokenType.self:
             return self.self()
         else:
-            self.error(ErrorType.UNEXPECTED_TOKEN, token = self.current_token)
+            self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
 
     def expr_l1(self):
-        # level 1 expression := expr_l0 (
-        #   (POINT IDENTIFIER)
-        #   | (LPAREN (arg COMMA)* arg? RPAREN)
-        #   | AT expr_l0
-        # )*
-        # arg := (IDENTIFIER EQUAL)? expr
+        """
+        level 1 expression := expr_l0 (
+          (POINT IDENTIFIER)
+          | (LPAREN (arg COMMA)* arg? RPAREN)
+          | AT expr_l0
+        )*
+        arg := (IDENTIFIER EQUAL)? expr
+        """
         node = self.expr_l0()
         def _attribute(node: Expression):
             # make `node` an Attribute
@@ -184,9 +190,9 @@ class Parser:
             attr = self.current_token.value
             self.eat(TokenType.identifier)
             return Attribute(node, attr, lineno=node.lineno, col=node.col)
-        
+
         def _call(node: Expression):
-            # make `node` a Call
+            # make `node` a `Call`
             args, keywords = [], {}
             self.eat(TokenType.lparen)
             # keywords are always after positioned args, so use this flag to
@@ -200,13 +206,13 @@ class Parser:
                     key = self.current_token.value
                     pos = self.current_pos
                     self.eat(TokenType.identifier)
-                    if key in keywords: # if already exists
+                    if key in keywords:  # if already exists
                         self.error(
-                            ErrorType.ARG_MULTIPLE_VALUES, arg = key, **pos
+                            ErrorType.ARG_MULTIPLE_VALUES, arg=key, **pos
                         )
                     self.eat(TokenType.equal)
                     keywords[key] = self.expr()
-                else: # positioned
+                else:  # positioned
                     if not accept_positioned:
                         self.error(ErrorType.POSITIONED_ARG_AFTER_KEYWORD)
                     args.append(self.expr())
@@ -218,15 +224,15 @@ class Parser:
             self.eat(TokenType.rparen)
             return Call(
                 node, args, keywords,
-                lineno = node.lineno, col = node.col
+                lineno=node.lineno, col=node.col
             )
-        
+
         def _entity_cast(node: Expression):
             self.eat(TokenType.at)
             object_ = self.expr_l0()
             return EntityCast(object_, template=node,
                               lineno=node.lineno, col=node.col)
-        
+
         # start
         while True:
             if self.current_token.type is TokenType.point:
@@ -237,9 +243,9 @@ class Parser:
                 node = _entity_cast(node)
             else:
                 return node
-    
+
     def expr_l2(self):
-        # level 2 expression := ((PLUS | MINUS) expr_l2) | expr_l1
+        """level 2 expression := ((PLUS | MINUS) expr_l2) | expr_l1"""
         pos = self.current_pos
         if self.current_token.type is TokenType.plus:
             self.eat()
@@ -247,11 +253,11 @@ class Parser:
         elif self.current_token.type is TokenType.minus:
             self.eat()
             return UnaryOp(Operator.negative, self.expr_l2(), **pos)
-        else: # no unary operators
+        else:  # no unary operators
             return self.expr_l1()
 
     def expr_l3(self):
-        # level 3 expression := expr_l2 ((TIMES | DEVIDE | MOD) expr_l2)*
+        """level 3 expression := expr_l2 ((STAR | SLASH | MOD) expr_l2)*"""
         node = self.expr_l2()
         while True:
             token_type = self.current_token.type
@@ -261,16 +267,16 @@ class Parser:
                 op = Operator.divide
             elif token_type is TokenType.mod:
                 op = Operator.mod
-            else: # no valid operator found
+            else:  # no valid operator found
                 return node
-            self.eat() # eat operator
+            self.eat()  # eat operator
             node = BinOp(
                 node, op, self.expr_l2(),
-                lineno = node.lineno, col = node.col
+                lineno=node.lineno, col=node.col
             )
-    
+
     def expr_l4(self):
-        # level 4 expression := expr_l3 ((ADD | MINUS) expr_l3)*
+        """level 4 expression := expr_l3 ((ADD | MINUS) expr_l3)*"""
         node = self.expr_l3()
         while True:
             token_type = self.current_token.type
@@ -278,18 +284,18 @@ class Parser:
                 op = Operator.add
             elif token_type is TokenType.minus:
                 op = Operator.minus
-            else: # no valid operator found
+            else:  # no valid operator found
                 return node
-            self.eat() # eat operator
-            node = BinOp(
-                node, op, self.expr_l3(),
-                lineno = node.lineno, col = node.col
-            )
-    
+            self.eat()  # eat operator
+            node = BinOp(node, op, self.expr_l3(),
+                         lineno=node.lineno, col=node.col)
+
     def expr_l5(self):
-        # level 5 expression := expr_l4 ((
-        #   EQUAL_TO | UNEQUAL_TO | GREATER | LESS | GREATER_EQUAL | LESS_EQUAL
-        # ) expr_l4)*
+        """
+        level 5 expression := expr_l4 ((
+          EQUAL_TO | UNEQUAL_TO | GREATER | LESS | GREATER_EQUAL | LESS_EQUAL
+        ) expr_l4)*
+        """
         pos = self.current_pos
         left = self.expr_l4()
         COMPARE_OPS = (
@@ -305,49 +311,45 @@ class Parser:
             operators.append(Operator[self.current_token.type.name])
             self.eat()
             operands.append(self.expr_l4())
-        if operators: # if not empty
+        if operators:  # if not empty
             return CompareOp(left, operators, operands, **pos)
         return left
-    
+
     def expr_l6(self):
-        # level 6 expression := (NOT expr_l6) | expr_l5
+        """level 6 expression := (NOT expr_l6) | expr_l5"""
         pos = self.current_pos
         if self.current_token.type is TokenType.not_:
             self.eat()
             return UnaryOp(Operator.not_, self.expr_l6(), **pos)
-        else: # no unary operators
+        else:  # no unary operators
             return self.expr_l5()
-    
+
     def expr_l7(self):
-        # level 7 expression := expr_l6 (AND expr_l6)*
+        """level 7 expression := expr_l6 (AND expr_l6)*"""
         left = self.expr_l6()
         operands = []
         while self.current_token.type is TokenType.and_:
-            self.eat() # eat and_
+            self.eat()  # eat and_
             operands.append(self.expr_l6())
-        if operands: # if not empty
+        if operands:  # if not empty
             operands.insert(0, left)
-            return BoolOp(
-                Operator.and_, operands,
-                lineno = left.lineno, col = left.col
-            )
+            return BoolOp(Operator.and_, operands,
+                          lineno=left.lineno, col=left.col)
         return left
-    
+
     def expr_l8(self):
-        # level 8 expression := expr_l7 (OR expr_l7)*
+        """level 8 expression := expr_l7 (OR expr_l7)*"""
         left = self.expr_l7()
         operands = []
         while self.current_token.type is TokenType.or_:
-            self.eat() # eat or_
+            self.eat()  # eat or_
             operands.append(self.expr_l7())
-        if operands: # if not empty
+        if operands:  # if not empty
             operands.insert(0, left)
-            return BoolOp(
-                Operator.or_, operands,
-                lineno = left.lineno, col = left.col
-            )
+            return BoolOp(Operator.or_, operands,
+                          lineno=left.lineno, col=left.col)
         return left
-    
+
     # expr: keep updates with the highest level of expr method
     # this is to make sure other funcs always call the
     # highest level of expr (convenient when updating)
@@ -356,16 +358,19 @@ class Parser:
     ## Statement generator
 
     def if_stmt(self):
-        # if_statement := IF expr COLON statement_block
-        #   (ELIF expr COLON statement_block)*
-        #   (ELSE COLON statement_block)?
+        """
+        if_statement := IF expr COLON statement_block
+          (ELIF expr COLON statement_block)*
+          (ELSE COLON statement_block)?
+        """
         pos = self.current_pos
         IF_EXTRA = (TokenType.elif_, TokenType.else_)
-        def _if_extra() -> list:
-            # if statement is defined recursively, so a recursion is needed
-            # if_extra := (ELIF expr COLON statement_block if_extra?)
-            #   | (ELSE COLON statement_block)
-            # return list of statements
+        def _if_extra():
+            """
+            if_extra := (ELIF expr COLON statement_block if_extra?)
+              | (ELSE COLON statement_block)
+            return list of statements
+            """
             if self.current_token.type is TokenType.else_:
                 self.eat()
                 self.eat(TokenType.colon)
@@ -379,10 +384,10 @@ class Parser:
             # See if there's more "elif" or "else"
             else_stmts = []
             next_indent = self.current_token.value
-            self.peek() # same as below; skip line_begin
-            if (self.next_token.type in IF_EXTRA) and \
-                    (next_indent == self.current_indent):
-                self.eat() # eat line_begin
+            self.peek()  # same as below; skip line_begin
+            if ((self.next_token.type in IF_EXTRA)
+                and (next_indent == self.current_indent)):
+                self.eat()  # eat line_begin
                 else_stmts = _if_extra()
             return [If(condition, stmts, else_stmts, **self.current_pos)]
         # if_statement := IF expr COLON statement_block if_extra?
@@ -392,31 +397,33 @@ class Parser:
         stmts = self.statement_block()
         else_stmts = []
         next_indent = self.current_token.value
-        self.peek() # current is line_begin, check next
-        if (self.next_token.type in IF_EXTRA) and \
-                (next_indent == self.current_indent):
-            self.eat() # eat this line_begin
+        self.peek()  # current is line_begin, check next
+        if ((self.next_token.type in IF_EXTRA)
+            and (next_indent == self.current_indent)):
+            self.eat()  # eat this line_begin
             else_stmts = _if_extra()
         return If(condition, stmts, else_stmts, **pos)
-    
+
     def while_stmt(self):
-        # while_stmt := WHILE expr COLON statement_block
+        """while_stmt := WHILE expr COLON statement_block"""
         pos = self.current_pos
         self.eat(TokenType.while_)
         condition = self.expr()
         self.eat(TokenType.colon)
         body = self.statement_block()
         return While(condition, body, **pos)
-    
+
     def pass_stmt(self):
-        # pass_statement := PASS
+        """pass_statement := PASS"""
         node = Pass(**self.current_pos)
         self.eat(TokenType.pass_)
         return node
-    
+
     def interface_stmt(self):
-        # interface_stmt := INTERFACE IDENTIFIER (POINT IDENTIFIER)*
-        #   COLON statement_block
+        """
+        interface_stmt := INTERFACE IDENTIFIER (POINT IDENTIFIER)*
+          COLON statement_block
+        """
         pos = self.current_pos
         self.eat(TokenType.interface)
         path = [self.current_token.value]
@@ -428,14 +435,16 @@ class Parser:
         self.eat(TokenType.colon)
         stmts = self.statement_block()
         return InterfaceDef(path, stmts, **pos)
-    
+
     def def_stmt(self):
-        # def_stmt := INLINE? DEF IDENTIFIER argument_table
-        #   (ARROW type_spec)? COLON statement_block
+        """
+        def_stmt := INLINE? DEF IDENTIFIER argument_table
+          (ARROW type_spec)? COLON statement_block
+        """
         pos = self.current_pos
         is_inline = self.current_token.type is TokenType.inline
         if is_inline:
-            self.eat() # Eat `inline`
+            self.eat()  # eat "inline"
         self.eat(TokenType.def_)
         name = self.current_token.value
         self.eat(TokenType.identifier)
@@ -451,18 +460,17 @@ class Parser:
         return ast_class(name, arg_table, stmts, returns, **pos)
 
     def _entity_body(self):
-        # Used by entity statement
         pos = self.current_pos
         if self.current_token.type is TokenType.identifier:
             # field_decl
             name = self.current_token.value
-            self.eat() # eat IDENTIFIER
+            self.eat()  # eat IDENTIFIER
             self.eat(TokenType.colon)
             type_ = self.type_spec()
             return EntityField(name, type_, **pos)
         elif self.current_token.type is TokenType.at:
             # meta_decl
-            self.eat() # eat `@`
+            self.eat()  # eat "@"
             name = self.current_token.value
             self.eat(TokenType.identifier)
             self.eat(TokenType.colon)
@@ -476,29 +484,31 @@ class Parser:
             return EntityMethod(content, **pos)
 
     def entity_stmt(self):
-        # entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
-        #   (COMMA expr)*)? COLON entity_body_block
-        # field_decl := IDENTIFIER COLON type_spec
-        # method_decl := def_stmt
-        # meta_decl := AT IDENTIFIER COLON expr
-        # entity_body := method_decl | field_decl | meta_decl | pass_stmt
+        """
+        entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
+          (COMMA expr)*)? COLON entity_body_block
+        field_decl := IDENTIFIER COLON type_spec
+        method_decl := def_stmt
+        meta_decl := AT IDENTIFIER COLON expr
+        entity_body := method_decl | field_decl | meta_decl | pass_stmt
+        """
         pos = self.current_pos
         self.eat(TokenType.entity)
         name = self.current_token.value
         self.eat(TokenType.identifier)
         parents = []
         if self.current_token.type is TokenType.extends:
-            self.eat() # eat EXTENDS
+            self.eat()  # eat EXTENDS
             parents.append(self.expr())
             while self.current_token.type is TokenType.comma:
-                self.eat() # eat COMMA
+                self.eat()  # eat COMMA
                 parents.append(self.expr())
         self.eat(TokenType.colon)
         body = self._block(self._entity_body)
         return EntityTemplateDef(name, parents, body, **pos)
 
     def command_stmt(self):
-        # command_stmt := COMMAND
+        """command_stmt := COMMAND"""
         pos = self.current_pos
         # NOTE the ${expressions} in COMMAND token need to be parsed
         res = []
@@ -513,15 +523,15 @@ class Parser:
                 res.append(section)
         self.eat(TokenType.command)
         return Command(res, **pos)
-    
+
     def result_stmt(self):
-        # result_stmt := RESULT expr
+        """result_stmt := RESULT expr"""
         pos = self.current_pos
         self.eat(TokenType.result)
         return Result(self.expr(), **pos)
-    
+
     def module_meta(self):
-        # module_meta := POINT* IDENTIFIER (POINT IDENTIFIER)*
+        """module_meta := POINT* IDENTIFIER (POINT IDENTIFIER)*"""
         # leading dots
         leadint_dots = 0
         while self.current_token.type is TokenType.point:
@@ -537,29 +547,32 @@ class Parser:
             self.eat(TokenType.identifier)
         last_name = names.pop()
         return ModuleMeta(last_name, leadint_dots, names)
-    
+
     def alia(self) -> str:
-        # Try to read an alia. Return None if no alia is given.
-        # alia := (AS IDENTIFIER)?
+        """Try to read an alia. Return None if no alia is given.
+        alia := (AS IDENTIFIER)?
+        """
         if self.current_token.type is TokenType.as_:
             self.eat()
             value = self.current_token.value
             self.eat(TokenType.identifier)
             return value
         return None
-    
+
     def import_stmt(self):
-        # import_stmt := IMPORT module_meta alia
+        """import_stmt := IMPORT module_meta alia"""
         pos = self.current_pos
         self.eat(TokenType.import_)
         meta = self.module_meta()
         alia = self.alia()
         return Import(meta, alia, **pos)
-    
+
     def from_import_stmt(self):
-        # from_import_stmt := FROM module_meta IMPORT (STAR | (
-        #   IDENTIFIER alia (COMMA IDENTIFIER alia)*
-        # ))
+        """
+        from_import_stmt := FROM module_meta IMPORT (STAR | (
+          IDENTIFIER alia (COMMA IDENTIFIER alia)*
+        ))
+        """
         pos = self.current_pos
         self.eat(TokenType.from_)
         meta = self.module_meta()
@@ -578,15 +591,16 @@ class Parser:
                 alias.append(self.alia())
             return FromImport(meta, names, alias, **pos)
 
-    def statement(self) -> (Statement or None):
-        # statement := LINE_BEGIN (
-        #   (expr (
-        #     (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
-        #     TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
-        #   )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
-        #   command_stmt | result_stmt | import_stmt |
-        #   from_import_stmt | entity_stmt
-        # )
+    def statement(self):
+        """statement := LINE_BEGIN (
+          (expr (
+            (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
+            TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
+          )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
+          command_stmt | result_stmt | import_stmt |
+          from_import_stmt | entity_stmt
+        )
+        """
         # Statements that start with special token
         TOK2STMT = {
             TokenType.if_: self.if_stmt,
@@ -604,7 +618,7 @@ class Parser:
         stmt_method = TOK2STMT.get(self.current_token.type)
         if stmt_method:
             return stmt_method()
-        
+
         # Other statements that starts with an expression
         pos = self.current_pos
         expr = self.expr()
@@ -619,35 +633,34 @@ class Parser:
             # check if the assign target is valid
             if not isinstance(node, (Attribute, Identifier, RawScore)):
                 self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
-        
+
         # assignable := attribute | identifier | raw_score
         if self.current_token.type is TokenType.equal:
             # assign_stmt := assignable EQUAL expr
-            self.eat() # eat equal
+            self.eat()  # eat equal
             _check_assign_target(expr)
             return Assign(expr, self.expr(), **pos)
         elif self.current_token.type in AUG_ASSIGN:
             # aug_assign_stmt := assignable (PLUS_EQUAL |
             #   MINUS_EQUAL | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
             operator = AUG_ASSIGN[self.current_token.type]
-            self.eat() # eat operator
+            self.eat()  # eat operator
             _check_assign_target(expr)
             return AugmentedAssign(expr, operator, self.expr(), **pos)
         elif self.current_token.type is TokenType.arrow:
             # bind_stmt := (attribute | identifier) ARROW expr
-            self.eat() # eat arrow
+            self.eat()  # eat arrow
             if not isinstance(expr, (Attribute, Identifier)):
                 self.error(ErrorType.INVALID_BIND_TARGET)
-            right = self.expr() # get assign value
+            right = self.expr()  # get assign value
             return MacroBind(expr, right, **pos)
-        else: # just an expr
+        else:  # just an expr
             # expr_stmt := expr
             return ExprStatement(expr, **pos)
 
     ## Other generators
 
     def module(self):
-        # parse a Module
         pos = self.current_pos
         stmts = []
         while self.current_token.type != TokenType.end_marker:
@@ -664,23 +677,24 @@ class Parser:
                 break
             stmts.append(self.statement())
         return Module(stmts, **pos)
-    
+
     def argument_table(self, type_required=True):
-        # parse an ArgumentTable
-        # type_decl := COLON type_spec
-        # default_decl := EQUAL expr
-        # When `type_required`:
-        #   arg_decl := IDENTIFIER ((type_decl | default_decl)
-        #     | (type_decl default_decl))
-        # Else:
-        #   arg_decl := IDENTIFIER type_decl? default_decl?
-        # argument_table := LPAREN (arg_decl COMMA)* arg_decl? RPAREN
+        """
+        type_decl := COLON type_spec
+        default_decl := EQUAL expr
+        When `type_required`:
+          arg_decl := IDENTIFIER ((type_decl | default_decl)
+            | (type_decl default_decl))
+        Else:
+          arg_decl := IDENTIFIER type_decl? default_decl?
+        argument_table := LPAREN (arg_decl COMMA)* arg_decl? RPAREN
+        """
         arg_table = ArgumentTable(**self.current_pos)
         self.eat(TokenType.lparen)
         while self.current_token.type is TokenType.identifier:
             name = self.current_token.value
             pos = self.current_pos
-            self.eat() # eat identifier
+            self.eat()  # eat identifier
             # read type
             type_ = None
             if self.current_token.type is TokenType.colon:
@@ -693,26 +707,26 @@ class Parser:
                 default = self.expr()
             # check
             if (not (type_ or default)) and type_required:
-                self.error(ErrorType.DONT_KNOW_ARG_TYPE, **pos, arg = name)
+                self.error(ErrorType.DONT_KNOW_ARG_TYPE, **pos, arg=name)
             if name in arg_table.args:
-                self.error(ErrorType.DUPLICATE_ARG_DEF, **pos, arg = name)
+                self.error(ErrorType.DUPLICATE_ARG_DEF, **pos, arg=name)
             # add arg
             arg_table.add_arg(name, type_, default)
             # eat comma
             if self.current_token.type is TokenType.comma:
                 self.eat()
             else:
-                break # no comma -> end
+                break  # no comma -> end
         self.eat(TokenType.rparen)
         return arg_table
 
     def type_spec(self):
-        # type_spec := expr | (ENTITY (LPAREN expr RPAREN)?)
+        """type_spec := expr | (ENTITY (LPAREN expr RPAREN)?)"""
         pos = self.current_pos
         if self.current_token.type is TokenType.entity:
-            self.eat() # Eat `entity`
+            self.eat()  # Eat "entity"
             if self.current_token.type is TokenType.lparen:
-                self.eat() # Eat `(`
+                self.eat()  # Eat "("
                 template = self.expr()
                 self.eat(TokenType.rparen)
             else:

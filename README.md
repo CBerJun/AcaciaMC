@@ -8,7 +8,7 @@ commands can be complicated, long and hard to maintain. Acacia simplify
 commands into Python-like code. Acacia code is finally compiled into
 `.mcfunction` files, and can be loaded in a Minecraft world as a datapack.
 
-Acacia is written in Python, so Python (require 3.3 or newer) is needed
+Acacia is written in Python, so Python (require 3.5 or newer) is needed
 for the compiler to run. It is also possible to create a binary module
 using Python for Acacia code to use. For example, noteblock musics can
 be generated automatically using builtin module `music`.

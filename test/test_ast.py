@@ -16,18 +16,18 @@ class ASTVisualizer(ASTVisitor):
     def __init__(self, node: AST):
         self.node = node
         super().__init__()
-    
+
     @staticmethod
     def get_fields(node: AST):
         # get the names of fields of a node
         return filter(
-            lambda name: 
+            lambda name:
                 not name.startswith('_')
                 and name != 'lineno'
                 and name != 'col',
             dir(node)
         )
-    
+
     def general_visit(self, node: AST, indent = 0):
         # indent:int the indent spaces to add (for recursion)
         res = '%s(\n' % node.__class__.__name__
@@ -35,12 +35,12 @@ class ASTVisualizer(ASTVisitor):
             # get sub value
             value = getattr(node, field)
             if isinstance(value, AST):
-                substr = self.visit(value, indent = indent + 2)
+                substr = self.visit(value, indent=(indent + 2))
             elif isinstance(value, list):
                 substr = '[\n'
                 for element in value:
                     if isinstance(element, AST):
-                        subsub = self.visit(element, indent = indent + 4)
+                        subsub = self.visit(element, indent=(indent + 4))
                     else: subsub = str(element)
                     substr += '%s%s\n' % (
                         ' ' * (indent + 4),
@@ -51,8 +51,9 @@ class ASTVisualizer(ASTVisitor):
                 substr = '{\n'
                 for k, v in value.items():
                     if isinstance(v, AST):
-                        subsub = self.visit(v, indent = indent + 4)
-                    else: subsub = str(v)
+                        subsub = self.visit(v, indent=(indent + 4))
+                    else:
+                        subsub = str(v)
                     substr += '%s%s: %s\n' % (
                         ' ' * (indent + 4),
                         k, subsub
@@ -68,7 +69,7 @@ class ASTVisualizer(ASTVisitor):
             )
         res += '%s)' % (' ' * indent)
         return res
-    
+
     def visit_ArgumentTable(self, node: ArgumentTable, indent: int):
         res = 'ArgumentTable(\n'
         for name in node.args:
@@ -77,9 +78,8 @@ class ASTVisualizer(ASTVisitor):
             # type str
             type_str = '' if type_ is None else ' : ' + type_.name
             # default str
-            default_str = '' if default is None else \
-                ' = ' + self.visit(default, indent = indent + 2)
-            
+            default_str = ('' if default is None else
+                ' = ' + self.visit(default, indent=(indent + 2)))
             res += ' ' * (indent + 2) + name + type_str + default_str + '\n'
         res += ' ' * indent + ')'
         return res
@@ -119,7 +119,7 @@ if_test = '''if a:
     #*pass*# pass
     if a + 1:
         1
-elif a: # a comment
+elif a:  # a comment
     pass'''
 
 attr_test = '''

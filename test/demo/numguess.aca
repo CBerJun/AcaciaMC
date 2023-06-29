@@ -8,10 +8,10 @@ import print
 import math
 import schedule
 
-MAX_ANSWER -> 999 # the last digit should be 9
+MAX_ANSWER -> 999  # the last digit should be 9
 answer = 0
 guess = 0
-TAG -> "num_guess" # the tag used to identify player
+TAG -> "num_guess"  # the tag used to identify player
 PLAYER -> "@p[tag=" + TAG + "]"
 
 interface input:

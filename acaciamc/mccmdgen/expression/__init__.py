@@ -1,6 +1,6 @@
 # Export useful things
 from .base import *
-from .types import * # import these first!
+from .types import *  # import these first!
 from .callable import *
 from .module import *
 from .boolean import *

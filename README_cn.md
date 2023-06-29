@@ -7,7 +7,7 @@ Acacia 的原则是**尽可能简单**。Minecraft 的命令较为复杂、很�
 Acacia 将指令简化为了类似 Python 语言的代码。
 代码最终会被编译为多个 `.mcfunction` 文件，可以通过数据包被加载进一个世界。
 
-Acacia 是使用 Python 编写的，所以编译器需要 Python（需要 3.3 或以上版本）来运行。
+Acacia 是使用 Python 编写的，所以编译器需要 Python（需要 3.5 或以上版本）来运行。
 通过 Python 也可以创建可供 Acacia 调用的模块。例如，通过内置模块 `music` 可以
 自动生成红石音乐。
 

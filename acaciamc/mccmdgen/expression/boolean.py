@@ -1,13 +1,21 @@
-# Generate commands of bool expressions
-from .base import *
-from .integer import *
-from .types import IntType, BoolType, DataType
-from ...ast import Operator
-from ...error import *
-from ...constants import INT_MAX, INT_MIN
+"""Builtin "bool" type.
 
-from copy import deepcopy
-import operator as builtin_op
+There are several classes that are used to represent bool expressions:
+- BoolLiteral: boolean literal (True or False).
+- BoolVar: boolean variable. We use a score to store a boolean.
+  When a score == 1, it's True; when score == 0, it's False.
+- NotBoolVar: inverted (`not var`) form of `BoolVar`.
+- BoolCompare: store comparison between 2 integer expressions.
+  This only store ONE comparison, unlike the AST node `CompareOp`,
+  so "a > b > 1" is stored in 2 `BoolCompare`s. Always use factory
+  `new_compare`.
+- AndGroup: store several bool expressions that are connected with
+  "and". Always use factory `new_and_group`.
+
+Q: WHERE IS AN `or` EXPRESSION STORED???
+A: `or` expressions are all converted into other types of expressions
+this is done by `new_or_expression`.
+"""
 
 __all__ = [
     # Expressions
@@ -18,114 +26,99 @@ __all__ = [
     'to_BoolVar'
 ]
 
-# There are several classes that are used to represent bool expressions:
-# - BoolLiteral: Boolean literal (True or False)
-# - BoolVar: Boolean Acacia variable
-#   NOTE when score == 1, it's True; == 0, it's False
-#   Although 1 bit is enough for a boolean, we still use a whole
-#   score (int) to store bool, bacause spliting a bit from a score costs
-#   much commands.
-# - NotBoolVar: inverted (`not var`) form of BoolVar
-# - BoolCompare: store comparison between 2 integer expressions
-#   NOTE this only store ONE comparison (unlike the AST node CompareOp)
-#   e.g. a > b > 1 is stored in 2 BoolCompares
-#   NOTE always use factory method `new_compare`
-# - AndGroup: store several bool expressions that are connected with `and`
-#   NOTE always use factory method `new_and_group`
+from typing import Iterable, List, Tuple
+from copy import deepcopy
+import operator as builtin_op
 
-# NOTE Q: WHERE IS AN `or` EXPRESSION STORED???
-# A: `or` expressions are all converted into other types of expressions
-# this is done by `new_or_expression`
+from .base import *
+from .integer import *
+from .types import IntType, BoolType, DataType
+from ...ast import Operator
+from ...error import *
+from ...constants import INT_MAX, INT_MIN
 
 class BoolLiteral(AcaciaExpr):
+    """Literal boolean."""
     def __init__(self, value: bool, compiler):
         super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.value = value
-    
-    def export(self, var):
-        # export self to a BoolVar
+
+    def export(self, var: "BoolVar"):
         return ['scoreboard players set %s %s' % (var, self)]
-    
-    def deepcopy(self):
-        # copy self to another var
-        return BoolLiteral(value = self.value, compiler = self.compiler)
-    
+
+    def deepcopy(self) -> "BoolLiteral":
+        return BoolLiteral(value=self.value, compiler=self.compiler)
+
     def __str__(self):
-        # return '1' if True, else '0'
+        """Return 1 if True, 0 if False."""
         return str(int(self.value))
-    
-    # --- UNARY OP ---
+
+    # Unary operator
     def not_(self):
         res = self.deepcopy()
         res.value = not res.value
         return res
 
 class BoolVar(VarValue):
+    """Boolean stored as a score on scoreboard."""
     def __init__(self, objective: str, selector: str,
                  compiler, with_quote=True):
         super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.objective = objective
         self.selector = selector
         self.with_quote = with_quote
-    
+
     def __str__(self):
         return (('"%s" "%s"' if self.with_quote else '%s "%s"')
                 % (self.selector, self.objective))
 
-    def export(self, var) -> list:
-        # var:BoolVar
+    def export(self, var: "BoolVar"):
         return ['scoreboard players operation %s = %s' % (var, self)]
-        
-    # --- UNARY OP ---
+
+    # Unary operator
     def not_(self):
-        return NotBoolVar(
-            self.objective, self.selector,
-            compiler = self.compiler
-        )
+        return NotBoolVar(self.objective, self.selector, self.compiler)
 
 class NotBoolVar(AcaciaExpr):
     def __init__(self, objective: str, selector: str, compiler):
         super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.objective = objective
         self.selector = selector
-    
+
     def __str__(self):
         return '"%s" "%s"' % (self.selector, self.objective)
-    
+
     @export_need_tmp
     def export(self, var: BoolVar):
         return [
             'scoreboard players set %s 0' % var,
             export_execute_subcommands(
-                subcmds = ['if score %s matches 0' % self],
-                main = 'scoreboard players set %s 1' % var
+                subcmds=['if score %s matches 0' % self],
+                main='scoreboard players set %s 1' % var
             )
         ]
-    
-    # --- UNARY OP ---
+
+    # Unary operator
     def not_(self):
-        return BoolVar(
-            self.objective, self.selector,
-            compiler = self.compiler
-        )
+        return BoolVar(self.objective, self.selector, self.compiler)
 
 class BoolCompare(AcaciaExpr):
     def __init__(
         self, left: AcaciaExpr, operator: Operator,
         right: AcaciaExpr, compiler
     ):
-        # The factory method is `new_compare` below!
+        """Use factory method `new_compare` below."""
         super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
         self.left = left
         self.operator = operator
         self.right = right
-        ## make sure operands are available
+        # Make sure operands are available
         lt, rt = left.data_type, right.data_type
         if not (lt.raw_matches(IntType)
                 and rt.raw_matches(IntType)):
             compiler.error(
                 ErrorType.INVALID_OPERAND,
-                operator = {
+                operator={
                     Operator.greater: '>',
                     Operator.greater_equal: '>=',
                     Operator.less: '<',
@@ -133,11 +126,11 @@ class BoolCompare(AcaciaExpr):
                     Operator.equal_to: '==',
                     Operator.unequal_to: '!='
                 }[operator],
-                operand = '%r, %r' % (str(lt), str(rt))
+                operand='%r, %r' % (str(lt), str(rt))
             )
-        ## NOTE if one of self.left and self.right is IntLiteral,
-        ## always make sure that IntLiteral on the right
-        ## e.g. `0 < a` -> `a > 0`
+        # NOTE if one of `self.left` and `self.right` is `IntLiteral`,
+        # always make sure that `IntLiteral` on the right
+        # e.g. `0 < a` -> `a > 0`
         if isinstance(self.left, IntLiteral):
             self.left, self.right = self.right, self.left
             self.operator = {
@@ -148,7 +141,7 @@ class BoolCompare(AcaciaExpr):
                 Operator.equal_to: Operator.equal_to,
                 Operator.unequal_to: Operator.unequal_to
             }[self.operator]
-    
+
     @export_need_tmp
     def export(self, var: BoolVar):
         # set `res` to dependencies that as_execute returns
@@ -160,21 +153,19 @@ class BoolCompare(AcaciaExpr):
             subcmds, 'scoreboard players set %s 1' % var
         ))
         return res
-    
+
     def deepcopy(self):
-        return BoolCompare(
-            self.left, self.operator, self.right,
-            compiler = self.compiler
-        )
-    
-    def as_execute(self):
-        # convert self to some dependency commands (return[0]:list) and
-        # subcommands of /execute (return[1]:list)
-        res_dependencies = [] # return[0]
-        res_main = [] # return[1]
-        # remember that if one of left and right is IntLiteral
+        return BoolCompare(self.left, self.operator, self.right, self.compiler)
+
+    def as_execute(self) -> Tuple[List[str], List[str]]:
+        """Convert this compare to some dependency commands
+        (return[0]) and subcommands of /execute (return[1]).
+        """
+        res_dependencies = []  # return[0]
+        res_main = []  # return[1]
+        # Remember that if one of left and right is `IntLiteral`
         # it will be put on the right (in self.__init__)?
-        if isinstance(self.right, IntLiteral):
+        if isinstance(self.right, IntLiteral):  # there is literal
             literal = self.right.value
             # parse the other operand (that is not IntLiteral)
             dependency, var = to_IntVar(self.left)
@@ -186,8 +177,7 @@ class BoolCompare(AcaciaExpr):
                 res_main.append(
                     'unless score %s matches %d' % (var, literal)
                 )
-            else: # for other 5 operators
-                # get range
+            else:  # for other 5 operators
                 match_range = {
                     Operator.greater: '%d..' % (literal + 1),
                     Operator.greater_equal: '%d..' % literal,
@@ -196,32 +186,32 @@ class BoolCompare(AcaciaExpr):
                     Operator.equal_to: str(literal)
                 }[self.operator]
                 res_main.append('if score %s matches %s' % (var, match_range))
-        else: # if there is no literal: not `if score ... matches` optimization
+        else:  # not `if score ... matches` optimization
             # then both operands should be processed
             dependency, var_left = to_IntVar(self.left)
             res_dependencies.extend(dependency)
             dependency, var_right = to_IntVar(self.right)
             res_dependencies.extend(dependency)
             # != is special handled, because Minecraft does not provide
-            # such syntax like 'if score ... != ...'
-            # while other 5 operators are allowed (e.g. 'if score ... >= ...')
+            # such syntax like 'if score ... != ...' while other 5
+            # operators are OK.
             if self.operator is Operator.unequal_to:
                 res_main.append('unless score %s = %s' % (var_left, var_right))
-            else: # for other 5 operators
+            else:  # for other 5 operators
                 mcop = {
                     Operator.greater: '>',
                     Operator.greater_equal: '>=',
                     Operator.less: '<',
                     Operator.less_equal: '<=',
-                    # NOTE in Minecraft equal_to IS "=" instead of "=="
+                    # NOTE in Minecraft `equal_to` is "=" instead of "=="
                     Operator.equal_to: '='
                 }[self.operator]
                 res_main.append('if score %s %s %s' % (
                     var_left, mcop, var_right
                 ))
         return res_dependencies, res_main
-    
-    # --- UNARY OP ---
+
+    # Unary operator
     def not_(self):
         res = self.deepcopy()
         res.operator = {
@@ -234,14 +224,13 @@ class BoolCompare(AcaciaExpr):
         }[res.operator]
         return res
 
-def new_compare(
-    left: AcaciaExpr, operator: Operator,
-    right: AcaciaExpr, compiler
-) -> AcaciaExpr:
-    # factory method
-    # return an AcaciaExpr that compares `left` and `right` with `operator`
-    ## the purpose is to do this optimization:
-    ## when both left and right are IntLiteral
+def new_compare(left: AcaciaExpr, operator: Operator,
+                right: AcaciaExpr, compiler) -> AcaciaExpr:
+    """Return an `AcaciaExpr` that compares `left` and `right`
+    with `operator`.
+    """
+    # The purpose of this factory is to do this optimization:
+    # when both left and right are IntLiteral
     if isinstance(left, IntLiteral) and isinstance(right, IntLiteral):
         return BoolLiteral(
             {
@@ -254,32 +243,30 @@ def new_compare(
             }[operator](left.value, right.value),
             compiler
         )
-    ## fallback to BoolCompare
+    # Fallback to BoolCompare
     return BoolCompare(left, operator, right, compiler)
 
 class AndGroup(AcaciaExpr):
-    def __init__(self, operands, compiler):
-        # operands:iterable[(boolean)AcaciaExpr]
+    def __init__(self, operands: Iterable[AcaciaExpr], compiler):
         super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
-        self.main = [] # list of subcommands of /execute (See `export`)
-        self.dependencies = [] # commands that runs before self.main
-        # compare_operands: operands that are BoolCompare; they are converted
-        # to commands when exported (there might be optimization)
+        self.main = []  # list of subcommands of /execute (See `export`)
+        self.dependencies = []  # commands that runs before `self.main`
+        # `compare_operands` stores `BoolCompare` operands -- they are
+        # converted to commands when `export`ed since there may be
+        # optimizations.
         self.compare_operands = set()
-        # inverted: if self is `not`ed
-        self.inverted = False
-        # init value
+        self.inverted = False  # if this is "not"ed
         for operand in operands:
             self._add_operand(operand)
-    
+
     @export_need_tmp
     def export(self, var: BoolVar):
-        # handle problem of reversing
+        # Handle inversion
         TRUE = 0 if self.inverted else 1
         FALSE = int(not TRUE)
         SET_FALSE = 'scoreboard players set %s %d' % (var, FALSE)
-        res_dependencies = [] # dependencies part of result
-        res_main = [] # main part of result (/execute subcommands)
+        res_dependencies = []  # dependencies part of result
+        res_main = []  # main part of result (/execute subcommands)
         # -- Now convert self.compare_operands into commands --
         # Optimization: When the same expr is compared by 2 or more
         # IntLiterals, redundant ones can be removed and commands can be merged
@@ -288,15 +275,14 @@ class AndGroup(AcaciaExpr):
         # 1st Pass: Throw BoolCompares that don't have an IntLiteral as operand
         # In: [a > 3, b < 5, a < 8, a > c, c > 0]
         # Out: [a > 3, b < 5, a < 8, c > 0]
-        optimizable = set(filter(
+        optimizable = set(
+            cp for cp in self.compare_operands
             # 1. Remember that in BoolCompare.__init__, if one of left and
             # right is an IntLiteral, it must be on the right?
             # 2. != is not optimizable by `if score ... matches`
-            lambda cp: (
-                isinstance(cp.right, IntLiteral) and \
-                cp.operator is not Operator.unequal_to
-            ), self.compare_operands
-        ))
+            if isinstance(cp.right, IntLiteral)
+               and cp.operator is not Operator.unequal_to
+        )
         no_optimize = self.compare_operands - optimizable
         # 2nd Pass: Find BoolCompares which has an IntLiteral as operand
         # and which the other operands are the same
@@ -328,7 +314,7 @@ class AndGroup(AcaciaExpr):
                     max_ = min(literal - 1, max_)
                 elif compare.operator is Operator.less_equal:
                     max_ = min(literal, max_)
-            if min_ > max_: # must be False
+            if min_ > max_:  # must be False
                 return [SET_FALSE]
             elif min_ == max_:
                 int_range = str(min_)
@@ -340,12 +326,12 @@ class AndGroup(AcaciaExpr):
             dependency, left_var = to_IntVar(left)
             res_dependencies.extend(dependency)
             res_main.append('if score %s matches %s' % (left_var, int_range))
-        # Finally, handle unoptimizable BoolCompares
+        # Finally, handle unoptimizable `BoolCompare`s
         for compare in no_optimize:
             dependency, main = compare.as_execute()
             res_dependencies.extend(dependency)
             res_main.extend(main)
-        # convert dependencies and main to real commands
+        # Convert dependencies and `res_main` to real commands
         res_main.extend(self.main)
         res_dependencies.extend(self.dependencies)
         return res_dependencies + [
@@ -356,7 +342,7 @@ class AndGroup(AcaciaExpr):
         ]
 
     def _add_operand(self, operand: AcaciaExpr):
-        # add an operand to AndGroup
+        """Add an operand to this `AndGroup`."""
         if isinstance(operand, BoolVar):
             self.main.append('if score %s matches 1' % operand)
         elif isinstance(operand, NotBoolVar):
@@ -364,11 +350,11 @@ class AndGroup(AcaciaExpr):
         elif isinstance(operand, BoolCompare):
             self.compare_operands.add(operand)
         elif isinstance(operand, AndGroup):
-            # combine AndGroups
+            # Combine AndGroups
             if operand.inverted:
                 # `a and not (b and c)` needs a tmp var:
                 # tmp = `b and c`, self = `a and not tmp`
-                tmp = self.data_type.new_var(tmp = True)
+                tmp = self.data_type.new_var(tmp=True)
                 self.dependencies.extend(operand.export(tmp))
                 self._add_operand(tmp.not_())
             else:
@@ -376,28 +362,27 @@ class AndGroup(AcaciaExpr):
                 self.dependencies.extend(operand.dependencies)
                 self.compare_operands.update(operand.compare_operands)
         else:
-            # BoolLiterals should have been optimized by `new_and_group`
-            # AcaciaExpr which is not a boolean (which is illegal) should
-            # have been detected by `new_and_group`, too
+            # `BoolLiteral`s should have been optimized by
+            # `new_and_group`. `AcaciaExpr`s which are not boolean type
+            # (which is illegal) should have been detected by that too.
             raise ValueError
-    
+
     def deepcopy(self):
-        # return a deepcopy of self
-        res = AndGroup(operands = (), compiler = self.compiler)
+        res = AndGroup(operands=(), compiler=self.compiler)
         res.main = deepcopy(self.main)
         res.dependencies = deepcopy(self.dependencies)
         res.inverted = self.inverted
         res.compare_operands = deepcopy(self.compare_operands)
         return res
-    
-    # --- UNARY OP ---
+
+    # Unary operator
     def not_(self):
         res = self.deepcopy()
         res.inverted = not res.inverted
         return res
 
-def new_and_group(operands: list, compiler) -> AcaciaExpr:
-    # factory function of AndGroup
+def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
+    """Creates a boolean value connected with "and"."""
     ## Purpose 1. check whether operands are valid
     # make sure there is at least 1 operand
     if not operands:
@@ -410,10 +395,9 @@ def new_and_group(operands: list, compiler) -> AcaciaExpr:
                 operand=repr(str(operand.data_type))
             )
     ## Purpose 2. to do these optimizations:
-    literals = filter(
-        lambda operand: isinstance(operand, BoolLiteral), operands
-    )
-    new_operands = list(operands) # make a deepcopy of `operands`
+    literals = [operand for operand in operands
+                if isinstance(operand, BoolLiteral)]
+    new_operands = operands.copy()
     for literal in literals:
         if literal.value is True:
             # throw away operands that are always true
@@ -431,8 +415,8 @@ def new_and_group(operands: list, compiler) -> AcaciaExpr:
     # Final fallback
     return AndGroup(operands, compiler)
 
-def new_or_expression(operands, compiler) -> AcaciaExpr:
-    # create an `or` expression
+def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
+    """Create a boolean value connected with "or"."""
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
     def _map(operand):
         if not operand.data_type.raw_matches(BoolType):
@@ -443,21 +427,18 @@ def new_or_expression(operands, compiler) -> AcaciaExpr:
         return operand.not_()
     inverted_operands = list(map(_map, operands))
     # connect them with `and` (-> `not a and not b and not c`)
-    res = new_and_group(
-        operands = inverted_operands, compiler = compiler
-    )
+    res = new_and_group(operands=inverted_operands, compiler=compiler)
     # invert result (-> `not (not a and not b and not c)`)
     return res.not_()
 
-# --- Utils ---
-def to_BoolVar(expr: AcaciaExpr):
-    # make any bool expr become an BoolVar,
-    # with the dependencies and var apart
-    # expr:(Any AcaciaExpr that are boolean type)
-    # return[0]: the dependency to calculate the operand itself
-    # return[1]: the final IntVar that is used
+# Utils
+def to_BoolVar(expr: AcaciaExpr) -> Tuple[List[str], BoolVar]:
+    """Convert any boolean expression to a `BoolVar` and some commands.
+    return[0]: the commands to run
+    return[1]: the `BoolVar`
+    """
     if isinstance(expr, BoolVar):
-        return (), expr
+        return [], expr
     else:
-        tmp = expr.data_type.new_var(tmp = True)
+        tmp = expr.data_type.new_var(tmp=True)
         return expr.export(tmp), tmp

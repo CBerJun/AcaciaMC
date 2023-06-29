@@ -1,75 +1,77 @@
-# Minecraft Command Generator of Acacia
-import contextlib
-
-from ..ast import *
-from ..constants import Config
-from ..error import *
-from .expression import *
-from .symbol import *
+"""Minecraft Command Generator of Acacia."""
 
 __all__ = ['MCFunctionFile', 'Generator']
 
-# --- MCFUNCTIONFILE --- #
+from typing import Union, TYPE_CHECKING, Optional, List, Tuple
+import contextlib
+
+from acaciamc.ast import *
+from acaciamc.constants import Config
+from acaciamc.error import *
+from acaciamc.mccmdgen.expression import *
+from acaciamc.mccmdgen.symbol import *
+
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
+
 class MCFunctionFile:
-    # an MCFunctionFile represents a .mcfunction file
-    def __init__(self, path: str = None):
-        # path:str the path of function from Config.function_folder
-        # e.g. `lib/acalib3`, `main`
+    """Represents a .mcfunction file."""
+    def __init__(self, path: Union[str, None] = None):
+        # `path`: the path of function relative to
+        # `Config.function_folder`. (e.g. `lib/acalib3`, `main`)
         self.commands = []
         self.set_path(path)
-    
+
     def has_content(self):
-        # return if there IS any commands in this file
+        """Return if there are any commands in this file."""
         for line in self.commands:
             line = line.strip()
             if (not line.startswith('#')) and bool(line):
                 return True
         return False
-    
+
     # --- About Path ---
+
     def get_path(self):
         if self._path is None:
             raise ValueError('"path" attribute is not set yet')
         return self._path
-    
+
     def set_path(self, path: str):
         self._path = path
-    
+
     def is_path_set(self) -> bool:
         return self._path is not None
-    
+
     # --- Export Methods ---
 
     def to_str(self) -> str:
         # make commands to str
         return '\n'.join(self.commands)
-    
+
     def call(self) -> str:
         # return the command that runs this file
         return 'function %s/%s' % (Config.function_folder, self.get_path())
 
     # --- Write Methods ---
-    
+
     def write(self, *commands: str):
         self.commands.extend(commands)
-    
+
     def write_debug(self, *comments: str):
         # check enabled
         if not Config.debug_comments:
             return
         self.write(*comments)
-    
+
     def extend(self, commands):
         # extend commands
         self.commands.extend(commands)
 
-# --- GENERATOR --- #
-
 class Generator(ASTVisitor):
-    # A Generator generates code of an AST (a single file)
-    def __init__(self, node: AST, main_file: MCFunctionFile, compiler):
-        # compiler:Compiler
-        # main_file:MCFunctionFile
+    """Generates MC function from an AST for a single file."""
+    def __init__(self, node: AST, main_file: MCFunctionFile,
+                 compiler: "Compiler"):
         super().__init__()
         self.node = node
         self.compiler = compiler
@@ -78,42 +80,43 @@ class Generator(ASTVisitor):
         # result_var: the var that stores result value
         # only exists when passing functions
         self.result_var = None
-        # self_value: The entity keyword `self` represents
+        # self_value: the entity keyword `self` value
         self.self_value = None
-        # processing_node is prepared for showing errors
+        # processing_node: prepared for showing errors
         # to know which AST we are passing (so that lineno and col are known)
         self.processing_node = self.node
-        self.node_depth = -1 # how deep we are in the tree (for debug comment)
+        self.node_depth = -1  # how deep we are in the tree (for debug comment)
         # current_tmp_scores: tmp scores allocated on current statement
-        # see method `visit`
+        # see method `visit`.
         self.current_tmp_scores = []
         # current_tmp_entities: just like `current_tmp_scores`, but
         # store tmp `EntityVar`s.
         self.current_tmp_entities = []
 
     def parse(self):
-        # parse the AST and generate commands
+        """Parse the AST and generate commands."""
         self.visit(self.node)
-    
+
     def parse_as_module(self) -> AcaciaModule:
-        # parse the AST and return it as AcaciaModule
+        """Parse the AST and return it as an `AcaciaModule`."""
         self.current_file.write_debug("## Start of module parsing")
         self.parse()
         self.current_file.write_debug("## End of module parsing")
         return AcaciaModule(self.current_scope, self.compiler)
-    
+
     # --- INTERNAL USE ---
-    
+
     def check_assignable(self, value: AcaciaExpr):
-        # check if a an AcaciaExpr is assignable
+        """Raise error when an `AcaciaExpr` is unassignable."""
         if not isinstance(value, VarValue):
             self.compiler.error(ErrorType.UNASSIGNABLE)
-    
+
     def register_symbol(self, target_node: AST, target_value: AcaciaExpr):
-        # register a value to a SymbolTable according to AST
-        # `target_value` is the value that the ast represents
-        # e.g. Identifier(name='a'), IntVar(...) -> 
-        #   self.current_scope.set('a', IntVar(...))
+        """Register a value to a symbol table according to AST.
+        `target_value` is the value that the ast represents
+        e.g. Identifier(name='a'), IntVar(...) ->
+             self.current_scope.set('a', IntVar(...))
+        """
         if isinstance(target_node, Identifier):
             self.current_scope.set(target_node.name, target_value)
         elif isinstance(target_node, Attribute):
@@ -125,22 +128,22 @@ class Generator(ASTVisitor):
                                     value_type=str(object_.data_type),
                                     attr=target_node.attr)
             object_.attribute_table.set(target_node.attr, target_value)
-        else: raise TypeError
-    
+        else:
+            raise TypeError
+
     def get_result_type(self, node: AnyTypeSpec) -> DataType:
-        # Get result DataType according to AST
+        """Get result `DataType` according to AST."""
         if node is None:
             return DataType.from_type(
                 self.compiler.types[NoneType], self.compiler)
         else:
             return self.visit(node)
-    
-    def write_debug(self, comment: str, target: MCFunctionFile = None):
-        # write debug comment to current_file
-        # target:MCFunctionFile the file to write comments into
-        # (default self.current_file)
-        # decide target
-        target = self.current_file if target is None else target
+
+    def write_debug(self, comment: str,
+                    target: Optional[MCFunctionFile] = None):
+        """Write debug comment to a file."""
+        if target is None:
+            target = self.current_file
         # write
         for comment_line in comment.split('\n'):
             target.write_debug(
@@ -151,7 +154,7 @@ class Generator(ASTVisitor):
                     comment_line
                 )
             )
-    
+
     @contextlib.contextmanager
     def set_mcfunc_file(self, file: MCFunctionFile):
         old = self.current_file
@@ -160,17 +163,17 @@ class Generator(ASTVisitor):
         self.current_file = old
 
     @contextlib.contextmanager
-    def new_mcfunc_file(self, path: str = None):
-        # Create a new mcfunction file
+    def new_mcfunc_file(self, path: Optional[str] = None):
+        """Create a new mcfunction file and set it to current file."""
         f = MCFunctionFile(path)
         with self.set_mcfunc_file(f):
             yield f
             if f.has_content():
                 self.compiler.add_file(f)
-    
+
     @contextlib.contextmanager
     def new_scope(self):
-        # Create a new scope
+        """Create a new scope."""
         old = self.current_scope
         s = ScopedSymbolTable(outer=old, builtins=self.compiler.builtins)
         self.current_scope = s
@@ -185,18 +188,19 @@ class Generator(ASTVisitor):
         self.result_var = old
 
     # --- VISITORS ---
-    
+
     def visit(self, node: AST, **kwargs):
         # store which node we are passing now
         old_node = self.processing_node
         self.processing_node = node
-        self.node_depth += 1 # used by self.write_debug
+        self.node_depth += 1  # used by `self.write_debug`
         if isinstance(node, Statement):
             # NOTE `current_tmp_scores` and `current_tmp_entities` are
             # modified by `Compiler`, to tell the tmp scores that are
             # allocated in this statement so that we can free them when
             # the statement ends.
-            # Therefore, only update tmp scores when node is a Statement
+            # Therefore, only update tmp scores when node is a
+            # `Statement`.
             old_tmp_scores = self.current_tmp_scores
             self.current_tmp_scores = []
             old_tmp_entities = self.current_tmp_entities
@@ -218,19 +222,19 @@ class Generator(ASTVisitor):
             self.current_tmp_scores = old_tmp_scores
             self.current_tmp_entities = old_tmp_entities
         return res
-    
+
     def visit_Module(self, node: Module):
         # start
         for stmt in node.body:
             self.visit(stmt)
-    
-    ### --- visit Statement ---
+
+    # --- STATEMENT VISITORS ---
 
     def visit_Assign(self, node: Assign):
         # analyze expr first
         value = self.visit(node.value)
         # then analyze target
-        target = self.visit(node.target, check_undef = False)
+        target = self.visit(node.target, check_undef=False)
         # for new defined var, analyze type and apply for score
         if target is None:
             ## apply a var according to type
@@ -241,7 +245,7 @@ class Generator(ASTVisitor):
                                     var_type=str(value.data_type))
             ## register the var to symbol table
             self.register_symbol(node.target, target)
-        else: # for existed name, check if it is assignable
+        else:  # for existing name, check if it is assignable
             self.check_assignable(target)
         # check type
         if not target.data_type.matches(value.data_type):
@@ -251,10 +255,10 @@ class Generator(ASTVisitor):
             )
         # assign
         self.current_file.extend(value.export(target))
-    
+
     def visit_AugmentedAssign(self, node: AugmentedAssign):
         # visit nodes
-        target = self.visit(node.target, check_undef = True)
+        target = self.visit(node.target, check_undef=True)
         self.check_assignable(target)
         value = self.visit(node.value)
         # call target's methods
@@ -268,19 +272,19 @@ class Generator(ASTVisitor):
         self.current_file.extend(
             getattr(target, OP2METHOD[node.operator])(value)
         )
-    
+
     def visit_MacroBind(self, node: MacroBind):
         # analyze value
         value = self.visit(node.value)
         # register to symbol table
         self.register_symbol(node.target, value)
-    
+
     def visit_ExprStatement(self, node: ExprStatement):
         self.visit(node.value)
-    
+
     def visit_Pass(self, node: Pass):
         pass
-    
+
     def visit_Command(self, node: Command):
         # get exact command (without formatting)
         cmd = ''
@@ -298,7 +302,7 @@ class Generator(ASTVisitor):
                 cmd += section[1]
             else: raise ValueError
         self.current_file.write(cmd)
-    
+
     def visit_If(self, node: If):
         # condition
         condition = self.visit(node.condition)
@@ -307,12 +311,12 @@ class Generator(ASTVisitor):
                                 got=str(condition.data_type))
         # optimization: if condition is a constant, just run the code
         if isinstance(condition, BoolLiteral):
-            run_node = node.body if condition.value is True else node.else_body
+            run_node = node.body if condition.value else node.else_body
             for stmt in run_node:
                 self.visit(stmt)
             return
         dependencies, condition = to_BoolVar(condition)
-        self.current_file.extend(dependencies) # add dependencies
+        self.current_file.extend(dependencies)
         # process body
         with self.new_mcfunc_file() as body_file:
             self.write_debug('If body')
@@ -334,7 +338,7 @@ class Generator(ASTVisitor):
                 subcmds = ['if score %s matches 0' % condition],
                 main = else_body_file.call()
             ))
-    
+
     def visit_While(self, node: While):
         # condition
         condition = self.visit(node.condition)
@@ -359,7 +363,7 @@ class Generator(ASTVisitor):
             for stmt in node.body:
                 self.visit(stmt)
         # trigering the function
-        if body_file.has_content(): # continue when body is not empty
+        if body_file.has_content():  # continue when body is not empty
             def _write_condition(file: MCFunctionFile):
                 file.extend(dependencies)
                 file.write(export_execute_subcommands(
@@ -373,7 +377,7 @@ class Generator(ASTVisitor):
             _write_condition(self.current_file)
         else:
             self.write_debug('No commands generated')
-    
+
     def visit_InterfaceDef(self, node: InterfaceDef):
         with self.new_scope():
             # body
@@ -388,7 +392,7 @@ class Generator(ASTVisitor):
                 self.write_debug('Generated at %s' % body_file.get_path())
             else:
                 self.write_debug('No commands generated')
-    
+
     def visit_ArgumentTable(self, node: ArgumentTable):
         # handle arg table
         args = node.args
@@ -403,7 +407,7 @@ class Generator(ASTVisitor):
                 if default_node is not None:
                     # type is ommited, default value given
                     types[arg] = defaults[arg].data_type
-            else: # type is given
+            else:  # type is given
                 types[arg] = self.visit(type_node)
                 # make sure default value matches type
                 # e.g. `def f(a: int = True)`
@@ -429,8 +433,9 @@ class Generator(ASTVisitor):
         return DataType.from_entity(template, self.compiler)
 
     def _func_expr(self, node: FuncDef) -> AcaciaFunction:
-        # Return the function object to a function definition,
-        # WITHOUT parsing the body.
+        """Return the function object to a function definition
+        without parsing the body.
+        """
         # get return type (of Type type)
         returns = self.get_result_type(node.returns)
         # parse arg
@@ -486,12 +491,12 @@ class Generator(ASTVisitor):
             )
         # write file
         self.current_file.extend(expr.export(self.result_var))
-    
+
     def visit_Import(self, node: Import):
         module, path = self.compiler.parse_module(node.meta)
         self.write_debug("Got module from %s" % path)
         self.current_scope.set(node.name, module)
-    
+
     def visit_FromImport(self, node: FromImport):
         module, path = self.compiler.parse_module(node.meta)
         self.write_debug("Import from %s" % path)
@@ -500,7 +505,7 @@ class Generator(ASTVisitor):
             if value is None:
                 self.compiler.error(ErrorType.MODULE_NO_ATTRIBUTE, name=name)
             self.current_scope.set(alia, value)
-    
+
     def visit_FromImportAll(self, node: FromImportAll):
         module, path = self.compiler.parse_module(node.meta)
         self.write_debug("Import everything from %s" % path)
@@ -509,7 +514,7 @@ class Generator(ASTVisitor):
 
     def visit_EntityTemplateDef(self, node: EntityTemplateDef):
         field_types = {}  # Field name to `DataType`
-        field_metas = {}  # Field name to field meta 
+        field_metas = {}  # Field name to field meta
         methods = {}  # Method name to function `AcaciaExpr`
         metas = {}  # Meta name to value
         # Handle parents
@@ -525,7 +530,7 @@ class Generator(ASTVisitor):
             parents.append(self.compiler.base_template)
         # 1st Pass: get all the attributes and give every non-inline
         # method a `MCFunctionFile` without parsing its body.
-        methods_2ndpass: list[tuple[AcaciaFunction, FuncDef]] = []
+        methods_2ndpass: List[Tuple[AcaciaFunction, FuncDef]] = []
         for decl in node.body:
             res = self.visit(decl)
             if isinstance(decl, EntityField):
@@ -593,22 +598,22 @@ class Generator(ASTVisitor):
     def visit_EntityMeta(self, node: EntityMeta):
         return node.name, self.visit(node.value)
 
-    ### --- visit Expression ---
+    # --- EXPRESSION VISITORS ---
     # literal
-    
+
     def visit_Literal(self, node: Literal):
         value = node.value
         # NOTE Python bool is a subclass of int!!!
         if isinstance(value, bool):
-            return BoolLiteral(value, compiler = self.compiler)
+            return BoolLiteral(value, self.compiler)
         elif isinstance(value, int):
-            return IntLiteral(value, compiler = self.compiler)
+            return IntLiteral(value, self.compiler)
         elif isinstance(value, str):
-            return String(value, compiler = self.compiler)
+            return String(value, self.compiler)
         elif value is None:
-            return NoneLiteral(compiler = self.compiler)
+            return NoneLiteral(self.compiler)
         raise TypeError
-    
+
     def visit_Self(self, node: Self):
         v = self.self_value
         if v is None:
@@ -618,16 +623,16 @@ class Generator(ASTVisitor):
     # assignable & bindable
     # check_undef:bool if True, raise Error when the assignable is
     # not found in SymbolTable; if False, return None when not found
-    
-    def visit_Identifier(self, node: Identifier, check_undef = True):
+
+    def visit_Identifier(self, node: Identifier, check_undef=True):
         res = self.current_scope.lookup(node.name)
         # check undef
         if res is None and check_undef:
-            self.compiler.error(ErrorType.NAME_NOT_DEFINED, name = node.name)
+            self.compiler.error(ErrorType.NAME_NOT_DEFINED, name=node.name)
         # return product
         return res
-    
-    def visit_Attribute(self, node: Attribute, check_undef = True):
+
+    def visit_Attribute(self, node: Attribute, check_undef=True):
         value = self.visit(node.object)
         res = value.attribute_table.lookup(node.attr)
         # check undef
@@ -636,11 +641,10 @@ class Generator(ASTVisitor):
                 ErrorType.HAS_NO_ATTRIBUTE,
                 value_type=str(value.data_type), attr=node.attr,
             )
-        # return product
         return res
-    
-    def visit_RawScore(self, node: RawScore, check_undef = True):
-        # a valid raw score always exists; `check_undef` is ommitted
+
+    def visit_RawScore(self, node: RawScore, check_undef=True):
+        # a valid raw score always exists; `check_undef` is omitted
         objective = self.visit(node.objective)
         selector = self.visit(node.selector)
         if not isinstance(objective, String):
@@ -651,11 +655,11 @@ class Generator(ASTVisitor):
                                 got=str(selector.data_type))
         return IntVar(
             objective.value, selector.value,
-            compiler = self.compiler, with_quote = False
+            compiler=self.compiler, with_quote=False
         )
 
     # operators
-    
+
     def visit_UnaryOp(self, node: UnaryOp):
         operand = self.visit(node.operand)
         if node.operator is Operator.positive:
@@ -665,7 +669,7 @@ class Generator(ASTVisitor):
         elif node.operator is Operator.not_:
             return operand.not_()
         raise TypeError
-    
+
     def visit_BinOp(self, node: BinOp):
         left, right = self.visit(node.left), self.visit(node.right)
         if node.operator is Operator.add:
@@ -679,27 +683,25 @@ class Generator(ASTVisitor):
         elif node.operator is Operator.mod:
             return left % right
         raise TypeError
-    
+
     def visit_CompareOp(self, node: CompareOp):
-        compares = [] # BoolCompare objects that are generated
+        compares = []
         left, right = None, self.visit(node.left)
         # split `e0 o1 e1 o2 e2 ... o(n) e(n)` into
         # `e0 o1 e1 and ... and e(n-1) o(n) e(n)`
         for operand, operator in zip(node.operands, node.operators):
             left, right = right, self.visit(operand)
-            compares.append(new_compare(
-                left, operator, right, compiler = self.compiler
-            ))
-        return new_and_group(compares, compiler = self.compiler)
-    
+            compares.append(new_compare(left, operator, right, self.compiler))
+        return new_and_group(compares, self.compiler)
+
     def visit_BoolOp(self, node: BoolOp):
         operands = [self.visit(operand) for operand in node.operands]
         if node.operator is Operator.and_:
-            return new_and_group(operands, compiler = self.compiler)
+            return new_and_group(operands, self.compiler)
         elif node.operator is Operator.or_:
-            return new_or_expression(operands, compiler = self.compiler)
+            return new_or_expression(operands, self.compiler)
         raise TypeError
-    
+
     # call
 
     def visit_Call(self, node: Call):
@@ -711,13 +713,14 @@ class Generator(ASTVisitor):
             args.append(self.visit(value))
         for arg, value in node.keywords.items():
             keywords[arg] = self.visit(value)
-        # Call it
+        # call it
         res, cmds = func.call(args, keywords)
-        # Write commands
+        # write commands
         self.current_file.extend(cmds)
         return res
-    
-    def call_inline_func(self, func: InlineFunction, args, keywords: dict):
+
+    def call_inline_func(self, func: InlineFunction,
+                         args: ARGS_T, keywords: KEYWORDS_T) -> List[str]:
         # We visit the AST node every time an inline function is called
         # Return a list of commands
         with self.new_scope():

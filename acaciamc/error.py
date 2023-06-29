@@ -1,6 +1,8 @@
-import enum
+"""Error definition for Acacia."""
 
 __all__ = ['ErrorType', 'Error']
+
+import enum
 
 class ErrorType(enum.Enum):
     # Tokenizer
@@ -90,9 +92,9 @@ class Error(Exception):
         self.type = err_type
         self.file = file
         super().__init__()
-    
+
     def __str__(self):
-        res = self.type.value # unformatted error
-        res = res.format(**self.error_args) # formatted
+        res = self.type.value  # unformatted error
+        res = res.format(**self.error_args)  # formatted
         res = '%s:%d:%d: %s' % (self.file, self.lineno, self.col, res)
         return res

@@ -1,10 +1,11 @@
-# the builtin `math` module of Acacia
+"""math - Math related utilities."""
 from acaciamc.mccmdgen.expression import *
 from acaciamc.ast import ModuleMeta
 
 def _randintc(func: BinaryFunction):
-    # randintc(min: int-literal, max: int-literal) -> int
-    # get a random integer between [`min`, `max`]
+    """randintc(min: int-literal, max: int-literal) -> int
+    Get a random integer between `min` and `max` (inclusive).
+    """
     # Parse arg
     arg_min = func.arg_require('min', IntType)
     arg_max = func.arg_require('max', IntType)
@@ -14,37 +15,39 @@ def _randintc(func: BinaryFunction):
     if not isinstance(arg_max, IntLiteral):
         func.arg_error('max', 'must be a constant')
     # Write
-    res = IntOpGroup(init = None, compiler = func.compiler)
+    res = IntOpGroup(init=None, compiler=func.compiler)
     res.write('scoreboard players random {this} %s %s' % (arg_min, arg_max))
     return res
 
 def _pow(func: BinaryFunction):
-    # pow(x: int, y: int) -> int
-    # return x to the power of y
+    """pow(x: int, y: int) -> int
+    return x to the power of y.
+    """
     # Parse args
     arg_x = func.arg_require('x', IntType)
     arg_y = func.arg_require('y', IntType)
     func.assert_no_arg()
     if not isinstance(arg_y, IntLiteral):
         # Fallback to `_math._pow`
-        return _math_pow.call(args=(arg_x, arg_y), keywords={})
+        return _math_pow.call(args=[arg_x, arg_y], keywords={})
     if arg_y.value <= 0:
         func.arg_error('y', 'must be a positive integer')
     # Special handle when x is a literal
     if isinstance(arg_x, IntLiteral):
         return IntLiteral(arg_x.value ** arg_y.value, func.compiler)
     # Write
-    res = IntOpGroup(init = arg_x, compiler = func.compiler)
+    res = IntOpGroup(init=arg_x, compiler=func.compiler)
     cmds = tuple(
-        'scoreboard players operation {this} *= {this}' \
+        'scoreboard players operation {this} *= {this}'
         for _ in range(arg_y.value)
     )
     res.write(*cmds)
     return res
 
 def _min(func: BinaryFunction):
-    # min(*args:int) -> int
-    # return the minimum value between `args`
+    """min(*args:int) -> int
+    Return the minimum value among `args`.
+    """
     # Parse args
     args, arg_kw = func.arg_raw()
     if arg_kw:
@@ -69,8 +72,9 @@ def _min(func: BinaryFunction):
     return res
 
 def _max(func: BinaryFunction):
-    # max(*args:int) -> int
-    # return the maximum value between `args`
+    """max(*args:int) -> int
+    Return the maximum value among `args`.
+    """
     # Parse args
     args, arg_kw = func.arg_raw()
     if arg_kw:

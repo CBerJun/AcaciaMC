@@ -273,13 +273,13 @@ class Music(AcaciaExpr):
         # Ticking
         self.mt = 0
         self.gt = 0.0
-        self.gt_int = 0 # Always == round(self.gt)
+        self.gt_int = 0  # Always == round(self.gt)
         self.last_gt_int = 0
         # last_msg_mt: track id to MT when last Message is handled
         self.last_msg_mt = dict.fromkeys(range(len(midi.tracks)), 0)
         # Channel info
-        self.channel_volume = {} # channel id to volume (0-127)
-        self.channel_instrument = {} # channel id to instrument id
+        self.channel_volume = {}  # channel id to volume (0-127)
+        self.channel_instrument = {}  # channel id to instrument id
         ## Default instrument: 0~8 & 9~15: Piano (0); 9: Drum set (127)
         ## Default volumn: 100
         for i in range(16):
@@ -297,12 +297,12 @@ class Music(AcaciaExpr):
         self.files = []
         # file_sep_gt: in which GT we seperate the file
         self.file_sep_gt = []
-        self.cur_chunk_size = 0 # Commands written in current file
-        self.new_file() # Initial file
+        self.cur_chunk_size = 0  # Commands written in current file
+        self.new_file()  # Initial file
         # Go
         while not self.is_finished():
             self.main_loop()
-        GT_LEN = self.gt_int # Length of music in GT
+        GT_LEN = self.gt_int  # Length of music in GT
         # The last file may be useless
         if not self.files[-1].has_content():
             self.files.pop()
@@ -388,7 +388,7 @@ class Music(AcaciaExpr):
             elif mtype == "set_tempo":
                 self.bpm = 6E+7 / message.tempo
             elif message.is_cc():
-                if message.control == 7: # Volume
+                if message.control == 7:  # Volume
                     self.channel_volume[message.channel] = message.value
             elif mtype == "program_change":
                 self.channel_instrument[message.channel] = message.program
@@ -417,7 +417,7 @@ class Music(AcaciaExpr):
 
     def is_finished(self):
         return not any(self.tracks)
-    
+
     def get_instrument(self, channel: int) -> str:
         """Get MC sound of channel."""
         ins_id = self.channel_instrument[channel]
@@ -441,7 +441,7 @@ class Music(AcaciaExpr):
         gt = self.gt_int
         self.cur_file.write(
             "execute if score %s matches %d %s run " %
-            (self.timer, gt, self.execute_condition) + 
+            (self.timer, gt, self.execute_condition) +
             "playsound %s @s ~~~ %.2f %.3f" %
             (sound, volume, pitch)
         )

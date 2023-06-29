@@ -1,11 +1,25 @@
-# Int objects in Acacia
-from .base import *
-from .types import IntType, DataType
-from ...error import *
-from ...constants import INT_MIN, INT_MAX
+"""Builtin integer.
 
-from copy import deepcopy
-import operator as builtin_op
+Three types of values are used to represent an Acacia int object:
+- IntLiteral: a literal integer like `3` (for const folding)
+- IntVar: describe a value stored in a Minecraft score
+  which is usually an Acacia variable
+- IntOpGroup: describe complicated expressions with operators
+
+Q: WHY NOT just use one class to show everything???
+A: With these classes apart, we can design a different operator logic for
+   each kind of expression.
+    e.g. 1 + 1 can be folded and directly get 2 when IntLiteral is apart.
+    e.g. 1 + a can be optimized when IntVar is apart
+   So the purpose is to optimize the output
+
+This shows the priority of these classes
+IntOpGroup > IntVar > IntLiteral
+A class can only handle operation with other objects with lower priority
+e.g. Literal can only handle operations with Literal
+If a class can't handle an operation `self (operator xxx) other`,
+other's method `other.__rxxx__` is used
+"""
 
 __all__ = [
     # Expression
@@ -14,7 +28,14 @@ __all__ = [
     'to_IntVar'
 ]
 
-# Small util
+from typing import List, Union
+from copy import deepcopy
+import operator as builtin_op
+
+from .base import *
+from .types import IntType, DataType
+from acaciamc.error import *
+from acaciamc.constants import INT_MIN, INT_MAX
 
 def _to_mcop(operator: str):
     # convert "+" to "add", "-" to "remove"
@@ -22,31 +43,12 @@ def _to_mcop(operator: str):
     elif operator == '-': return 'remove'
     raise ValueError
 
-# Four types of values are used to represent an Acacia int object:
-# - IntLiteral: a literal integer like `3` (for const folding)
-# - IntVar: describe a value stored in a Minecraft score
-#   which is usually an Acacia variable
-# - IntOpGroup: describe complicated expressions with operators
-
-# Q: WHY NOT just use one class to show everything???
-# A: With these classes apart, we can design a different operator logic for
-#    each kind of expression.
-#     e.g. 1 + 1 can be folded and directly get 2 when IntLiteral is apart.
-#     e.g. 1 + a can be optimized when IntVar is apart
-#    So the purpose is to optimize the output
-
-# This shows the priority of these classes
-# IntOpGroup > IntVar > IntLiteral
-# A class can only handle operation with other objects with lower priority
-# e.g. Literal can only handle operations with Literal
-# If a class can't handle an operation `self (operator xxx) other`,
-# other's method `other.__rxxx__` is used
-
 class IntLiteral(AcaciaExpr):
-    # Represents a literal integer.
-    # NOTE the purpose of these class is to implement an optimization called
-    # "constant folding" which calculate the value of constant expressions
-    # while compiling (e.g. compiler can convert 2 + 3 to 5)
+    """Represents a literal integer.
+    The purpose of these class is to implement constant folding
+    which calculate the value of constant expressions
+    in compile time (e.g. compiler can convert "2 + 3" to "5").
+    """
     def __init__(self, value: int, compiler):
         super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
         self.value = value
@@ -54,45 +56,41 @@ class IntLiteral(AcaciaExpr):
         if not INT_MIN <= value <= INT_MAX:
             self.compiler.error(ErrorType.INT_OVERFLOW)
 
-    def export(self, var):
-        # export literal value to var
+    def export(self, var: "IntVar"):
         return ['scoreboard players set %s %s' % (var, self)]
-    
+
     def deepcopy(self):
-        # copy self to another var
-        return IntLiteral(value = self.value, compiler = self.compiler)
-    
+        return IntLiteral(self.value, self.compiler)
+
     def __str__(self):
-        # return str(literal)
         return str(self.value)
 
     ## UNARY OPERATORS
 
     def __pos__(self):
         return self
-    
+
     def __neg__(self):
         res = self.deepcopy()
-        res.value = - res.value
+        res.value = -res.value
         return res
-    
+
     ## BINARY OPERATORS
 
     def _bin_op(self, other, name):
         if isinstance(other, IntLiteral):
-            # just calculate self.value and other.value
+            # just calculate `self.value` and `other.value`
             res = self.deepcopy()
             try:
                 res.value = getattr(res.value, name)(other.value)
             except ArithmeticError as err:
-                self.compiler.error(
-                    ErrorType.CONST_ARITHMETIC, message = str(err)
-                )
+                self.compiler.error(ErrorType.CONST_ARITHMETIC,
+                                    message=str(err))
             return res
         elif isinstance(other, (IntOpGroup, IntVar)):
             return NotImplemented
         raise TypeError
-    
+
     def __add__(self, other):
         return self._bin_op(other, '__add__')
     def __sub__(self, other):
@@ -105,47 +103,40 @@ class IntLiteral(AcaciaExpr):
         return self._bin_op(other, '__mod__')
 
 class IntVar(VarValue):
-    # an integer variable
-    def __init__(
-        self, objective: str, selector: str, compiler, with_quote = True
-    ):
-        # with_quote:bool whether to add quote to selector
+    """An integer variable."""
+    def __init__(self, objective: str, selector: str,
+                 compiler, with_quote=True):
         super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
         self.objective = objective
         self.selector = selector
         self.with_quote = with_quote
-    
-    def export(self, var):
-        # export self to an IntVar
-        # var:IntVar
+
+    def export(self, var: "IntVar"):
         return ['scoreboard players operation %s = %s' % (var, self)]
 
     def __str__(self):
         msg = '"%s" "%s"' if self.with_quote else '%s "%s"'
         return msg % (self.selector, self.objective)
-    
+
     ## UNARY OPERATORS
 
     def __pos__(self):
-        # positive value of an int is itself
         return self
-    
+
     def __neg__(self):
-        return -IntOpGroup(self, compiler = self.compiler)
-    
+        return -IntOpGroup(self, self.compiler)
+
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _bin_op(self, other, name):
-        # implementation of all binary operators
-        # name is method name
+    def _bin_op(self, other, name: str):
+        # `name` is method name
         if isinstance(other, IntOpGroup):
-            # VarValues can't handle Exprs
-            return NotImplemented # var.expr -> expr.__rxxx__
+            return NotImplemented
         elif isinstance(other, (IntLiteral, IntVar)):
-            res = IntOpGroup(self, compiler = self.compiler)
+            res = IntOpGroup(self, self.compiler)
             return getattr(res, name)(other)
         raise TypeError
-    
+
     def __add__(self, other):
         return self._bin_op(other, '__add__')
     def __sub__(self, other):
@@ -156,18 +147,18 @@ class IntVar(VarValue):
         return self._bin_op(other, '__floordiv__')
     def __mod__(self, other):
         return self._bin_op(other, '__mod__')
-    
+
     ## BINARY (OTHER ... SELF) OPERATORS
-    # only Literal might call __rxxx__ of self
-    # so just convert self to Expr and let this Expr handle operation
+    # only `IntLiteral` might call __rxxx__ of self
+    # so just convert self to `IntOpGroup` and let this handle operation
 
     def _r_bin_op(self, other, name):
         if isinstance(other, IntLiteral):
             return getattr(
-                IntOpGroup(other, compiler = self.compiler), name
+                IntOpGroup(other, self.compiler), name
             )(self)
         raise TypeError
-    
+
     def __radd__(self, other):
         return self._r_bin_op(other, '__add__')
     def __rsub__(self, other):
@@ -178,12 +169,11 @@ class IntVar(VarValue):
         return self._r_bin_op(other, '__floordiv__')
     def __rmod__(self, other):
         return self._r_bin_op(other, '__mod__')
-    
+
     # AUGMENTED ASSIGN `ixxx`
-    # directly return a list of commands that change value of self
 
     def _iadd_sub(self, other, operator: str) -> list:
-        # implementation of iadd and isub
+        """Implementation of iadd and isub."""
         if isinstance(other, IntLiteral):
             return ['scoreboard players %s %s %s' % (
                 _to_mcop(operator), self, other
@@ -193,11 +183,11 @@ class IntVar(VarValue):
                 self, operator, other
             )]
         elif isinstance(other, IntOpGroup):
-            return self._aug_IntOpGroup(other, operator = operator)
+            return self._aug_IntOpGroup(other, operator)
         raise TypeError
-    
+
     def _imul_div_mod(self, other, operator: str) -> list:
-        # implementation of imul, idiv, imod
+        """Implementation of imul, idiv, imod."""
         if isinstance(other, IntLiteral):
             const = self.compiler.add_int_const(other.value)
             return ['scoreboard players operation %s %s= %s' % (
@@ -210,12 +200,12 @@ class IntVar(VarValue):
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator)
         raise TypeError
-    
-    def _aug_IntOpGroup(self, other, operator: str) -> list:
-        # implementation for augmented assigns where other is IntOpGroup
-        # other:IntOpGroup
-        # operator:str '+', '-', etc.
-        # in this condition, a (op)= b equals to a = a (op) b
+
+    def _aug_IntOpGroup(self, other: "IntOpGroup", operator: str):
+        """Implementation for augmented assigns where `other` is
+        `IntOpGroup`. `operator` is "+", "-", etc.
+        """
+        # In this condition, we convert a (op)= b to a = a (op) b
         ## Calculate
         value = {
             '+': builtin_op.add, '-': builtin_op.sub,
@@ -226,7 +216,7 @@ class IntVar(VarValue):
         res = value.export(tmp)
         res.extend(tmp.export(self))
         return res
-    
+
     def iadd(self, other):
         return self._iadd_sub(other, '+')
     def isub(self, other):
@@ -239,71 +229,66 @@ class IntVar(VarValue):
         return self._imul_div_mod(other, '%')
 
 class IntOpGroup(AcaciaExpr):
-    # An IntOpGroup stores how an integer is changed by storing
-    # unformatted commands where the target positions of scores are preserved.
-    # (It does not care which score the value is assigning to, but cares the
-    # value itself, until you `export` it, where all commands are completed)
-    # e.g. IntOpGroup `1 + a` might be saved like this:
-    #   scoreboard players set {this} 1
-    #   # (When variable `a` is stored in `acacia1` of scoreboard `acacia`)
-    #   scoreboard players operation {this} += "acacia1" "acacia"
-    # when using method `export`, value of "this" is given
-    
-    # To be more specific, it provides interfaces to change the value
-    # Sometimes temporary scores are needed, those are stored in attribute
-    # `libs`, where other IntOpGroups are stored (recursively)
+    """An `IntOpGroup` stores how an integer is changed by storing
+    unformatted commands where the target positions of scores are
+    preserved. It does not care about which score the value is assigning
+    to, but cares about the value itself, until you `export` it, when
+    all commands are completed.
+    e.g. IntOpGroup `1 + a` might be saved like this:
+      scoreboard players set {this} 1
+      # (When variable `a` is stored in `acacia1` of scoreboard `acacia`)
+      scoreboard players operation {this} += "acacia1" "acacia"
+    When method `export` is called, value of "this" is given
+
+    Sometimes temporary scores are needed, those are stored in attribute
+    `libs`, where other `IntOpGroup`s are stored (recursively).
+    """
     def __init__(self, init, compiler):
         super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
-        self.main = [] # list[str] (commands)
-        self.libs = [] # list[IntOpGroup] (dependencies)
-        self._current_lib_index = 0 # always equals to len(self.libs)
-        # init value
+        self.main: List[str] = []
+        self.libs: List[IntOpGroup]= []
+        self._current_lib_index = 0  # always equals to `len(self.libs)`
+        # Initial value
         if isinstance(init, IntLiteral):
             self.write('scoreboard players set {this} %s' % init)
         elif isinstance(init, IntVar):
             self.write('scoreboard players operation {this} = %s' % init)
         elif init is not None:
             raise ValueError
-    
+
     @export_need_tmp
-    def export(self, var: IntVar) -> list:
-        # export expression and assign value of this expression to `var`
-        # return list of commands
+    def export(self, var: IntVar):
         res = []
-        # subvars:list[IntVar] Allocate a tmp int for every IntOpGroups
-        # in self.libs and export them to this var;
-        # finally format self.main with them ({x} means value of self.libs[x])
-        subvars = []
+        # subvars: Allocate a tmp int for every `IntOpGroup` in
+        # `self.libs` and export them to this var; finally format
+        # `self.main` using them ({x} means value of self.libs[x]).
+        subvars: List[IntVar] = []
         for subexpr in self.libs:
             subvar = self.data_type.new_var(tmp=True)
             subvars.append(subvar)
             res.extend(subexpr.export(subvar))
         res.extend(map(lambda s: s.format(*subvars, this = var), self.main))
         return res
-    
-    def _add_lib(self, lib) -> int:
-        # register a dependency (which is also an Expr)
-        # return its index in self.libs
-        # NOTE value of libs are stored in list so in commands {x} will be
-        # formatted as value of self.libs[x] when exported
-        # lib:Expr
+
+    def _add_lib(self, lib: "IntOpGroup") -> int:
+        """Register a dependency and return its index in `self.libs`."""
         self.libs.append(lib)
         self._current_lib_index += 1
         return self._current_lib_index - 1
-    
-    def write(self, *commands: str, pos: int = None):
-        # write commands
-        # if pos is None, write to self.main; else to libs[pos]
+
+    def write(self, *commands: str, pos: Union[int, None] = None):
+        """Write commands.
+        if `pos` is None, write to `self.main`
+        else to `self.libs[pos]`.
+        """
         if pos is None:
             target = self.main
         else:
             target = self.libs[pos]
         target.extend(commands)
-    
+
     def deepcopy(self):
-        # deepcopy this `IntOpGroup`
-        # NOTE some of the attributes are not deepcopied
-        res = IntOpGroup(init = None, compiler = self.compiler)
+        res = IntOpGroup(init=None, compiler=self.compiler)
         res.main = deepcopy(self.main)
         res.libs = deepcopy(self.libs)
         res._current_lib_index = self._current_lib_index
@@ -312,19 +297,19 @@ class IntOpGroup(AcaciaExpr):
     ## UNARY OPERATORS
 
     def __pos__(self):
-        # +expr = expr
         return self
-    
+
     def __neg__(self):
         # -expr = expr * (-1)
         neg1 = self.compiler.add_int_const(-1)
         return self * neg1
-    
+
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _add_sub(self, other, operator):
-        # implementation of __add__ and __sub__
-        # operator is '+' or '-'
+    def _add_sub(self, other, operator: str):
+        """Implementation of __add__ and __sub__
+        `operator` is '+' or '-'.
+        """
         res = self.deepcopy()
         if isinstance(other, IntLiteral):
             res.write('scoreboard players %s {this} %s' % (
@@ -341,10 +326,11 @@ class IntOpGroup(AcaciaExpr):
         else:
             raise TypeError
         return res
-    
+
     def _mul_div_mod(self, other, operator: str):
-        # implementation of __mul__, __div__ and __mod__
-        # operator is '*' or '/' or '%'
+        """Implementation of __mul__, __div__ and __mod__
+        operator is '*' or '/' or '%'.
+        """
         res = self.deepcopy()
         if isinstance(other, IntLiteral):
             const = self.compiler.add_int_const(other.value)
@@ -362,7 +348,7 @@ class IntOpGroup(AcaciaExpr):
         else:
             raise TypeError
         return res
-    
+
     def __add__(self, other):
         return self._add_sub(other, '+')
     def __sub__(self, other):
@@ -382,15 +368,16 @@ class IntOpGroup(AcaciaExpr):
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(self, name)(other)
         raise TypeError
-    
+
     def _r_sub_div_mod(self, other, name):
-        # convert `other` to Expr and use that Expr to handle this operation
+        # Convert `other` to `IntOpGroup` and use this to handle this
+        # operation.
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(
-                IntOpGroup(other, compiler = self.compiler), name
+                IntOpGroup(other, self.compiler), name
             )(self)
         raise TypeError
-    
+
     def __radd__(self, other):
         return self._r_add_mul(other, '__add__')
     def __rsub__(self, other):
@@ -402,14 +389,12 @@ class IntOpGroup(AcaciaExpr):
     def __rmod__(self, other):
         return self._r_sub_div_mod(other, '__mod__')
 
-# --- Utils ---
-
+# Utils
 def to_IntVar(expr: AcaciaExpr):
-    # make any int expr become an IntVar,
-    # with the dependencies and var apart
-    # expr:IntVar|IntOpGroup|IntLiteral
-    # return[0]: the dependency to calculate the operand itself
-    # return[1]: the final IntVar that is used
+    """Convert any integer expression to a `IntVar` and some commands.
+    return[0]: the commands to run
+    return[1]: the `IntVar`
+    """
     if isinstance(expr, IntVar):
         return (), expr
     else:

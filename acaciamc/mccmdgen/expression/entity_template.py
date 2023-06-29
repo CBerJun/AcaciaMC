@@ -1,26 +1,32 @@
 """Entity template of Acacia."""
 
+__all__ = ["EntityTemplate"]
+
+from typing import List, Tuple, Dict, TYPE_CHECKING, Union, Any
 import itertools
 
+from acaciamc.error import *
 from .base import *
-from ...error import *
 from .types import ETemplateType, NoneType, DataType
 from .entity import TaggedEntity
 from .callable import *
 from .string import String
 
-__all__ = ["EntityTemplate"]
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
+    from .callable import METHODDEF_T
+    from .entity import _EntityBase
 
 class _MethodDispatcher:
-    def __init__(self, method_name, compiler):
+    def __init__(self, method_name: str, compiler: "Compiler"):
         self.compiler = compiler
         self.method_name = method_name
-        self.bound = []
-        self.temp_n_impl = []
-        self.result_var = None
+        self.bound: List[BoundMethodDispatcher] = []
+        self.temp_n_impl: List[Tuple["EntityTemplate", "METHODDEF_T"]] = []
+        self.result_var: Union[VarValue, None] = None
 
-    def register(self, template, implementation):
-        assert isinstance(implementation, (AcaciaFunction, InlineFunction))
+    def register(self, template: "EntityTemplate",
+                 implementation: "METHODDEF_T"):
         res_type = implementation.result_var.data_type
         if self.result_var is None:
             self.result_var = res_type.new_var()
@@ -35,12 +41,13 @@ class _MethodDispatcher:
         for bound in self.bound:
             bound.add_implementation(template, implementation)
 
-    def register_inherit(self, template, parent):
+    def register_inherit(self, template: "EntityTemplate",
+                         parent: "EntityTemplate"):
         # XXX this will repeat the whole code that calls implementation
         impl = parent._orig_methods[self.method_name]
         self.register(template, impl)
 
-    def bind_to(self, entity):
+    def bind_to(self, entity: "_EntityBase"):
         res = BoundMethodDispatcher(entity, self.method_name,
                                     self.result_var, self.compiler)
         self.bound.append(res)
@@ -48,7 +55,7 @@ class _MethodDispatcher:
             res.add_implementation(template, implementation)
         return res
 
-    def bind_to_cast(self, entity):
+    def bind_to_cast(self, entity: "_EntityBase"):
         candidates = {}
         mro = entity.cast_template.mro_
         for template, implementation in self.temp_n_impl:
@@ -59,8 +66,13 @@ class _MethodDispatcher:
                            implementation, self.compiler)
 
 class EntityTemplate(AcaciaExpr):
-    def __init__(self, name: str, field_types: dict, field_metas: dict,
-                 methods: dict, parents: list, metas: dict, compiler):
+    def __init__(self, name: str,
+                 field_types: Dict[str, DataType],
+                 field_metas: Dict[str, dict],
+                 methods: Dict[str, "METHODDEF_T"],
+                 parents: List["EntityTemplate"],
+                 metas: Dict[str, AcaciaExpr],
+                 compiler):
         super().__init__(
             DataType.from_type_cls(ETemplateType, compiler), compiler
         )
@@ -70,14 +82,14 @@ class EntityTemplate(AcaciaExpr):
         self._orig_field_types = field_types
         self._orig_field_metas = field_metas
         self._orig_methods = methods
-        self.field_types = {}
-        self.field_metas = {}
-        # methods: list[tuple[EntityTemplate, dict[str, <method>]]]
-        # sorted in MRO order
-        self.methods = []
-        self.method_dispatchers = {}  # type: dict[str, _MethodDispatcher]
-        self.metas = {}
-        self.mro_ = [self]  # Method Resolution Order
+        self.field_types: Dict[str, DataType] = {}
+        self.field_metas: Dict[str, dict] = {}
+        # methods: sorted in MRO order
+        self.methods: \
+            List[Tuple[EntityTemplate, Dict[str, "METHODDEF_T"]]] = []
+        self.method_dispatchers: Dict[str, _MethodDispatcher] = {}
+        self.metas: Dict[str, Any] = {}
+        self.mro_: List[EntityTemplate] = [self]  # Method Resolution Order
         # Handle meta
         # We convert meta `AcaciaExpr`s to Python objects here:
         #  `@type`, `@position` are converted to `str`
@@ -151,7 +163,7 @@ class EntityTemplate(AcaciaExpr):
                     self.method_dispatchers[method] = disp
                     disp.register_inherit(self, parent)
 
-    def register_entity(self, entity):
+    def register_entity(self, entity: "_EntityBase"):
         # Register attributes to and initialize an entity
         # whose template is self.
         # Every entities MUST call their template's `register_entity`
@@ -185,7 +197,7 @@ class EntityTemplate(AcaciaExpr):
                                     type_=str(inst.data_type))
         return inst, cmds
 
-    def is_subtemplate_of(self, other) -> bool:
+    def is_subtemplate_of(self, other: "EntityTemplate") -> bool:
         # Return whether `self` is a subtemplate of `other`. A
         # template itself is considered as a subtemplate of itself.
         # other:EntityTemplate

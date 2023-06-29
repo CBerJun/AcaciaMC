@@ -1,11 +1,12 @@
-# Main file of Acacia Compiler
-from acaciamc.constants import Config
-from acaciamc.error import Error as CompileError
-from acaciamc.compiler import Compiler
+"""Acacia - a programming language for Minecraft Bedrock command dev."""
 
 import argparse
 import os
 import shutil
+
+from acaciamc.constants import Config
+from acaciamc.error import Error as CompileError
+from acaciamc.compiler import Compiler
 
 DESCRIPTION = '''
 Compiler of Acacia, a language that dedicates
@@ -61,7 +62,7 @@ argparser.add_argument(
     help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
 )
 argparser.add_argument(
-    '--encoding', metavar="CODEC",
+    '--encoding', metavar="CODEC", default="utf-8",
     help='encoding of file (default "utf-8")'
 )
 argparser.add_argument(
@@ -107,16 +108,13 @@ if args.entity_name:
     Config.entity_name = args.entity_name
 if args.entity_tag:
     Config.entity_tag = args.entity_tag
-if args.encoding is not None:
-    encoding = args.encoding
-else:
-    encoding = 'utf-8'
+encoding = args.encoding
 
 # --- PATH RELATED ARGS ---
 
 if args.out:
     out_path = os.path.realpath(args.out)
-else: # default out path: ./<name of source>.acaout
+else:  # default out path: ./<name of source>.acaout
     out_path, _ = os.path.splitext(args.file)
     out_path = os.path.realpath(out_path)
     out_path += '.acaout'
@@ -133,7 +131,7 @@ if not os.path.exists(out_path):
 # --- START COMPILE ---
 
 try:
-    Compiler(args.file, open_args = {
+    Compiler(args.file, open_args={
         'encoding': encoding
     }).output(out_path)
 except CompileError as err:
