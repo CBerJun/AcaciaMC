@@ -50,8 +50,7 @@ class AcaciaFunction(AcaciaExpr):
             DataType.from_type_cls(FunctionType, compiler), compiler
         )
         self.name = name
-        self.arg_handler = ArgumentHandler(
-            args, arg_types, arg_defaults, self.compiler)
+        self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
         # Create a `VarValue` for every args according to their types
         # and store them as dict at `self.arg_vars`.
         # Meanwhile, check whether arg types are supported.
@@ -62,8 +61,8 @@ class AcaciaFunction(AcaciaExpr):
                 self.arg_vars[arg] = type_.new_var()
             except NotImplementedError:
                 # type.new_var() is not implemented
-                self.compiler.error(ErrorType.UNSUPPORTED_ARG_TYPE,
-                                    arg=arg, arg_type=type_.name)
+                raise Error(ErrorType.UNSUPPORTED_ARG_TYPE,
+                            arg=arg, arg_type=type_.name)
         # Allocate a var for result value
         self.result_var = returns.new_var()
         # `file`: the target file of function. When it is None,
@@ -93,8 +92,7 @@ class InlineFunction(AcaciaExpr):
         self.node = node
         self.name = node.name
         self.result_var = returns.new_var()
-        self.arg_handler = ArgumentHandler(
-            args, arg_types, arg_defaults, compiler)
+        self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         cmds = self.compiler.current_generator.call_inline_func(
@@ -171,7 +169,7 @@ class BinaryFunction(AcaciaExpr):
             type_ = (type_,)
         if not any(dt.is_type_of(value) for dt in type_):
             # If all the DataType can't match the `value`, raise error
-            self.compiler.error(
+            raise Error(
                 ErrorType.WRONG_ARG_TYPE, arg=arg,
                 expect=', '.join(map(str, type_)), got=str(value.data_type)
             )
@@ -191,7 +189,7 @@ class BinaryFunction(AcaciaExpr):
         if res1 is None and res2 is None:
             return None
         if res1 is not None and res2 is not None:
-            self.compiler.error(ErrorType.ARG_MULTIPLE_VALUES, arg=name)
+            raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=name)
         res = res2 if res1 is None else res1
         return res
 
@@ -207,7 +205,7 @@ class BinaryFunction(AcaciaExpr):
         res = self._find_arg(name)
         # Check
         if res is None:
-            self.compiler.error(ErrorType.MISSING_ARG, arg=name)
+            raise Error(ErrorType.MISSING_ARG, arg=name)
         self._check_arg_type(name, res, type_)
         return res
 
@@ -224,19 +222,16 @@ class BinaryFunction(AcaciaExpr):
     def assert_no_arg(self):
         """Assert there is no argument left."""
         if bool(self._calling_args):
-            self.compiler.error(ErrorType.TOO_MANY_ARGS)
+            raise Error(ErrorType.TOO_MANY_ARGS)
         if bool(self._calling_keywords):
-            self.compiler.error(
+            raise Error(
                 ErrorType.UNEXPECTED_KEYWORD_ARG,
                 arg=', '.join(self._calling_keywords.keys())
             )
 
     def arg_error(self, arg: str, message: str):
         """Raise an argument parsing error."""
-        self.compiler.error(
-            ErrorType.INVALID_BIN_FUNC_ARG,
-            arg=arg, message=message
-        )
+        raise Error(ErrorType.INVALID_BIN_FUNC_ARG, arg=arg, message=message)
 
 METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 

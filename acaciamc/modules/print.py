@@ -176,7 +176,7 @@ class FStringType(Type):
                     arg_pattern.value, arg_fargs, arg_fkws
                 ).parse()
             except _FStrError as err:
-                func.compiler.error(ErrorType.ANY, message = str(err))
+                raise Error(ErrorType.ANY, message=str(err))
             # scan pattern
             return FString(dependencies, json, func.compiler)
         self.attribute_table.set(

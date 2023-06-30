@@ -28,8 +28,7 @@ class Type(AcaciaExpr):
     def __init__(self, compiler: "Compiler"):
         """Override `do_init` instead of this."""
         super().__init__(
-            DataType.from_type(compiler.types.get(TypeType, self), compiler),
-            compiler
+            DataType.from_type(compiler.types.get(TypeType, self)), compiler
         )
 
     def do_init(self):
@@ -83,16 +82,14 @@ class Type(AcaciaExpr):
         # Call `__new__`
         new = self.attribute_table.lookup('__new__')
         if new is None:
-            self.compiler.error(ErrorType.CANT_CREATE_INSTANCE,
-                                type=self.name)
+            raise Error(ErrorType.CANT_CREATE_INSTANCE, type=self.name)
         instance, cmds = new.call(args, keywords)
         # Call initializer of instance if exists
         initializer = instance.attribute_table.lookup('__init__')
         if initializer is not None:
             ret, _cmds = initializer.call(args, keywords)
             if not ret.data_type.raw_matches(NoneType):
-                self.compiler.error(ErrorType.INITIALIZER_RESULT,
-                                    type_=self.name)
+                raise Error(ErrorType.INITIALIZER_RESULT, type_=self.name)
             cmds.extend(_cmds)
         return instance, cmds
 
@@ -192,29 +189,28 @@ class DataType:
      completely, including template for entity, like `int` or
      `entity(Template)`.
     """
-    def __init__(self, type_: Type, is_entity: bool, compiler: "Compiler"):
+    def __init__(self, type_: Type, is_entity: bool):
         """Do not initialize directly, use factory methods."""
         if not isinstance(type_, Type):
-            compiler.error(ErrorType.INVALID_TYPE_SPEC, got=type_.name)
+            raise Error(ErrorType.INVALID_TYPE_SPEC, got=type_.name)
         self.type = type_
         self.is_entity = is_entity
         self.template: Union[None, "EntityTemplate"] = None
 
     @classmethod
-    def from_type(cls, type_: Type, compiler: "Compiler"):
+    def from_type(cls, type_: Type):
         """Generate `DataType` from a `type_`."""
-        return cls(type_, is_entity=False, compiler=compiler)
+        return cls(type_, is_entity=False)
 
     @classmethod
     def from_type_cls(cls, type_: PythonType[Type], compiler: "Compiler"):
         """Generate `DataType` from `type_` class."""
-        return cls(compiler.types[type_], is_entity=False, compiler=compiler)
+        return cls(compiler.types[type_], is_entity=False)
 
     @classmethod
     def from_entity(cls, template: "EntityTemplate", compiler: "Compiler"):
         # Generate `DataType` from an entity with given `template`
-        inst = cls(compiler.types[EntityType],
-                   is_entity=True, compiler=compiler)
+        inst = cls(compiler.types[EntityType], is_entity=True)
         inst.template = template
         return inst
 

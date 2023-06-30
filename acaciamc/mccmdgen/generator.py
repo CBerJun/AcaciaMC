@@ -95,7 +95,10 @@ class Generator(ASTVisitor):
 
     def parse(self):
         """Parse the AST and generate commands."""
-        self.visit(self.node)
+        try:
+            self.visit(self.node)
+        except Error as err:
+            self.error(err)
 
     def parse_as_module(self) -> AcaciaModule:
         """Parse the AST and return it as an `AcaciaModule`."""
@@ -104,12 +107,23 @@ class Generator(ASTVisitor):
         self.current_file.write_debug("## End of module parsing")
         return AcaciaModule(self.current_scope, self.compiler)
 
+    def fix_error_location(self, error: Error):
+        error.set_location(self.processing_node.lineno,
+                           self.processing_node.col)
+
     # --- INTERNAL USE ---
+
+    def error_c(self, *args, **kwds):
+        self.error(Error(*args, **kwds))
+
+    def error(self, error: Error):
+        self.fix_error_location(error)
+        raise error
 
     def check_assignable(self, value: AcaciaExpr):
         """Raise error when an `AcaciaExpr` is unassignable."""
         if not isinstance(value, VarValue):
-            self.compiler.error(ErrorType.UNASSIGNABLE)
+            self.error_c(ErrorType.UNASSIGNABLE)
 
     def register_symbol(self, target_node: AST, target_value: AcaciaExpr):
         """Register a value to a symbol table according to AST.
@@ -124,9 +138,9 @@ class Generator(ASTVisitor):
             object_ = self.visit(target_node.object)
             # The attribute must exists when assigning to it.
             if not object_.attribute_table.is_defined(target_node.attr):
-                self.compiler.error(ErrorType.HAS_NO_ATTRIBUTE,
-                                    value_type=str(object_.data_type),
-                                    attr=target_node.attr)
+                self.error_c(ErrorType.HAS_NO_ATTRIBUTE,
+                             value_type=str(object_.data_type),
+                             attr=target_node.attr)
             object_.attribute_table.set(target_node.attr, target_value)
         else:
             raise TypeError
@@ -134,8 +148,7 @@ class Generator(ASTVisitor):
     def get_result_type(self, node: AnyTypeSpec) -> DataType:
         """Get result `DataType` according to AST."""
         if node is None:
-            return DataType.from_type(
-                self.compiler.types[NoneType], self.compiler)
+            return DataType.from_type_cls(NoneType, self.compiler)
         else:
             return self.visit(node)
 
@@ -241,15 +254,15 @@ class Generator(ASTVisitor):
             try:
                 target = value.data_type.new_var()
             except NotImplementedError:
-                self.compiler.error(ErrorType.UNSUPPORTED_VAR_TYPE,
-                                    var_type=str(value.data_type))
+                self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE,
+                             var_type=str(value.data_type))
             ## register the var to symbol table
             self.register_symbol(node.target, target)
         else:  # for existing name, check if it is assignable
             self.check_assignable(target)
         # check type
         if not target.data_type.matches(value.data_type):
-            self.compiler.error(
+            self.error_c(
                 ErrorType.WRONG_ASSIGN_TYPE,
                 expect=str(target.data_type), got=str(value.data_type)
             )
@@ -293,7 +306,7 @@ class Generator(ASTVisitor):
             if section[0] is StringMode.expression:
                 expr = self.visit(section[1])
                 if not expr.data_type.raw_matches(StringType):
-                    self.compiler.error(
+                    self.error_c(
                         ErrorType.INVALID_CMD_FORMATTING,
                         expr_type=str(expr.data_type)
                     )
@@ -307,8 +320,8 @@ class Generator(ASTVisitor):
         # condition
         condition = self.visit(node.condition)
         if not condition.data_type.raw_matches(BoolType):
-            self.compiler.error(ErrorType.WRONG_IF_CONDITION,
-                                got=str(condition.data_type))
+            self.error_c(ErrorType.WRONG_IF_CONDITION,
+                         got=str(condition.data_type))
         # optimization: if condition is a constant, just run the code
         if isinstance(condition, BoolLiteral):
             run_node = node.body if condition.value else node.else_body
@@ -343,8 +356,8 @@ class Generator(ASTVisitor):
         # condition
         condition = self.visit(node.condition)
         if not condition.data_type.raw_matches(BoolType):
-            self.compiler.error(ErrorType.WRONG_WHILE_CONDITION,
-                                got=str(condition.data_type))
+            self.error_c(ErrorType.WRONG_WHILE_CONDITION,
+                         got=str(condition.data_type))
         # optimization: if condition is always False, ommit
         if isinstance(condition, BoolLiteral):
             if condition.value is False:
@@ -353,7 +366,7 @@ class Generator(ASTVisitor):
                 )
                 return
             else:
-                self.compiler.error(ErrorType.ENDLESS_WHILE_LOOP)
+                self.error_c(ErrorType.ENDLESS_WHILE_LOOP)
         # convert condition to BoolVar
         dependencies, condition = to_BoolVar(condition)
         # body
@@ -413,7 +426,7 @@ class Generator(ASTVisitor):
                 # e.g. `def f(a: int = True)`
                 if (defaults[arg] is not None
                     and not types[arg].is_type_of(defaults[arg])):
-                    self.compiler.error(
+                    self.error_c(
                         ErrorType.UNMATCHED_ARG_DEFAULT_TYPE,
                         arg=arg, arg_type=str(types[arg]),
                         default_type=str(defaults[arg].data_type)
@@ -422,7 +435,7 @@ class Generator(ASTVisitor):
 
     def visit_TypeSpec(self, node: TypeSpec):
         type_ = self.visit(node.content)
-        return DataType.from_type(type_, self.compiler)
+        return DataType.from_type(type_)
 
     def visit_EntityTypeSpec(self, node: EntityTypeSpec):
         if node.template is None:
@@ -480,11 +493,11 @@ class Generator(ASTVisitor):
     def visit_Result(self, node: Result):
         # check
         if self.result_var is None:
-            self.compiler.error(ErrorType.RESULT_OUT_OF_SCOPE)
+            self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
         # visit expr and check type
         expr = self.visit(node.value)
         if not self.result_var.data_type.is_type_of(expr):
-            self.compiler.error(
+            self.error_c(
                 ErrorType.WRONG_RESULT_TYPE,
                 expect=str(self.result_var.data_type),
                 got=str(expr.data_type)
@@ -492,23 +505,29 @@ class Generator(ASTVisitor):
         # write file
         self.current_file.extend(expr.export(self.result_var))
 
+    def _parse_module(self, meta: ModuleMeta):
+        res = self.compiler.parse_module(meta)
+        if isinstance(res, Error):
+            self.error(res)
+        return res
+
     def visit_Import(self, node: Import):
-        module, path = self.compiler.parse_module(node.meta)
+        module, path = self._parse_module(node.meta)
         self.write_debug("Got module from %s" % path)
         self.current_scope.set(node.name, module)
 
     def visit_FromImport(self, node: FromImport):
-        module, path = self.compiler.parse_module(node.meta)
+        module, path = self._parse_module(node.meta)
         self.write_debug("Import from %s" % path)
         for name, alia in node.id2name.items():
             value = module.attribute_table.lookup(name)
             if value is None:
-                self.compiler.error(ErrorType.MODULE_NO_ATTRIBUTE,
-                                    attr=name, module=str(node.meta))
+                self.error_c(ErrorType.MODULE_NO_ATTRIBUTE,
+                             attr=name, module=str(node.meta))
             self.current_scope.set(alia, value)
 
     def visit_FromImportAll(self, node: FromImportAll):
-        module, path = self.compiler.parse_module(node.meta)
+        module, path = self._parse_module(node.meta)
         self.write_debug("Import everything from %s" % path)
         for name, value in module.attribute_table:
             self.current_scope.set(name, value)
@@ -523,8 +542,8 @@ class Generator(ASTVisitor):
         for parent_ast in node.parents:
             parent = self.visit(parent_ast)
             if not parent.data_type.raw_matches(ETemplateType):
-                self.compiler.error(ErrorType.INVALID_ETEMPLATE,
-                                    got=str(parent.data_type))
+                self.error_c(ErrorType.INVALID_ETEMPLATE,
+                             got=str(parent.data_type))
             parents.append(parent)
         # If parent is not specified, use builtin `Object`
         if not parents:
@@ -546,8 +565,7 @@ class Generator(ASTVisitor):
                 # `res` is (mata name, mata value)
                 key, value = res
                 if key in metas:
-                    self.compiler.error(ErrorType.REPEAT_ENTITY_META,
-                                        meta=key)
+                    self.error_c(ErrorType.REPEAT_ENTITY_META, meta=key)
                 metas[key] = value
         # generate the template before 2nd pass, since `self` value
         # needs the template specified.
@@ -580,8 +598,8 @@ class Generator(ASTVisitor):
         try:
             field_meta = data_type.new_entity_field()
         except NotImplementedError:
-            self.compiler.error(ErrorType.UNSUPPORTED_FIELD_TYPE,
-                                field_type=str(data_type))
+            self.error_c(ErrorType.UNSUPPORTED_FIELD_TYPE,
+                         field_type=str(data_type))
         return data_type, field_meta
 
     def visit_EntityMethod(self, node: EntityMethod):
@@ -618,7 +636,7 @@ class Generator(ASTVisitor):
     def visit_Self(self, node: Self):
         v = self.self_value
         if v is None:
-            self.compiler.error(ErrorType.SELF_OUT_OF_SCOPE)
+            self.error_c(ErrorType.SELF_OUT_OF_SCOPE)
         return v
 
     # assignable & bindable
@@ -629,7 +647,7 @@ class Generator(ASTVisitor):
         res = self.current_scope.lookup(node.name)
         # check undef
         if res is None and check_undef:
-            self.compiler.error(ErrorType.NAME_NOT_DEFINED, name=node.name)
+            self.error_c(ErrorType.NAME_NOT_DEFINED, name=node.name)
         # return product
         return res
 
@@ -638,7 +656,7 @@ class Generator(ASTVisitor):
         res = value.attribute_table.lookup(node.attr)
         # check undef
         if res is None and check_undef:
-            self.compiler.error(
+            self.error_c(
                 ErrorType.HAS_NO_ATTRIBUTE,
                 value_type=str(value.data_type), attr=node.attr,
             )
@@ -649,11 +667,11 @@ class Generator(ASTVisitor):
         objective = self.visit(node.objective)
         selector = self.visit(node.selector)
         if not isinstance(objective, String):
-            self.compiler.error(ErrorType.INVALID_RAWSCORE_OBJECTIVE,
-                                got=str(objective.data_type))
+            self.error_c(ErrorType.INVALID_RAWSCORE_OBJECTIVE,
+                         got=str(objective.data_type))
         if not isinstance(selector, String):
-            self.compiler.error(ErrorType.INVALID_RAWSCORE_SELECTOR,
-                                got=str(selector.data_type))
+            self.error_c(ErrorType.INVALID_RAWSCORE_SELECTOR,
+                         got=str(selector.data_type))
         return IntVar(
             objective.value, selector.value,
             compiler=self.compiler, with_quote=False
@@ -747,14 +765,14 @@ class Generator(ASTVisitor):
         template = self.visit(node.template)
         # Make sure `object_` is an entity
         if not object_.data_type.is_entity:
-            self.compiler.error(ErrorType.INVALID_CAST_ENTITY,
-                                got=str(object_.data_type))
+            self.error_c(ErrorType.INVALID_CAST_ENTITY,
+                         got=str(object_.data_type))
         # Make sure `template` is a template
         if not template.data_type.raw_matches(ETemplateType):
-            self.compiler.error(ErrorType.INVALID_ETEMPLATE,
-                                got=str(template.data_type))
+            self.error_c(ErrorType.INVALID_ETEMPLATE,
+                         got=str(template.data_type))
         # Make sure `template` is a super template of `object_`
         if not object_.template.is_subtemplate_of(template):
-            self.compiler.error(ErrorType.INVALID_CAST)
+            self.error_c(ErrorType.INVALID_CAST)
         # Go
         return object_.cast_to(template)

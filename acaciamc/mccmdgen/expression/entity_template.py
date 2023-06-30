@@ -32,7 +32,7 @@ class _MethodDispatcher:
             self.result_var = res_type.new_var()
         else:
             if not self.result_var.data_type.matches(res_type):
-                self.compiler.error(
+                raise Error(
                     ErrorType.OVERRIDE_RESULT_MISMATCH,
                     got=str(res_type), expect=str(self.result_var.data_type),
                     name=implementation.name
@@ -95,12 +95,12 @@ class EntityTemplate(AcaciaExpr):
         #  `@type`, `@position` are converted to `str`
         for name, meta in metas.items():
             if name not in ("type", "position"):
-                self.compiler.error(ErrorType.INVALID_ENTITY_META, meta=name)
+                raise Error(ErrorType.INVALID_ENTITY_META, meta=name)
             # Both `@type` and `@position` requires literal string
             if not isinstance(meta, String):
-                self.compiler.error(ErrorType.ENTITY_META, meta=name,
-                                    msg="should be a literal string, got "
-                                        '"%s"' % str(meta.data_type))
+                raise Error(ErrorType.ENTITY_META, meta=name,
+                            msg='should be a literal string, got "%s"'
+                                % str(meta.data_type))
             self._orig_metas[name] = meta.value
         # Runtime identification tag
         # Mark which template an entity is using at runtime.
@@ -132,15 +132,14 @@ class EntityTemplate(AcaciaExpr):
                                 merge.remove(ts3)
                     break
             else:
-                self.compiler.error(ErrorType.MRO)
+                raise Error(ErrorType.MRO)
         ## Inherit attributes
         # We reverse MRO here because we want the former ones to
         # override latter ones
         for parent in reversed(self.mro_):
             for attr in itertools.chain(field_types, methods):
                 if attr in self.field_types:
-                    self.compiler.error(ErrorType.ATTR_MULTIPLE_DEFS,
-                                        attr=attr)
+                    raise Error(ErrorType.ATTR_MULTIPLE_DEFS, attr=attr)
             self.metas.update(parent._orig_metas)
             self.methods.insert(0, (parent, parent._orig_methods))
             self.field_types.update(parent._orig_field_types)
@@ -193,8 +192,8 @@ class EntityTemplate(AcaciaExpr):
             res, _cmds = initializer.call(args, keywords)
             cmds.extend(_cmds)
             if not res.data_type.raw_matches(NoneType):
-                self.compiler.error(ErrorType.INITIALIZER_RESULT,
-                                    type_=str(inst.data_type))
+                raise Error(ErrorType.INITIALIZER_RESULT,
+                            type_=str(inst.data_type))
         return inst, cmds
 
     def is_subtemplate_of(self, other: "EntityTemplate") -> bool:

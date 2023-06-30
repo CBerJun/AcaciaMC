@@ -116,7 +116,7 @@ class BoolCompare(AcaciaExpr):
         lt, rt = left.data_type, right.data_type
         if not (lt.raw_matches(IntType)
                 and rt.raw_matches(IntType)):
-            compiler.error(
+            raise Error(
                 ErrorType.INVALID_OPERAND,
                 operator={
                     Operator.greater: '>',
@@ -390,7 +390,7 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     # make sure all operands are booleans
     for operand in operands:
         if not operand.data_type.raw_matches(BoolType):
-            compiler.error(
+            raise Error(
                 ErrorType.INVALID_OPERAND, operator='and',
                 operand=repr(str(operand.data_type))
             )
@@ -420,7 +420,7 @@ def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
     def _map(operand):
         if not operand.data_type.raw_matches(BoolType):
-            compiler.error(
+            raise Error(
                 ErrorType.INVALID_OPERAND, operator='or',
                 operand=repr(str(operand.data_type))
             )

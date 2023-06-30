@@ -23,7 +23,7 @@ class BinaryModule(AcaciaExpr):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         except Exception as err:
-            self.compiler.error(ErrorType.IO, message=str(err))
+            raise Error(ErrorType.IO, message=str(err))
         # Call `acacia_build`
         # binary modules should define a callable object named `acacia_build`,
         # which accepts 1 argument `compiler` and should return a dict:

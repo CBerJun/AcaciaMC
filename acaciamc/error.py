@@ -84,17 +84,24 @@ class ErrorType(enum.Enum):
     ANY = '{message}'
 
 class Error(Exception):
-    def __init__(self, err_type: ErrorType, lineno, col, file, **kwargs):
-        # lineno:int & col:int & file:str postion of error
-        # **kwargs:str will be formated to the message
-        self.lineno = lineno
-        self.col = col
+    def __init__(self, err_type: ErrorType, **kwargs):
+        self.lineno = None
+        self.col = None
         self.error_args = kwargs
         self.type = err_type
-        self.file = file
+        self.file = None
         super().__init__()
 
+    def set_file(self, file: str):
+        self.file = file
+
+    def set_location(self, lineno: int, col: int):
+        self.lineno = lineno
+        self.col = col
+
     def __str__(self):
+        assert self.file is not None
+        assert self.lineno is not None
         res = self.type.value  # unformatted error
         res = res.format(**self.error_args)  # formatted
         res = '%s:%d:%d: %s' % (self.file, self.lineno, self.col, res)

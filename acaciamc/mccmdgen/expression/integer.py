@@ -54,7 +54,7 @@ class IntLiteral(AcaciaExpr):
         self.value = value
         # check overflow
         if not INT_MIN <= value <= INT_MAX:
-            self.compiler.error(ErrorType.INT_OVERFLOW)
+            raise Error(ErrorType.INT_OVERFLOW)
 
     def export(self, var: "IntVar"):
         return ['scoreboard players set %s %s' % (var, self)]
@@ -84,8 +84,7 @@ class IntLiteral(AcaciaExpr):
             try:
                 res.value = getattr(res.value, name)(other.value)
             except ArithmeticError as err:
-                self.compiler.error(ErrorType.CONST_ARITHMETIC,
-                                    message=str(err))
+                raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return res
         elif isinstance(other, (IntOpGroup, IntVar)):
             return NotImplemented

@@ -80,8 +80,7 @@ class MusicType(Type):
             try:
                 midi = mido.MidiFile(arg_path.value)
             except Exception as err:
-                func.compiler.error(ErrorType.IO,
-                                    message="MIDI parser: %s" % err)
+                raise Error(ErrorType.IO, message="MIDI parser: %s" % err)
             exec_condition = arg_exec.value
             note_offset = arg_note.value
             looping = arg_loop_intv.value if arg_loop.value else -1
@@ -264,8 +263,8 @@ class Music(AcaciaExpr):
         self.tracks = [t.copy() for t in midi.tracks]
         # Check MIDI type
         if midi.type != 0 and midi.type != 1:
-            self.compiler.error(ErrorType.ANY,
-                message="Unsupported MIDI type: %d" % midi.type)
+            raise Error(ErrorType.ANY,
+                        message="Unsupported MIDI type: %d" % midi.type)
         # Speed settings
         self.bpm = 120
         self.mt_per_beat = midi.ticks_per_beat
@@ -500,8 +499,8 @@ def acacia_build(compiler):
     try:
         import mido
     except ImportError:
-        compiler.error(ErrorType.ANY,
-                       message="Python module 'mido' is required")
+        raise Error(ErrorType.ANY,
+                    message="Python module 'mido' is required")
     schedule = compiler.get_module(ModuleMeta("schedule"))
     register_loop = schedule.attribute_table.lookup("register_loop")
     compiler.add_type(MusicType)

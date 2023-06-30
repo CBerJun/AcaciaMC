@@ -51,16 +51,12 @@ def _min(func: BinaryFunction):
     # Parse args
     args, arg_kw = func.arg_raw()
     if arg_kw:
-        func.compiler.error(
-            ErrorType.ANY, '"min" does not receive keyword arguments'
-        )
+        raise Error(ErrorType.ANY, '"min" does not receive keyword arguments')
     if not args:
-        func.compiler.error(ErrorType.ANY, '"min" needs at least 1 argument')
+        raise Error(ErrorType.ANY, '"min" needs at least 1 argument')
     for arg in args:
         if not arg.data_type.raw_matches(IntType):
-            func.compiler.error(
-                ErrorType.ANY, '"min" arguments should all be int'
-            )
+            raise Error(ErrorType.ANY, '"min" arguments should all be int')
     # Calculate
     ## get first arg
     res = IntOpGroup(args[0], func.compiler)
@@ -78,16 +74,12 @@ def _max(func: BinaryFunction):
     # Parse args
     args, arg_kw = func.arg_raw()
     if arg_kw:
-        func.compiler.error(
-            ErrorType.ANY, '"max" does not receive keyword arguments'
-        )
+        raise Error(ErrorType.ANY, '"max" does not receive keyword arguments')
     if not args:
-        func.compiler.error(ErrorType.ANY, '"max" needs at least 1 argument')
+        raise Error(ErrorType.ANY, '"max" needs at least 1 argument')
     for arg in args:
         if not arg.data_type.raw_matches(IntType):
-            func.compiler.error(
-                ErrorType.ANY, '"max" arguments should all be int'
-            )
+            raise Error(ErrorType.ANY, '"max" arguments should all be int')
     # Calculate
     ## get first arg
     res = IntOpGroup(args[0], func.compiler)

@@ -130,16 +130,10 @@ class Compiler:
                 os.path.join(path, 'tick.json')
             )
 
-    def error(self, error_type: ErrorType,
-              lineno=None, col=None, **kwargs):
-        """Raise an error."""
-        if lineno is None:
-            lineno = self.current_generator.processing_node.lineno
-        if col is None:
-            col = self.current_generator.processing_node.col
-        raise Error(
-            error_type, lineno, col, file=self._current_file, **kwargs
-        )
+    def raise_error(self, error: Error):
+        self.current_generator.fix_error_location(error)
+        error.set_file(self._current_file)
+        raise error
 
     def add_file(self, file: MCFunctionFile):
         """Add a file to "libs" folder."""
@@ -264,11 +258,13 @@ class Compiler:
                     return path
         return None
 
-    def parse_module(self, meta: ModuleMeta):
+    def parse_module(self, meta: ModuleMeta) -> Tuple[AcaciaExpr, str]:
         """Parse and get a module and its path."""
         path = self.find_module(meta)
         if path is None:
-            self.error(ErrorType.MODULE_NOT_FOUND, module=str(meta))
+            self.raise_error(
+                Error(ErrorType.MODULE_NOT_FOUND, module=str(meta))
+            )
         # Get the module accoding to path
         for p in self._cached_modules:
             # Return cached if exists
@@ -302,7 +298,7 @@ class Compiler:
         # Check if the module is being loading (prevent circular import)
         for p in self._loading_files:
             if os.path.samefile(p, path):
-                self.error(ErrorType.CIRCULAR_PARSE, file_=path)
+                self.raise_error(Error(ErrorType.CIRCULAR_PARSE, file_=path))
         src = self._read_file(path)
         oldf = self._current_file
         oldg = self.current_generator
@@ -315,7 +311,11 @@ class Compiler:
             main_file=self.file_main,
             compiler=self
         )
-        yield self.current_generator
+        try:
+            yield self.current_generator
+        except Error as err:
+            err.set_file(path)
+            raise err
         self._current_file = oldf
         self.current_generator = oldg
         self._loading_files.pop()
@@ -328,7 +328,7 @@ class Compiler:
             with open(path, 'r', **self.OPEN_ARGS) as f:
                 return f.read()
         except Exception as err:
-            self.error(ErrorType.IO, message=str(err))
+            self.raise_error(Error(ErrorType.IO, message=str(err)))
 
     def _write_file(self, content: str, path: str):
         """write `content` to `path`."""
@@ -338,7 +338,7 @@ class Compiler:
             with open(path, 'w', **self.OPEN_ARGS) as f:
                 f.write(content)
         except Exception as err:
-            self.error(ErrorType.IO, message=str(err))
+            self.raise_error(Error(ErrorType.IO, message=str(err)))
 
     def _write_mcfunction(self, file: MCFunctionFile, path: str):
         """Write content of `file` to somewhere in output `path`

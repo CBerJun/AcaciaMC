@@ -59,9 +59,9 @@ def _operator_class(cls):
     ("operator methods" can be seen below in `OP2SHOW_NAME`)
     This is used by `AcaciaExpr` only
     - when it is defined, `TypeError` that it raised will be caught
-      and do `self.compiler.error` instead.
-    - when it is undefined, define it and it will directly run
-      `self.compiler.error`.
+      and raise an `Error` instead.
+    - when it is undefined, define it and it will directly raise an
+      `Error`.
     """
     # `OP2SHOW_NAME`: method name to representation user sees.
     OP2SHOW_NAME = {
@@ -90,7 +90,7 @@ def _operator_class(cls):
     }
     def _handle(func: Union[None, Callable], show_name: str):
         def _error(self: "AcaciaExpr", *args, **kwargs):
-            self.compiler.error(
+            raise Error(
                 ErrorType.INVALID_OPERAND,
                 operator=show_name,
                 operand=', '.join(
@@ -179,8 +179,7 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
          2nd element: Commands to run
         If this is not implemented, then the object is uncallable.
         """
-        self.compiler.error(ErrorType.UNCALLABLE,
-                            expr_type=str(self.data_type))
+        raise Error(ErrorType.UNCALLABLE, expr_type=str(self.data_type))
 
     def export(self, var: "VarValue") -> List[str]:
         """Return the commands that assigns value of `self` to `var`.
@@ -193,8 +192,7 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
 class ArgumentHandler:
     """A tool to match function arguments against a given definition."""
     def __init__(self, args: List[str], arg_types: Dict[str, "DataType"],
-                 arg_defaults: Dict[str, Union[AcaciaExpr, None]],
-                 compiler: "Compiler"):
+                 arg_defaults: Dict[str, Union[AcaciaExpr, None]]):
         """`args`, `arg_types` and `arg_defaults` decide the expected
         pattern.
         """
@@ -207,7 +205,6 @@ class ArgumentHandler:
             if value is None:
                 del self.arg_defaults[arg]
         self.ARG_LEN = len(self.args)
-        self.compiler = compiler
 
     def match(self, args: ARGS_T,
               keywords: KEYWORDS_T) -> Dict[str, AcaciaExpr]:
@@ -215,14 +212,14 @@ class ArgumentHandler:
         Return a `dict` mapping names to argument value.
         """
         if len(args) > self.ARG_LEN:
-            self.compiler.error(ErrorType.TOO_MANY_ARGS)
+            raise Error(ErrorType.TOO_MANY_ARGS)
         res = dict.fromkeys(self.args)
         # util
         def _check_arg_type(arg: str, value: AcaciaExpr):
             # check if `arg` got the correct type of `value`
             t = self.arg_types[arg]
             if (t is not None) and (not t.matches(value.data_type)):
-                self.compiler.error(
+                raise Error(
                     ErrorType.WRONG_ARG_TYPE, arg=arg,
                     expect=str(t), got=str(value.data_type)
                 )
@@ -235,9 +232,9 @@ class ArgumentHandler:
         for arg, value in keywords.items():
             # check multiple values of the same var
             if arg not in self.args:
-                self.compiler.error(ErrorType.UNEXPECTED_KEYWORD_ARG, arg=arg)
+                raise Error(ErrorType.UNEXPECTED_KEYWORD_ARG, arg=arg)
             if res[arg] is not None:
-                self.compiler.error(ErrorType.ARG_MULTIPLE_VALUES, arg=arg)
+                raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=arg)
             _check_arg_type(arg, value)
             res[arg] = value
         # if any args are missing use default if exists, else error
@@ -246,7 +243,7 @@ class ArgumentHandler:
                 if arg in self.arg_defaults:
                     res[arg] = self.arg_defaults[arg]
                 else:
-                    self.compiler.error(ErrorType.MISSING_ARG, arg=arg)
+                    raise Error(ErrorType.MISSING_ARG, arg=arg)
         return res
 
 class VarValue(AcaciaExpr):
