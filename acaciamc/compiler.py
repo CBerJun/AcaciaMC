@@ -304,14 +304,12 @@ class Compiler:
         oldg = self.current_generator
         self._current_file = path
         self._loading_files.append(path)
-        self.current_generator = Generator(
-            node=Parser(
-                Tokenizer(src, path)
-            ).module(),
-            main_file=self.file_main,
-            compiler=self
-        )
         try:
+            node = Parser(Tokenizer(src)).module()
+            self.current_generator = Generator(
+                node=node, main_file=self.file_main,
+                compiler=self
+            )
             yield self.current_generator
         except Error as err:
             err.set_file(path)

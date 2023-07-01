@@ -89,7 +89,7 @@ class ASTVisualizer(ASTVisitor):
 
 def test_tokenize(src: str):
     print('===TOKENIZER===')
-    tk = Tokenizer(src, "<unknown>")
+    tk = Tokenizer(src)
     while True:
         token = tk.get_next_token()
         print(token)
@@ -98,7 +98,7 @@ def test_tokenize(src: str):
 
 def test_parser(src: str):
     print('===PARSER===')
-    parser = Parser(Tokenizer(src, "<unknown>"))
+    parser = Parser(Tokenizer(src))
     visualizer = ASTVisualizer(parser.module())
     print(visualizer.get_string())
 
@@ -160,7 +160,11 @@ entity X:
 
 entity Y extends X:
     def get():
-        result self@X.get() + 1
+        result X@self.get() + 1
 '''
 
-test(entity_test)
+try:
+    test(entity_test)
+except Error as err:
+    err.set_file("<testsrc>")
+    print("Error:", err)

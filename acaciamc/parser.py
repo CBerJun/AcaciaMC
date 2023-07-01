@@ -12,7 +12,6 @@ from acaciamc.constants import *
 class Parser:
     def __init__(self, tokenizer: Tokenizer):
         self.tokenizer = tokenizer
-        self.FILE = tokenizer.FILE
         self.current_token = self.tokenizer.get_next_token()
         self.next_token = None
         self.current_indent = 0
@@ -25,11 +24,13 @@ class Parser:
         }
 
     def error(self, err_type: ErrorType, lineno=None, col=None, **kwargs):
-        lineno = self.current_pos['lineno'] if lineno is None else lineno
-        col = self.current_pos['col'] if col is None else col
-        raise Error(err_type,
-                    lineno=lineno, col=col, file=self.FILE,
-                    **kwargs)
+        if lineno is None:
+            lineno = self.current_pos['lineno']
+        if col is None:
+            col = self.current_pos['col']
+        err = Error(err_type, **kwargs)
+        err.set_location(lineno, col)
+        raise err
 
     def eat(self, expect_token_type: Optional[TokenType] = None):
         """Move to next token.

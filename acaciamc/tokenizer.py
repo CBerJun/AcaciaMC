@@ -145,10 +145,9 @@ class CommandToken(Token):
         self._dump_text()
 
 class Tokenizer:
-    def __init__(self, src: str, file: str):
+    def __init__(self, src: str):
         """src: source code"""
         self.src = src
-        self.FILE = file
         self.current_char = ''
         self.current_lineno = 1
         self.current_col = 0
@@ -162,11 +161,13 @@ class Tokenizer:
         self.forward()
 
     def error(self, err_type: ErrorType, lineno=None, col=None, **kwargs):
-        lineno = self.current_lineno if lineno is None else lineno
-        col = self.current_col if col is None else col
-        raise Error(
-            err_type, lineno=lineno, col=col, file=self.FILE, **kwargs
-        )
+        if lineno is None:
+            lineno = self.current_lineno
+        if col is None:
+            col = self.current_col
+        err = Error(err_type, **kwargs)
+        err.set_location(lineno, col)
+        raise err
 
     def forward(self):
         """Read next char and push pointer."""
@@ -448,7 +449,7 @@ class Tokenizer:
                 self.forward()
             self.forward()  # skip "}"
             # create the Tokenizer
-            tokenizer = Tokenizer(expr_str, self.FILE)
+            tokenizer = Tokenizer(expr_str)
             tokenizer.current_lineno = start_ln
             tokenizer.current_col = start_col
             tokenizer.get_next_token()  # skip line_begin token
