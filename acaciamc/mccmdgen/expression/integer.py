@@ -86,9 +86,7 @@ class IntLiteral(AcaciaExpr):
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return res
-        elif isinstance(other, (IntOpGroup, IntVar)):
-            return NotImplemented
-        raise TypeError
+        return NotImplemented
 
     def __add__(self, other):
         return self._bin_op(other, '__add__')
@@ -129,12 +127,10 @@ class IntVar(VarValue):
 
     def _bin_op(self, other, name: str):
         # `name` is method name
-        if isinstance(other, IntOpGroup):
-            return NotImplemented
-        elif isinstance(other, (IntLiteral, IntVar)):
+        if isinstance(other, (IntLiteral, IntVar)):
             res = IntOpGroup(self, self.compiler)
             return getattr(res, name)(other)
-        raise TypeError
+        return NotImplemented
 
     def __add__(self, other):
         return self._bin_op(other, '__add__')
@@ -153,10 +149,8 @@ class IntVar(VarValue):
 
     def _r_bin_op(self, other, name):
         if isinstance(other, IntLiteral):
-            return getattr(
-                IntOpGroup(other, self.compiler), name
-            )(self)
-        raise TypeError
+            return getattr(IntOpGroup(other, self.compiler), name)(self)
+        return NotImplemented
 
     def __radd__(self, other):
         return self._r_bin_op(other, '__add__')
@@ -323,7 +317,7 @@ class IntOpGroup(AcaciaExpr):
                 operator, res._add_lib(other)
             ))
         else:
-            raise TypeError
+            return NotImplemented
         return res
 
     def _mul_div_mod(self, other, operator: str):
@@ -345,7 +339,7 @@ class IntOpGroup(AcaciaExpr):
                 operator, res._add_lib(other)
             ))
         else:
-            raise TypeError
+            return NotImplemented
         return res
 
     def __add__(self, other):
@@ -366,16 +360,14 @@ class IntOpGroup(AcaciaExpr):
         # a (+ or *) b is b (+ or *) a
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(self, name)(other)
-        raise TypeError
+        return NotImplemented
 
     def _r_sub_div_mod(self, other, name):
         # Convert `other` to `IntOpGroup` and use this to handle this
         # operation.
         if isinstance(other, (IntLiteral, IntVar)):
-            return getattr(
-                IntOpGroup(other, self.compiler), name
-            )(self)
-        raise TypeError
+            return getattr(IntOpGroup(other, self.compiler), name)(self)
+        return NotImplemented
 
     def __radd__(self, other):
         return self._r_add_mul(other, '__add__')

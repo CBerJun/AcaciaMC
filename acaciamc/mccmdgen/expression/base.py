@@ -54,81 +54,13 @@ def export_need_tmp(func):
         return cmds
     return _decorated
 
-def _operator_class(cls):
-    """class decorator that do the following things to operator methods:
-    ("operator methods" can be seen below in `OP2SHOW_NAME`)
-    This is used by `AcaciaExpr` only
-    - when it is defined, `TypeError` that it raised will be caught
-      and raise an `Error` instead.
-    - when it is undefined, define it and it will directly raise an
-      `Error`.
-    """
-    # `OP2SHOW_NAME`: method name to representation user sees.
-    OP2SHOW_NAME = {
-        # unary
-        '__pos__': 'unary +',
-        '__neg__': 'unary -',
-        'not_': 'not',
-        # binary
-        '__add__': '+',
-        '__sub__': '-',
-        '__mul__': '*',
-        '__floordiv__': '/',
-        '__mod__': '%',
-        # don't forget __rxxx__ methods
-        '__radd__': '+',
-        '__rsub__': '-',
-        '__rmul__': '*',
-        '__rfloordiv__': '/',
-        '__rmod__': '%',
-        # augmented assign
-        'iadd': '+=',
-        'isub': '-=',
-        'imul': '*=',
-        'idiv': '/=',
-        'imod': '%=',
-    }
-    def _handle(func: Union[None, Callable], show_name: str):
-        def _error(self: "AcaciaExpr", *args, **kwargs):
-            raise Error(
-                ErrorType.INVALID_OPERAND,
-                operator=show_name,
-                operand=', '.join(
-                    repr(str(x.data_type))
-                    for x in (self, ) + args + tuple(kwargs.values())
-                )
-            )
-        def _new(self: "AcaciaExpr", *args, **kwargs):
-            try:
-                return func(self, *args, **kwargs)
-            except TypeError:
-                _error(self, *args, **kwargs)
-
-        if func is None:
-            # For undefined ones, just run `_error`
-            return _error
-        return _new
-    # Start
-    for name, show_name in OP2SHOW_NAME.items():
-        old = getattr(cls, name, None)
-        setattr(cls, name, _handle(old, show_name))
-    return cls
-
 ### --- END UTILS --- ###
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
 CALLRET_T = Tuple["AcaciaExpr", List[str]]  # Result
 
-class _AcaciaExprMeta(type):
-    """Decorate all the subclasses of `AcaciaExpr` with
-    `_operator_class`.
-    """
-    def __new__(cls, *args, **kwargs):
-        cls_instance = super().__new__(cls, *args, **kwargs)
-        return _operator_class(cls_instance)
-
-class AcaciaExpr(metaclass=_AcaciaExprMeta):
+class AcaciaExpr:
     """Base class for EVERYTHING that represents an Acacia expression.
     NOTE Contributer Guide:
     There are 2 types of Acacia data types:
@@ -166,6 +98,18 @@ class AcaciaExpr(metaclass=_AcaciaExprMeta):
      - All the AcaciaExprs of `int` type implements `export`.
      - `IntType` does have a `new_var` method, which creates a new
      `IntVar`.
+
+    To implement operator for your type, here are some methods:
+     - __add__, __sub__, __mul__, __floordiv__, __mod__: represents
+       binary +, -, *, /, %, respectively. See also __radd__,
+       __rsub__, etc.
+     - __pos__, __neg__, not_: represents unary +, - and "not",
+       respectively.
+     - iadd, isub, imul, idiv, imod: represents +=, -=, *=, /=, %=
+       respectively.
+    When you are not satisfied with input operand type, please raise
+    `TypeError`, EXCEPT for binary operators (return `NotImplemented`
+    instead).
     """
     def __init__(self, type_: "DataType", compiler: "Compiler"):
         self.compiler = compiler

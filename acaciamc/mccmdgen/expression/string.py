@@ -12,6 +12,8 @@ class String(AcaciaExpr):
         )
         self.value = value
 
-    def __add__(self, other: "String"):
+    def __add__(self, other):
         """Adding strings will connect them."""
-        return String(self.value + other.value, self.compiler)
+        if isinstance(other, String):
+            return String(self.value + other.value, self.compiler)
+        return NotImplemented

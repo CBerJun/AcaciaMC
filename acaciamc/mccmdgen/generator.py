@@ -2,8 +2,9 @@
 
 __all__ = ['MCFunctionFile', 'Generator']
 
-from typing import Union, TYPE_CHECKING, Optional, List, Tuple
+from typing import Union, TYPE_CHECKING, Optional, List, Tuple, Callable
 import contextlib
+import operator as builtin_op
 
 from acaciamc.ast import *
 from acaciamc.constants import Config
@@ -275,16 +276,17 @@ class Generator(ASTVisitor):
         self.check_assignable(target)
         value = self.visit(node.value)
         # call target's methods
-        OP2METHOD = {
-            Operator.add: 'iadd',
-            Operator.minus: 'isub',
-            Operator.multiply: 'imul',
-            Operator.divide: 'idiv',
-            Operator.mod: 'imod'
+        M = {
+            Operator.add: ('+=', 'iadd'),
+            Operator.minus: ('-=', 'isub'),
+            Operator.multiply: ('*=', 'imul'),
+            Operator.divide: ('/=', 'idiv'),
+            Operator.mod: ('%=', 'imod')
         }
-        self.current_file.extend(
-            getattr(target, OP2METHOD[node.operator])(value)
-        )
+        operator, method = M[node.operator]
+        self.current_file.extend(self._wrap_method_op(
+            operator, method, target, value
+        ))
 
     def visit_MacroBind(self, node: MacroBind):
         # analyze value
@@ -679,28 +681,50 @@ class Generator(ASTVisitor):
 
     # operators
 
+    def _wrap_op(self, operator: str, impl: Callable, *operands: AcaciaExpr):
+        try:
+            return impl(*operands)
+        except TypeError:
+            raise Error(
+                ErrorType.INVALID_OPERAND,
+                operator=operator,
+                operand=", ".join(
+                    '"%s"' % str(operand.data_type)
+                    for operand in operands
+                )
+            )
+
+    def _wrap_method_op(self, operator: str, method: str,
+                        owner: AcaciaExpr, *operands: AcaciaExpr):
+        def _empty_dummy(self, *operands):
+            raise TypeError
+        return self._wrap_op(
+            operator, getattr(type(owner), method, _empty_dummy),
+            owner, *operands
+        )
+
     def visit_UnaryOp(self, node: UnaryOp):
         operand = self.visit(node.operand)
         if node.operator is Operator.positive:
-            return + operand
+            return self._wrap_op("unary +", builtin_op.pos, operand)
         elif node.operator is Operator.negative:
-            return - operand
+            return self._wrap_op("unary -", builtin_op.neg, operand)
         elif node.operator is Operator.not_:
-            return operand.not_()
+            return self._wrap_method_op("not", "not_", operand)
         raise TypeError
 
     def visit_BinOp(self, node: BinOp):
         left, right = self.visit(node.left), self.visit(node.right)
         if node.operator is Operator.add:
-            return left + right
+            return self._wrap_op("+", builtin_op.add, left, right)
         elif node.operator is Operator.minus:
-            return left - right
+            return self._wrap_op("-", builtin_op.sub, left, right)
         elif node.operator is Operator.multiply:
-            return left * right
+            return self._wrap_op("*", builtin_op.mul, left, right)
         elif node.operator is Operator.divide:
-            return left // right
+            return self._wrap_op("/", builtin_op.floordiv, left, right)
         elif node.operator is Operator.mod:
-            return left % right
+            return self._wrap_op("%", builtin_op.mod, left, right)
         raise TypeError
 
     def visit_CompareOp(self, node: CompareOp):

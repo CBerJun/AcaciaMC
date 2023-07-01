@@ -30,6 +30,8 @@ class ErrorType(enum.Enum):
     HAS_NO_ATTRIBUTE = '"{value_type}" objects have no attribute "{attr}"'
     MODULE_NO_ATTRIBUTE = 'Module "{module}" does not have attribute "{attr}"'
     INVALID_OPERAND = 'Invalid operand(s) for "{operator}": {operand}'
+    INVALID_BOOLOP_OPERAND = 'Invalid operand for boolean operator ' \
+        '"{operator}": "{operand}"'
     UNSUPPORTED_VAR_TYPE = 'Can\'t define variables of "{var_type}" type; ' \
         'To define alias to expressions, use "alia -> expr"'
     UNSUPPORTED_ARG_TYPE = 'Argument "{arg}" can\'t be "{arg_type}" type'

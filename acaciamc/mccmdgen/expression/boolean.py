@@ -126,7 +126,7 @@ class BoolCompare(AcaciaExpr):
                     Operator.equal_to: '==',
                     Operator.unequal_to: '!='
                 }[operator],
-                operand='%r, %r' % (str(lt), str(rt))
+                operand='"%s", "%s"' % (lt, rt)
             )
         # NOTE if one of `self.left` and `self.right` is `IntLiteral`,
         # always make sure that `IntLiteral` on the right
@@ -391,8 +391,8 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     for operand in operands:
         if not operand.data_type.raw_matches(BoolType):
             raise Error(
-                ErrorType.INVALID_OPERAND, operator='and',
-                operand=repr(str(operand.data_type))
+                ErrorType.INVALID_BOOLOP_OPERAND, operator='and',
+                operand=str(operand.data_type)
             )
     ## Purpose 2. to do these optimizations:
     literals = [operand for operand in operands
@@ -421,8 +421,8 @@ def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     def _map(operand):
         if not operand.data_type.raw_matches(BoolType):
             raise Error(
-                ErrorType.INVALID_OPERAND, operator='or',
-                operand=repr(str(operand.data_type))
+                ErrorType.INVALID_BOOLOP_OPERAND, operator='or',
+                operand=str(operand.data_type)
             )
         return operand.not_()
     inverted_operands = list(map(_map, operands))

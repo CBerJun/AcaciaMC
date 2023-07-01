@@ -218,7 +218,7 @@ class FString(AcaciaExpr):
             # connect json
             res.json.extend(other.json)
         else:
-            raise TypeError
+            return NotImplemented
         return res
 
     def __radd__(self, other):
