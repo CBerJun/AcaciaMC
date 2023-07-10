@@ -69,7 +69,10 @@ class Compiler:
         # builtin types
         for name, cls in (
             ('int', IntType),
-            ('bool', BoolType)
+            ('bool', BoolType),
+            ('Pos', PosType),
+            ('Rot', RotType),
+            ('Offset', PosOffsetType),
         ):
             self.builtins.set(name, self.types[cls])
         # builtin names

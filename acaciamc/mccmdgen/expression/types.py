@@ -2,7 +2,8 @@
 e.g. "int" is a "type".
 """
 
-from typing import Tuple, TYPE_CHECKING, Type as PythonType, Union
+from typing import Tuple, TYPE_CHECKING, Type as PythonType, Union, List
+
 try:  # Python 3.8+
     from typing import final
 except ImportError:
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
+
+DEFAULT_ANCHOR = "feet"
 
 class Type(AcaciaExpr):
     """Base class for type of a variable that is a type
@@ -181,6 +184,162 @@ class EntityType(Type):
             self.compiler.add_tmp_entity(var)
         return var
 
+class FloatType(Type):
+    name = "float"
+
+class PosType(Type):
+    name = "Pos"
+
+    def do_init(self):
+        self.attribute_table.set(
+            "OVERWORLD", String("overworld", self.compiler)
+        )
+        self.attribute_table.set("NETHER", String("nether", self.compiler))
+        self.attribute_table.set("THE_END", String("the_end", self.compiler))
+        self.attribute_table.set("FEET", String("feet", self.compiler))
+        self.attribute_table.set("EYES", String("eyes", self.compiler))
+        self.attribute_table.set("X", String("x", self.compiler))
+        self.attribute_table.set("Y", String("y", self.compiler))
+        self.attribute_table.set("Z", String("z", self.compiler))
+        def _new(func: BinaryFunction):
+            """
+            Pos(entity, [str]):
+                position of entity. `str` is anchor (`Pos.EYES` or
+                `Pos.FEET`).
+            Pos(Pos):
+                make a copy of another `Pos`.
+            Pos(int-literal, int-literal, int-literal):
+                absolute position.
+            """
+            args, kwds = func.arg_raw()
+            if kwds:
+                raise Error(ErrorType.ANY,
+                            '"Pos" does not accept keyword arguments')
+            L = len(args)
+            cmds = []
+            if L == 1:
+                arg = args[0]
+                if arg.data_type.raw_matches(EntityType):
+                    inst = Position(func.compiler)
+                    inst.context.append("at %s" % arg)
+                    inst.context.append("anchored %s" % DEFAULT_ANCHOR)
+                elif arg.data_type.raw_matches(PosType):
+                    inst = arg.copy()
+                else:
+                    func.arg_error("#1", 'must be an entity or another "Pos"')
+            elif L == 2:
+                arg, arg_anchor = args
+                if not arg_anchor.data_type.raw_matches(StringType):
+                    func.arg_error("#2", 'must be a string showing anchor')
+                anchor = arg_anchor.value
+                if arg.data_type.is_entity:
+                    inst = Position(func.compiler)
+                    inst.context.append("at %s" % arg)
+                    inst.context.append("anchored %s" % anchor)
+                else:
+                    func.arg_error("#1", "must be an entity")
+            elif L == 3:
+                offset = PosOffset(func.compiler)
+                for i, arg in enumerate(args):
+                    if isinstance(arg, IntLiteral):
+                        arg = Float.from_int(arg)
+                    if not arg.data_type.raw_matches(FloatType):
+                        func.arg_error("#%d" % (i + 1),
+                                       "must be an int literal or float")
+                    offset.set(i, arg, CoordinateType.ABSOLUTE)
+                inst = Position(func.compiler)
+                _, cmds = inst.attribute_table.lookup("apply").call(
+                    [offset], {}
+                )
+            else:
+                raise Error(ErrorType.ANY,
+                            message='"Pos" takes 1 to 3 arguments')
+            return inst, cmds
+        self.attribute_table.set(
+            '__new__', BinaryFunction(_new, self.compiler)
+        )
+
+class PosOffsetType(Type):
+    name = "Offset"
+
+    def do_init(self):
+        def _new(func: BinaryFunction):
+            """Offset(): New object with no offset (~ ~ ~)."""
+            func.assert_no_arg()
+            return PosOffset(func.compiler)
+        self.attribute_table.set(
+            "__new__", BinaryFunction(_new, self.compiler)
+        )
+        def _local(func: BinaryFunction):
+            """Offset.local(x, y, z): New object using local coordinate."""
+            args_xyz: List[AcaciaExpr] = []
+            for name in ("left", "up", "front"):
+                arg = func.arg_optional(
+                    name, Float(0.0, func.compiler), (FloatType, IntType)
+                )
+                if arg.data_type.raw_matches(IntType):
+                    if not isinstance(arg, IntLiteral):
+                        func.arg_error(name, "integer must be literal")
+            func.assert_no_arg()
+            for i, arg in enumerate(args_xyz):
+                if isinstance(arg, IntLiteral):
+                    args_xyz[i] = Float.from_int(arg)
+            return PosOffset.local(*args_xyz, func.compiler)
+        self.attribute_table.set(
+            "local", BinaryFunction(_local, self.compiler)
+        )
+
+class RotType(Type):
+    name = "Rot"
+
+    def do_init(self):
+        def _new(func: BinaryFunction):
+            """
+            Rot(entity): rotation of an entity.
+            Rot(int-literal, int-literal): absolute rotation
+            """
+            args, kwds = func.arg_raw()
+            if kwds:
+                raise Error(ErrorType.ANY,
+                            '"Rot" does not accept keyword arguments')
+            L = len(args)
+            args_tuple = tuple(args)
+            if L == 1:
+                if not args[0].data_type.is_entity:
+                    func.arg_error("#1", "must be an entity")
+                inst = Rotation(func.compiler)
+                inst.context.append("rotated as %s" % args_tuple)
+            elif L == 2:
+                for i, arg in enumerate(args):
+                    if not (arg.data_type.raw_matches(FloatType)
+                            or isinstance(arg, IntLiteral)):
+                        func.arg_error("#%d" % (i + 1),
+                                       "must be an int literal or float")
+                inst = Rotation(func.compiler)
+                inst.context.append("rotated %s %s" % args_tuple)
+            else:
+                raise Error(ErrorType.ANY,
+                            message='"Rot" takes 1 or 2 arguments')
+            return inst
+        self.attribute_table.set(
+            "__new__", BinaryFunction(_new, self.compiler)
+        )
+        def _face_entity(func: BinaryFunction):
+            """Rot.face_entity(target: entity): facing `target`."""
+            arg = func.arg_require("target", EntityType)
+            arg_anchor = func.arg_optional(
+                "anchor", String(DEFAULT_ANCHOR, func.compiler), StringType
+            )
+            func.assert_no_arg()
+            inst = Rotation(func.compiler)
+            inst.context.append(
+                "facing entity %s %s" % (arg, arg_anchor.value)
+            )
+            return inst
+        self.attribute_table.set(
+            "face_entity", BinaryFunction(_face_entity, self.compiler)
+        )
+
 class DataType:
     """Data type like `int`, `bool` or entity like `entity(Template)`.
     WHAT'S THE FIFFERENCE BETWEEN `Type` AND THIS?
@@ -209,7 +368,7 @@ class DataType:
 
     @classmethod
     def from_entity(cls, template: "EntityTemplate", compiler: "Compiler"):
-        # Generate `DataType` from an entity with given `template`
+        """Generate `DataType` from an entity with given `template`."""
         inst = cls(compiler.types[EntityType], is_entity=True)
         inst.template = template
         return inst
@@ -260,10 +419,16 @@ from .boolean import BoolVar, BoolLiteral, to_BoolVar
 from .integer import IntVar, IntLiteral
 from .none import NoneVar
 from .entity import TaggedEntity
+from .position_offset import PosOffset, CoordinateType
+from .position import Position
+from .float_ import Float
+from .string import String
+from .rotation import Rotation
 
 BUILTIN_TYPES = (
     TypeType, IntType, BoolType, FunctionType, NoneType, StringType,
-    ModuleType, ETemplateType, EntityType
+    ModuleType, ETemplateType, EntityType, FloatType, PosType, PosOffsetType,
+    RotType
 )
 
 __all__ = [

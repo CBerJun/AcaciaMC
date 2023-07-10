@@ -163,8 +163,14 @@ entity Y extends X:
         result X@self.get() + 1
 '''
 
+decimal_test = '''
+1.2  # 1.2
+02.foo  # (2).foo
+0x10.f  # (16).f (float does not support hex form)
+'''
+
 try:
-    test(entity_test)
+    test(decimal_test)
 except Error as err:
     err.set_file("<testsrc>")
     print("Error:", err)

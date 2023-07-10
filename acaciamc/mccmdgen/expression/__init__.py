@@ -9,3 +9,7 @@ from .string import *
 from .none import *
 from .entity_template import *
 from .entity import *
+from .float_ import *
+from .position import *
+from .position_offset import *
+from .rotation import *

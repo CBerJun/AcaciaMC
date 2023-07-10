@@ -2,7 +2,9 @@
 
 __all__  = ['TokenType', 'Token', 'Tokenizer', 'StringMode']
 
+from typing import Union
 import enum
+
 from acaciamc.error import *
 
 class TokenType(enum.Enum):
@@ -49,6 +51,7 @@ class TokenType(enum.Enum):
     # Every tuple in list means a part of string, where mode can be:
     #  text: Normal text
     #  expression: An formatted expression (e.g. "Value: ${expr}")
+    float_ = 'FLOAT'  # value:float = this float
     ## id
     identifier = 'IDENTIFIER'  # value:str = this id
     # keywords
@@ -253,7 +256,7 @@ class Tokenizer:
             self.written_line_begin = True
             return self.handle_line_begin()
         if self.current_char.isdecimal():
-            return self.handle_integer()
+            return self.handle_number()
         elif self.current_char.isalpha() or self.current_char == '_':
             return self.handle_name()
         elif self.current_char == '/':
@@ -317,8 +320,12 @@ class Tokenizer:
             self.forward()
         return Token(TokenType.line_begin, value=count, lineno=ln, col=0)
 
-    def handle_integer(self):
-        """Read an INTEGER token."""
+    @staticmethod
+    def _isdecimal(char: Union[str, None]):
+        return char is not None and char.isdecimal()
+
+    def handle_number(self):
+        """Read an INTEGER or a FLOAT token."""
         res = ''
         ln, col = self.current_lineno, self.current_col
         ## decide base
@@ -342,13 +349,23 @@ class Tokenizer:
                and (self.current_char.upper() in valid_chars)):
             res += self.current_char
             self.forward()
-        ## convert to int
-        if not res:  # if integer is empty
-            self.error(ErrorType.INTEGER_REQUIRED, base=base)
-        value = int(res, base=base)
-
-        return Token(TokenType.integer, value=value,
-                     lineno=ln, col=col)
+        ## convert string to number
+        if (self.current_char == "."
+            and base == 10
+            and self._isdecimal(self.peek())
+        ):  # float
+            self.forward()
+            res += "."
+            while self._isdecimal(self.current_char):
+                res += self.current_char
+                self.forward()
+            value = float(res)
+            return Token(TokenType.float_, value=value, lineno=ln, col=col)
+        else:  # integer
+            if not res:
+                self.error(ErrorType.INTEGER_REQUIRED, base=base)
+            value = int(res, base=base)
+            return Token(TokenType.integer, value=value, lineno=ln, col=col)
 
     def handle_name(self):
         """Read a keyword or an IDENTIFIER token."""

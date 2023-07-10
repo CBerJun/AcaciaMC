@@ -113,9 +113,9 @@ class Parser:
     ## Expression generator
 
     def literal(self):
-        """literal := INTEGER | STRING | TRUE | FALSE | NONE"""
+        """literal := INTEGER | STRING | TRUE | FALSE | NONE | FLOAT"""
         tok_type = self.current_token.type
-        if tok_type in (TokenType.integer, TokenType.string):
+        if tok_type in (TokenType.integer, TokenType.string, TokenType.float_):
             value = self.current_token.value
             self.eat()
         elif tok_type in (TokenType.true, TokenType.false):
@@ -157,7 +157,7 @@ class Parser:
           identifier | raw_score
         """
         if self.current_token.type in (
-            TokenType.integer, TokenType.true,
+            TokenType.integer, TokenType.float_, TokenType.true,
             TokenType.false, TokenType.string, TokenType.none
         ):
             return self.literal()

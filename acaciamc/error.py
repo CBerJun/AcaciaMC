@@ -78,6 +78,8 @@ class ErrorType(enum.Enum):
     MRO = 'Invalid base templates (failed to create MRO)'
     OVERRIDE_RESULT_MISMATCH = 'Override method "{name}" should have same ' \
         'result type "{expect}" as its parent, not "{got}"'
+    POS_OFFSET_ALREADY_SET = '"{axis}" set already'
+    INVALID_POS_ALIGN = 'Invalid position alignment "{align}"'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{module}"'

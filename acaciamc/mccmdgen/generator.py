@@ -633,6 +633,8 @@ class Generator(ASTVisitor):
             return String(value, self.compiler)
         elif value is None:
             return NoneLiteral(self.compiler)
+        elif isinstance(value, float):
+            return Float(value, self.compiler)
         raise TypeError
 
     def visit_Self(self, node: Self):
