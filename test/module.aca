@@ -32,7 +32,7 @@ def foo2(n: int):
     x += n
 schedule.register_loop(foo2, interval=5, n=1)
 
-#* Relative module *#
+#* Importing another Acacia program *#
 # Import `mod` module from current directory and rename it as `testmod`
 import .mod as testmod
 # Import `mod.test` as `test_function`
@@ -43,3 +43,10 @@ from .mod import *
 b = testmod.test(-10)
 b = test_function(-10)
 b = test(-10)
+
+#* Importing a module written in Python *#
+import .test_mod
+ent = Object()
+test_mod.foo(x, g=ent, z="\u0030", k=10, m="ss", l=1)
+test_mod.bar(1)
+test_mod.extbar()
