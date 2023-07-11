@@ -654,7 +654,7 @@ class Parser:
             if not isinstance(expr, (Attribute, Identifier)):
                 self.error(ErrorType.INVALID_BIND_TARGET)
             right = self.expr()  # get assign value
-            return MacroBind(expr, right, **pos)
+            return Binding(expr, right, **pos)
         else:  # just an expr
             # expr_stmt := expr
             return ExprStatement(expr, **pos)

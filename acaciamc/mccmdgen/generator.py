@@ -288,7 +288,7 @@ class Generator(ASTVisitor):
             operator, method, target, value
         ))
 
-    def visit_MacroBind(self, node: MacroBind):
+    def visit_Binding(self, node: Binding):
         # analyze value
         value = self.visit(node.value)
         # register to symbol table

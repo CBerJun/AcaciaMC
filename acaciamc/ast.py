@@ -192,7 +192,7 @@ class AugmentedAssign(Statement):  # augmented assign
         self.operator = operator
         self.value = value
 
-class MacroBind(Statement):  # binding
+class Binding(Statement):  # binding
     def __init__(self, target: Expression, value: Expression, lineno, col):
         super().__init__(lineno, col)
         self.target = target
