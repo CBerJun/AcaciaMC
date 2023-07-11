@@ -3,7 +3,7 @@
  * This file gives you a brief picture of Acacia,
  * while itself is a legal Acacia program.
  *
- * Acacia is written in Python and version 3.3+ is required.
+ * Acacia is written in Python and version 3.6+ is required.
  * No third-party Python package is needed.
  * Compile this (i.e. turn it into MC behavior pack functions) with:
  *   cd path/to/acacia
