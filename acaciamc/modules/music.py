@@ -17,8 +17,8 @@ class MusicType(Type):
         execute_condition: str = "as @a at @s",
         note_offset: int = 0,
         chunk_size: int = 500,
-        speed: int = 100,
-        volume: int = 100
+        speed: float = 1.0,
+        volume: float = 1.0
     )
 
     A music to generate from MIDI file `path`.
@@ -33,8 +33,8 @@ class MusicType(Type):
     into several files to make sure you are not running too many commands
     every tick. `chunk_size` determines how many commands there will be
     in 1 file.
-    `speed` affects the speed of music in percentage.
-    `volume` affects the volume of music in percentage.
+    `speed` sets the speed of music.
+    `volume` sets the volume factor of music.
     """
     name = "Music"
 
@@ -59,22 +59,18 @@ class MusicType(Type):
             arg_chunk = func.arg_optional(
                 "chunk_size", IntLiteral(500, func.compiler), IntType)
             arg_speed = func.arg_optional(
-                "speed", IntLiteral(100, func.compiler), IntType)
+                "speed", Float(1.0, func.compiler), FloatType)
             arg_volume = func.arg_optional(
-                "volume", IntLiteral(100, func.compiler), IntType)
+                "volume", Float(1.0, func.compiler), FloatType)
             if not isinstance(arg_note, IntLiteral):
                 func.arg_error("note_offset", "must be a constant")
             if not isinstance(arg_chunk, IntLiteral):
                 func.arg_error("chunk_size", "must be a constant")
-            if not isinstance(arg_speed, IntLiteral):
-                func.arg_error("speed", "must be a constant")
-            if not isinstance(arg_volume, IntLiteral):
-                func.arg_error("volume", "must be a constant")
             if arg_chunk.value < 1:
                 func.arg_error("chunk_size", "must be positive")
-            if arg_speed.value < 1:
+            if arg_speed.value <= 0:
                 func.arg_error("speed", "must be positive")
-            if arg_volume.value < 1:
+            if arg_volume.value <= 0:
                 func.arg_error("volume", "must be positive")
             func.assert_no_arg()
             try:
@@ -85,8 +81,8 @@ class MusicType(Type):
             note_offset = arg_note.value
             looping = arg_loop_intv.value if arg_loop.value else -1
             chunk_size = arg_chunk.value
-            speed = arg_speed.value / 100
-            volume = arg_volume.value / 100
+            speed = arg_speed.value
+            volume = arg_volume.value
             return Music(
                 midi, exec_condition, looping, note_offset,
                 chunk_size, speed, volume, func.compiler

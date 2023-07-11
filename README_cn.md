@@ -58,7 +58,7 @@ print.title(print.format("Money: %0", money), mode=print.ACTIONBAR)
 ```
 import music
 # 自动生成红石音乐，并采用1.2倍速。
-m -> music.Music("music_score.mid", speed=120)
+m -> music.Music("music_score.mid", speed=1.2)
 m.play()
 ```
 

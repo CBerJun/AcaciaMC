@@ -60,7 +60,7 @@ print.title(print.format("Money: %0", money), mode=print.ACTIONBAR)
 ```
 import music
 # Generate a noteblock music and use 1.2x speed.
-m -> music.Music("music_score.mid", speed=120)
+m -> music.Music("music_score.mid", speed=1.2)
 m.play()
 ```
 
