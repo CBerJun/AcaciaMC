@@ -398,17 +398,19 @@ class Tokenizer:
         ## NOTE '\n' should be passed directly to MC
         ## because MC use '\n' escape too
         elif second in 'xuU':  # unicode number
-            self.forward()  # skip '\\'
-            code = ''
-            for _ in range({
-                'x': 2, 'u': 4, 'U': 8
-            }[second]):
-                code += self.current_char
-                self.forward()
-            # get code
             def _err():
                 self.error(ErrorType.INVALID_UNICODE_ESCAPE,
                            escape_char=second)
+            self.forward()  # skip '\\'
+            code = ''
+            length = {'x': 2, 'u': 4, 'U': 8}[second]
+            VALID_CHARS = tuple('0123456789ABCDEFabcdef')
+            for _ in range(length):
+                if self.current_char not in VALID_CHARS:
+                    _err()
+                code += self.current_char
+                self.forward()
+            # get code
             try:
                 unicode = int(code, base=16)
             except ValueError:
