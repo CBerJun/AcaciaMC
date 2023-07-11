@@ -85,7 +85,7 @@ class Type(AcaciaExpr):
         # Call `__new__`
         new = self.attribute_table.lookup('__new__')
         if new is None:
-            raise Error(ErrorType.CANT_CREATE_INSTANCE, type=self.name)
+            raise Error(ErrorType.CANT_CREATE_INSTANCE, type_=self.name)
         instance, cmds = new.call(args, keywords)
         # Call initializer of instance if exists
         initializer = instance.attribute_table.lookup('__init__')
