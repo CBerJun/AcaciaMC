@@ -9,7 +9,7 @@ __all__ = [
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "Nullable", "AnyOf",
     # Exception
-    "ChopError"
+    "ChopError", "ArgumentError"
 ]
 
 from collections.abc import Callable
@@ -32,6 +32,16 @@ if TYPE_CHECKING:
 class ChopError(Exception):
     """Wrong use of Axe."""
     pass
+
+class ArgumentError(Exception):
+    """Can be raised when user is not satisfied with an argument in
+    an implementation of binary function that is managed with Axe.
+    """
+    def __init__(self, arg: str, message: str) -> None:
+        """Report error on `arg`."""
+        super().__init__(arg, message)
+        self.arg = arg
+        self.message = message
 
 ### Building Stage
 
@@ -487,11 +497,22 @@ class _Chopper:
                     raise AcaciaError(ErrorType.MISSING_ARG, arg=arg_def.name)
                 else:
                     res[arg_def.rename] = default
+                    arg_got.append(arg_def.name)
         if self.args and self.args.name not in arg_got:
             res[self.args.rename] = []
+            arg_got.append(self.args.name)
         if self.kwds and self.kwds.name not in arg_got:
             res[self.kwds.rename] = {}
-        return self.implementation(compiler, **res)
+            arg_got.append(self.kwds.name)
+        try:
+            return self.implementation(compiler, **res)
+        except ArgumentError as err:
+            if err.arg not in arg_got:
+                # Make sure `err.arg` is a valid argument name
+                raise ChopError("unknown argument %r" % err.arg)
+            else:
+                raise AcaciaError(ErrorType.INVALID_BIN_FUNC_ARG,
+                                  arg=err.arg, message=err.message)
 
 def _create_signature(arg_defs: List[_Argument], compiler: "Compiler") -> str:
     return "(%s)" % ", ".join(
