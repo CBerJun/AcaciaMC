@@ -14,7 +14,7 @@ class ErrorType(enum.Enum):
     UNCLOSED_QUOTE = 'Unclosed double quote'
     UNCLOSED_FEXPR = 'Unclosed formatted expression'
     INVALID_UNICODE_ESCAPE = 'Invalid \\{escape_char} escape'
-    CHAR_AFTER_LINE_CONTINUOUS = 'Unexpected character after line continuation'
+    CHAR_AFTER_CONTINUATION = 'Unexpected character after line continuation'
     # Parser
     UNEXPECTED_TOKEN = 'Unexpected token {token}'
     WRONG_INDENT = 'Expect {expect} spaces indented, got {got}'

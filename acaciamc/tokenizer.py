@@ -207,7 +207,7 @@ class Tokenizer:
             self.forward()  # skip the '\\' itself
             while self.current_char != '\n' and self.current_char is not None:
                 if not self.current_char.isspace():
-                    self.error(ErrorType.CHAR_AFTER_LINE_CONTINUOUS)
+                    self.error(ErrorType.CHAR_AFTER_CONTINUATION)
                 self.forward()
             self.forward()  # skip '\n'
             # We don't generate the next `line_begin` token
