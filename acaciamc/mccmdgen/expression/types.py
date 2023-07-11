@@ -350,8 +350,6 @@ class DataType:
     """
     def __init__(self, type_: Type, is_entity: bool):
         """Do not initialize directly, use factory methods."""
-        if not isinstance(type_, Type):
-            raise Error(ErrorType.INVALID_TYPE_SPEC, got=type_.name)
         self.type = type_
         self.is_entity = is_entity
         self.template: Union[None, "EntityTemplate"] = None

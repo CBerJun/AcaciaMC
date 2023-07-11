@@ -146,7 +146,7 @@ class Generator(ASTVisitor):
         else:
             raise TypeError
 
-    def get_result_type(self, node: AnyTypeSpec) -> DataType:
+    def get_result_type(self, node: Union[AnyTypeSpec, None]) -> DataType:
         """Get result `DataType` according to AST."""
         if node is None:
             return DataType.from_type_cls(NoneType, self.compiler)
@@ -437,6 +437,8 @@ class Generator(ASTVisitor):
 
     def visit_TypeSpec(self, node: TypeSpec):
         type_ = self.visit(node.content)
+        if not isinstance(type_, Type):
+            raise Error(ErrorType.INVALID_TYPE_SPEC, got=str(type_.data_type))
         return DataType.from_type(type_)
 
     def visit_EntityTypeSpec(self, node: EntityTypeSpec):
@@ -445,6 +447,9 @@ class Generator(ASTVisitor):
             template = self.compiler.base_template
         else:
             template = self.visit(node.template)
+            if not template.data_type.raw_matches(ETemplateType):
+                self.error_c(ErrorType.INVALID_ETEMPLATE,
+                             got=str(template.data_type))
         return DataType.from_entity(template, self.compiler)
 
     def _func_expr(self, node: FuncDef) -> AcaciaFunction:
