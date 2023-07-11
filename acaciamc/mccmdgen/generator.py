@@ -122,9 +122,9 @@ class Generator(ASTVisitor):
         raise error
 
     def check_assignable(self, value: AcaciaExpr):
-        """Raise error when an `AcaciaExpr` is unassignable."""
+        """Raise error when an `AcaciaExpr` can't be assigned."""
         if not isinstance(value, VarValue):
-            self.error_c(ErrorType.UNASSIGNABLE)
+            self.error_c(ErrorType.INVALID_ASSIGN_TARGET)
 
     def register_symbol(self, target_node: AST, target_value: AcaciaExpr):
         """Register a value to a symbol table according to AST.

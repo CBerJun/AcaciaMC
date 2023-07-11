@@ -23,6 +23,7 @@ class ErrorType(enum.Enum):
         'must be specified: "{arg}"'
     DUPLICATE_ARG_DEF = 'Duplicate argument "{arg}" in function definition'
     POSITIONED_ARG_AFTER_KEYWORD = 'Positional argument after keyword'
+    # INVALID_ASSIGN_TARGET is used by both Generator and Parser
     INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_BIND_TARGET = 'Invalid bind target'
     # Command Generator
@@ -40,7 +41,6 @@ class ErrorType(enum.Enum):
     WRONG_ASSIGN_TYPE = 'Can\'t assign "{got}" to variable of "{expect}" type'
     WRONG_ARG_TYPE = 'Expect "{expect}" type for argument "{arg}", got "{got}"'
     WRONG_RESULT_TYPE = 'Expect "{expect}" type as result, got "{got}"'
-    UNASSIGNABLE = 'The target is unassignable'
     WRONG_IF_CONDITION = '"if" conditions must be "bool", not "{got}"'
     WRONG_WHILE_CONDITION = '"while" conditions must be "bool", not "{got}"'
     ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
