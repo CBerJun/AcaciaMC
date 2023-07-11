@@ -271,7 +271,9 @@ class PosOffsetType(Type):
             "__new__", BinaryFunction(_new, self.compiler)
         )
         def _local(func: BinaryFunction):
-            """Offset.local(x, y, z): New object using local coordinate."""
+            """Offset.local(left, up, front)
+            Return new object using local coordinate.
+            """
             args_xyz: List[AcaciaExpr] = []
             for name in ("left", "up", "front"):
                 arg = func.arg_optional(
@@ -280,10 +282,9 @@ class PosOffsetType(Type):
                 if arg.data_type.raw_matches(IntType):
                     if not isinstance(arg, IntLiteral):
                         func.arg_error(name, "integer must be literal")
+                    arg = Float.from_int(arg)
+                args_xyz.append(arg)
             func.assert_no_arg()
-            for i, arg in enumerate(args_xyz):
-                if isinstance(arg, IntLiteral):
-                    args_xyz[i] = Float.from_int(arg)
             return PosOffset.local(*args_xyz, func.compiler)
         self.attribute_table.set(
             "local", BinaryFunction(_local, self.compiler)
