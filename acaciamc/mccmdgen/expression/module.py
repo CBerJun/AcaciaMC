@@ -18,12 +18,11 @@ class BinaryModule(AcaciaExpr):
         )
         self.path = path
         # get the module from `path`
-        try:
-            spec = importlib.util.spec_from_file_location('<acaciamod>', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-        except Exception as err:
-            raise Error(ErrorType.IO, message=str(err))
+        spec = importlib.util.spec_from_file_location(
+            '<acacia module %r>' % path, path
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
         # Call `acacia_build`
         # binary modules should define a callable object named `acacia_build`,
         # which accepts 1 argument `compiler` and should return a dict:
