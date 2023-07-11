@@ -12,6 +12,9 @@ class String(AcaciaExpr):
         )
         self.value = value
 
+    def cmdstr(self) -> str:
+        return self.value
+
     def __add__(self, other):
         """Adding strings will connect them."""
         if isinstance(other, String):

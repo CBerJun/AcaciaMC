@@ -118,7 +118,8 @@ class Generator(ASTVisitor):
         self.error(Error(*args, **kwds))
 
     def error(self, error: Error):
-        self.fix_error_location(error)
+        if not error.location_set():
+            self.fix_error_location(error)
         raise error
 
     def check_assignable(self, value: AcaciaExpr):
@@ -306,16 +307,19 @@ class Generator(ASTVisitor):
         for section in node.values:
             # expressions in commands need to be parsed
             if section[0] is StringMode.expression:
-                expr = self.visit(section[1])
-                if not expr.data_type.raw_matches(StringType):
-                    self.error_c(
-                        ErrorType.INVALID_CMD_FORMATTING,
-                        expr_type=str(expr.data_type)
-                    )
-                cmd += expr.value
+                expr_ast = section[1]
+                expr = self.visit(expr_ast)
+                try:
+                    value = expr.cmdstr()
+                except NotImplementedError:
+                    err = Error(ErrorType.INVALID_CMD_FORMATTING)
+                    err.set_location(expr_ast.lineno, expr_ast.col)
+                    self.error(err)
+                cmd += value
             elif section[0] is StringMode.text:
                 cmd += section[1]
-            else: raise ValueError
+            else:
+                raise ValueError
         self.current_file.write(cmd)
 
     def visit_If(self, node: If):

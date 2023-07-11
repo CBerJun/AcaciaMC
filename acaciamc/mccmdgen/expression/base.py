@@ -85,6 +85,9 @@ class AcaciaExpr:
        the objects of this type.
        `call` is a special method that would be called when this
        expression is called in Acacia.
+       `cmdstr` is a special method that returns the string
+       representation of this expression used in raw command
+       substitution.
     Extra things for "storable" types to implement:
      - at least one (usually 1) class that is a subclass of `VarValue`,
        to represent this kind of value that is stored in Minecraft.
@@ -130,6 +133,13 @@ class AcaciaExpr:
         Since we need a `VarValue` here, only "storable" types need
         to implement this.
         The method can be decorated with `export_need_tmp`.
+        """
+        raise NotImplementedError
+
+    def cmdstr(self) -> str:
+        """Return a string representation of this expression, used in
+        raw commands. If not implemented, then the object can not be
+        formatted in a command.
         """
         raise NotImplementedError
 

@@ -60,8 +60,7 @@ class ErrorType(enum.Enum):
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
     UNCALLABLE = '"{expr_type}" is not callable'
-    INVALID_CMD_FORMATTING = 'Invalid formatted expression of type ' \
-        '"{expr_type}"'
+    INVALID_CMD_FORMATTING = 'Invalid formatted expression'
     INVALID_RAWSCORE_SELECTOR = 'Invalid raw score selector of "{got}" type'
     INVALID_RAWSCORE_OBJECTIVE = 'Invalid raw score objective of "{got}" type'
     INVALID_CAST_ENTITY = 'Cast object should be an entity, not "{got}"'
@@ -102,6 +101,9 @@ class Error(Exception):
     def set_location(self, lineno: int, col: int):
         self.lineno = lineno
         self.col = col
+
+    def location_set(self):
+        return self.lineno is not None
 
     def __str__(self):
         assert self.file is not None
