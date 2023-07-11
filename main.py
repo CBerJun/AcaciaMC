@@ -140,4 +140,5 @@ except Exception as err:
     if args.verbose:
         raise
     else:
-        error('unexpected error when compiling: %s' % err)
+        error('unexpected error when compiling: %s: %s'
+              % (type(err).__name__, str(err)))
