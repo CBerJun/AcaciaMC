@@ -38,6 +38,9 @@ class EntityReference(_EntityBase):
         self.selector = selector
         super().__init__(template, compiler, cast_to)
 
+    def cmdstr(self) -> str:
+        return str(self)
+
     def __str__(self) -> str:
         return self.selector
 
@@ -92,6 +95,9 @@ class TaggedEntity(_EntityBase, VarValue):
     def __str__(self) -> str:
         # Return selector of this entity
         return "@e[tag=%s]" % self.tag
+
+    def cmdstr(self) -> str:
+        return str(self)
 
     def clear(self) -> List[str]:
         # Clear the reference to entity that the tag is pointing to.

@@ -56,6 +56,9 @@ class IntLiteral(AcaciaExpr):
         if not INT_MIN <= value <= INT_MAX:
             raise Error(ErrorType.INT_OVERFLOW)
 
+    def cmdstr(self) -> str:
+        return str(self.value)
+
     def export(self, var: "IntVar"):
         return ['scoreboard players set %s %s' % (var, self)]
 

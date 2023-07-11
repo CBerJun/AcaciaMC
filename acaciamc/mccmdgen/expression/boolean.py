@@ -46,6 +46,9 @@ class BoolLiteral(AcaciaExpr):
     def export(self, var: "BoolVar"):
         return ['scoreboard players set %s %s' % (var, self)]
 
+    def cmdstr(self) -> str:
+        return "true" if self.value else "false"
+
     def deepcopy(self) -> "BoolLiteral":
         return BoolLiteral(value=self.value, compiler=self.compiler)
 

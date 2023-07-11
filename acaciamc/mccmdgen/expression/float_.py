@@ -13,6 +13,9 @@ class Float(AcaciaExpr):
         super().__init__(DataType.from_type_cls(FloatType, compiler), compiler)
         self.value = value
 
+    def cmdstr(self) -> str:
+        return str(self)
+
     @classmethod
     def from_int(cls, integer: IntLiteral):
         return Float(float(integer.value), integer.compiler)
