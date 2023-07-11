@@ -246,7 +246,7 @@ class PosType(Type):
                     if not arg.data_type.raw_matches(FloatType):
                         func.arg_error("#%d" % (i + 1),
                                        "must be an int literal or float")
-                    offset.set(i, arg, CoordinateType.ABSOLUTE)
+                    offset.set(i, arg.value, CoordinateType.ABSOLUTE)
                 inst = Position(func.compiler)
                 _, cmds = inst.attribute_table.lookup("apply").call(
                     [offset], {}
@@ -274,7 +274,7 @@ class PosOffsetType(Type):
             """Offset.local(left, up, front)
             Return new object using local coordinate.
             """
-            args_xyz: List[AcaciaExpr] = []
+            xyz: List[AcaciaExpr] = []
             for name in ("left", "up", "front"):
                 arg = func.arg_optional(
                     name, Float(0.0, func.compiler), (FloatType, IntType)
@@ -283,9 +283,9 @@ class PosOffsetType(Type):
                     if not isinstance(arg, IntLiteral):
                         func.arg_error(name, "integer must be literal")
                     arg = Float.from_int(arg)
-                args_xyz.append(arg)
+                xyz.append(arg.value)
             func.assert_no_arg()
-            return PosOffset.local(*args_xyz, func.compiler)
+            return PosOffset.local(*xyz, func.compiler)
         self.attribute_table.set(
             "local", BinaryFunction(_local, self.compiler)
         )

@@ -64,7 +64,7 @@ class Position(AcaciaExpr):
         Apply local offset to current position, using given rotation.
         """
         arg_rot = func.arg_require("rot", RotType)
-        args_xyz: List[AcaciaExpr] = []
+        xyz: List[float] = []
         for name in ("left", "up", "front"):
             arg = func.arg_optional(
                 name, Float(0.0, self.compiler), (FloatType, IntType)
@@ -73,9 +73,9 @@ class Position(AcaciaExpr):
                 if not isinstance(arg, IntLiteral):
                     func.arg_error(name, "integer must be literal")
                 arg = Float.from_int(arg)
-            args_xyz.append(arg)
+            xyz.append(arg.value)
         func.assert_no_arg()
-        offset = PosOffset.local(*args_xyz, self.compiler)
+        offset = PosOffset.local(*xyz, self.compiler)
         self.context.extend(arg_rot.context)
         _, cmds = self.attribute_table.lookup("apply").call([offset], {})
         return self, cmds

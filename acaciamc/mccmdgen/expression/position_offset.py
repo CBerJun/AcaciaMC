@@ -30,7 +30,7 @@ class PosOffset(AcaciaExpr):
     def __init__(self, compiler):
         super().__init__(DataType.from_type_cls(PosOffsetType, compiler),
                          compiler)
-        self.values: List[Float] = [Float(0.0, compiler) for _ in range(3)]
+        self.values: List[float] = [0.0, 0.0, 0.0]
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]
         self.already_set: Set[int] = set()
@@ -63,7 +63,7 @@ class PosOffset(AcaciaExpr):
                 if i in self.already_set:
                     raise Error(ErrorType.POS_OFFSET_ALREADY_SET, axis=XYZ[i])
                 self.already_set.add(i)
-                self.set(i, arg, offset_type)
+                self.set(i, arg.value, offset_type)
         return self
 
     _abs = partialmethod(_setter, offset_type=CoordinateType.ABSOLUTE)
@@ -75,7 +75,7 @@ class PosOffset(AcaciaExpr):
     """
 
     @classmethod
-    def local(cls, left: Float, up: Float, front: Float, compiler):
+    def local(cls, left: float, up: float, front: float, compiler):
         inst = cls(compiler)
         inst.set(0, left, CoordinateType.LOCAL)
         inst.set(1, up, CoordinateType.LOCAL)
@@ -83,7 +83,7 @@ class PosOffset(AcaciaExpr):
         inst.already_set.update((0, 1, 2))
         return inst
 
-    def set(self, index: int, value: Float, type_: CoordinateType):
+    def set(self, index: int, value: float, type_: CoordinateType):
         assert 0 <= index <= 2
         self.values[index] = value
         self.value_types[index] = type_
