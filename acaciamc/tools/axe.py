@@ -7,7 +7,7 @@ __all__ = [
     "OverloadChopped", "overload",
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
-    "LiteralFloat", "LiteralString", "Nullable", "AnyOf",
+    "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -284,6 +284,22 @@ class LiteralString(Typed):
         origin = super().convert(origin)
         assert isinstance(origin, acacia.String)
         return origin.value
+
+class LiteralBool(Typed):
+    """Accepts a boolean literal and converts it to Python `bool`.
+    Default value should also be given as Python `bool`.
+    """
+    def __init__(self):
+        super().__init__(acacia.BoolType)
+
+    def get_show_name(self) -> str:
+        return "bool (literal)"
+
+    def convert(self, origin: acacia.AcaciaExpr) -> bool:
+        origin = super().convert(origin)
+        if isinstance(origin, acacia.BoolLiteral):
+            return origin.value
+        self.wrong_argument(origin)
 
 class Nullable(Converter):
     """Accepts "None" value and convert it to Python "None".
