@@ -119,19 +119,15 @@ class Task(AcaciaExpr):
 def _register_loop(func: BinaryFunction):
     """
     schedule.register_loop(
-        target: function, interval: int = 1, *args, **kwargs
+        target: function, interval: int = 1, *args, **kwds
     )
-    Call a function repeatly every `interval` ticks with `args` and `kwargs`.
+    Call a function repeatly every `interval` ticks with `args` and `kwds`.
     """
     # Parse args
     target = func.arg_require("target", FunctionType)
     arg_interval = func.arg_optional(
         "interval", IntLiteral(1, func.compiler), IntType
     )
-    if not isinstance(arg_interval, IntLiteral):
-        func.arg_error("interval", "must be a constant")
-    if arg_interval.value <= 0:
-        func.arg_error("interval", "must be positive")
     other_arg, other_kw = func.arg_raw()
     # Allocate an int for timer
     timer = func.compiler.types[IntType].new_var()
