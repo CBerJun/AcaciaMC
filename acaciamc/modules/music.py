@@ -468,18 +468,15 @@ def _set_instrument(func: BinaryFunction):
 
 def _channel_volume(func: BinaryFunction):
     """
-    music.channel_volume(channel: int-literal, volume: int-literal)
+    music.channel_volume(channel: int-literal, volume: float)
 
     Modify volume of specified channel.
-    `volume` is in percentage, 100 stands for 100%.
     """
     # Parse args
     arg_channel = func.arg_require("channel", IntType)
-    arg_volume = func.arg_require("volume", IntType)
+    arg_volume = func.arg_require("volume", FloatType)
     if not isinstance(arg_channel, IntLiteral):
         func.arg_error('channel', 'must be a constant')
-    if not isinstance(arg_volume, IntLiteral):
-        func.arg_error('volume', 'must be a constant')
     channel = arg_channel.value
     if channel >= 16 or channel < 0:
         func.arg_error('channel', 'must in 0~15')
@@ -487,7 +484,7 @@ def _channel_volume(func: BinaryFunction):
     if volume < 0:
         func.arg_error('volume', "can't be negative")
     # Modify
-    Music.CHANNEL_VOLUME[channel] = volume / 100
+    Music.CHANNEL_VOLUME[channel] = volume
     return NoneVar(func.compiler)
 
 def acacia_build(compiler):
