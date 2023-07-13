@@ -9,15 +9,12 @@ __all__ = ["PosOffset", "CoordinateType"]
 
 from typing import Set, List
 from enum import Enum
-from functools import partialmethod
 
 from acaciamc.error import *
+from acaciamc.tools import axe
 from .base import *
-from .types import DataType, PosOffsetType, FloatType, NoneType, IntType
-from .float_ import Float
+from .types import DataType, PosOffsetType
 from .callable import BinaryFunction
-from .none import NoneLiteral
-from .integer import IntLiteral
 
 XYZ = ("x", "y", "z")
 
@@ -34,10 +31,17 @@ class PosOffset(AcaciaExpr):
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]
         self.already_set: Set[int] = set()
+        _abs = self._create_setter(CoordinateType.ABSOLUTE)
+        _offset = self._create_setter(CoordinateType.RELATIVE)
+        """.offset(x, y, z) .abs(x, y, z)
+        "x", "y" and "z" are either "None" or int literal or float.
+        "offset" sets given axes to use relative coordinate,
+        while "abs" sets them to use absolute coordinate.
+        """
         self.attribute_table.set(
-            "offset", BinaryFunction(self._offset, self.compiler))
+            "offset", BinaryFunction(_offset, self.compiler))
         self.attribute_table.set(
-            "abs", BinaryFunction(self._abs, self.compiler))
+            "abs", BinaryFunction(_abs, self.compiler))
 
     def __str__(self) -> str:
         return " ".join(
@@ -45,34 +49,21 @@ class PosOffset(AcaciaExpr):
             for type_, value in zip(self.value_types, self.values)
         )
 
-    def _setter(self, func: BinaryFunction, offset_type: CoordinateType):
-        args_xyz: List[AcaciaExpr] = []
-        for name in XYZ:
-            arg = func.arg_optional(
-                name, NoneLiteral(self.compiler),
-                (FloatType, NoneType, IntType)
-            )
-            if arg.data_type.raw_matches(IntType):
-                if not isinstance(arg, IntLiteral):
-                    func.arg_error(name, "integer must be literal")
-                arg = Float.from_int(arg)
-            args_xyz.append(arg)
-        func.assert_no_arg()
-        for i, arg in enumerate(args_xyz):
-            if not arg.data_type.raw_matches(NoneType):
-                if i in self.already_set:
-                    raise Error(ErrorType.POS_OFFSET_ALREADY_SET, axis=XYZ[i])
-                self.already_set.add(i)
-                self.set(i, arg.value, offset_type)
-        return self
-
-    _abs = partialmethod(_setter, offset_type=CoordinateType.ABSOLUTE)
-    _offset = partialmethod(_setter, offset_type=CoordinateType.RELATIVE)
-    """.offset(x, y, z) .abs(x, y, z)
-    "x", "y" and "z" are either "None" or int literal or float.
-    "offset" sets given axes to use relative coordinate,
-    while "abs" sets them to use absolute coordinate.
-    """
+    def _create_setter(self, offset_type: CoordinateType):
+        @axe.chop
+        @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("z", axe.Nullable(axe.LiteralFloat()), default=None)
+        def _setter(compiler, x, y, z):
+            for i, arg in enumerate((x, y, z)):
+                if arg is not None:
+                    if i in self.already_set:
+                        raise Error(ErrorType.POS_OFFSET_ALREADY_SET,
+                                    axis=XYZ[i])
+                    self.already_set.add(i)
+                    self.set(i, arg, offset_type)
+            return self
+        return _setter
 
     @classmethod
     def local(cls, left: float, up: float, front: float, compiler):

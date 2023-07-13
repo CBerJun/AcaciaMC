@@ -13,6 +13,7 @@ except ImportError:
 from .base import *
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
+from acaciamc.tools import axe, resultlib
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -105,27 +106,33 @@ class IntType(Type):
     def do_init(self):
         self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
         self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
-        def _new(func: BinaryFunction):
-            # `int()` -> literal `0`
-            # `int(x: int)` -> x
-            # `int(x: bool)` -> 1 if x.value else 0
-            arg = func.arg_optional(
-                'x',
-                default=IntLiteral(0, self.compiler),
-                type_=(IntType, BoolType)
-            )
-            if arg.data_type.raw_matches(IntType):
-                return arg
-            elif arg.data_type.raw_matches(BoolType):
-                if isinstance(arg, BoolLiteral):
-                    # Python `int` also converts boolean to integer
-                    return IntLiteral(int(arg.value), self.compiler)
-                # fallback: convert `arg` to `BoolVar`,
-                # Since boolean just use 0 to store False, 1 to store
-                # True, just "cast" it to `IntVar`.
-                dependencies, bool_var = to_BoolVar(arg)
+        class _new(metaclass=axe.OverloadChopped):
+            """
+            int() -> literal 0
+            int(x: int) -> x
+            int(x: bool) -> 1 if x else 0
+            """
+            @axe.overload
+            def zero(cls, compiler):
+                return resultlib.literal(0, compiler)
+
+            @axe.overload
+            @axe.arg("x", IntType)
+            def copy(cls, compiler, x):
+                return x
+
+            @axe.overload
+            @axe.arg("b", BoolType)
+            def from_bool(cls, compiler, b):
+                if isinstance(b, BoolLiteral):
+                    return resultlib.literal(int(b.value), compiler)
+                # Fallback: convert `b` to `BoolVar`,
+                # Since 0 is used to store False, 1 is for True, just
+                # "cast" it to `IntVar`.
+                dependencies, bool_var = to_BoolVar(b)
                 return IntVar(
                     objective=bool_var.objective, selector=bool_var.selector,
+                    with_quote=bool_var.with_quote,
                     compiler=self.compiler
                 ), dependencies
         self.attribute_table.set(
@@ -201,7 +208,7 @@ class PosType(Type):
         self.attribute_table.set("X", String("x", self.compiler))
         self.attribute_table.set("Y", String("y", self.compiler))
         self.attribute_table.set("Z", String("z", self.compiler))
-        def _new(func: BinaryFunction):
+        class _new(metaclass=axe.OverloadChopped):
             """
             Pos(entity, [str]):
                 position of entity. `str` is anchor (`Pos.EYES` or
@@ -211,50 +218,39 @@ class PosType(Type):
             Pos(int-literal, int-literal, int-literal):
                 absolute position.
             """
-            args, kwds = func.arg_raw()
-            if kwds:
-                raise Error(ErrorType.ANY,
-                            '"Pos" does not accept keyword arguments')
-            L = len(args)
-            cmds = []
-            if L == 1:
-                arg = args[0]
-                if arg.data_type.raw_matches(EntityType):
-                    inst = Position(func.compiler)
-                    inst.context.append("at %s" % arg)
-                    inst.context.append("anchored %s" % DEFAULT_ANCHOR)
-                elif arg.data_type.raw_matches(PosType):
-                    inst = arg.copy()
-                else:
-                    func.arg_error("#1", 'must be an entity or another "Pos"')
-            elif L == 2:
-                arg, arg_anchor = args
-                if not arg_anchor.data_type.raw_matches(StringType):
-                    func.arg_error("#2", 'must be a string showing anchor')
-                anchor = arg_anchor.value
-                if arg.data_type.is_entity:
-                    inst = Position(func.compiler)
-                    inst.context.append("at %s" % arg)
-                    inst.context.append("anchored %s" % anchor)
-                else:
-                    func.arg_error("#1", "must be an entity")
-            elif L == 3:
-                offset = PosOffset(func.compiler)
-                for i, arg in enumerate(args):
-                    if isinstance(arg, IntLiteral):
-                        arg = Float.from_int(arg)
-                    if not arg.data_type.raw_matches(FloatType):
-                        func.arg_error("#%d" % (i + 1),
-                                       "must be an int literal or float")
-                    offset.set(i, arg.value, CoordinateType.ABSOLUTE)
-                inst = Position(func.compiler)
+            @axe.overload
+            @axe.arg("pos", PosType)
+            def copy(cls, compiler, pos: Position):
+                return pos.copy()
+
+            @axe.overload
+            @axe.arg("target", EntityType)
+            @axe.arg("anchor", axe.LiteralString())
+            def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
+                inst = Position(compiler)
+                inst.context.append("at %s" % target)
+                inst.context.append("anchored %s" % anchor)
+                return inst
+
+            @axe.overload
+            @axe.arg("target", EntityType)
+            def from_entity_feet(cls, compiler, target: "_EntityBase"):
+                return cls.from_entity(compiler, target, "feet")
+
+            @axe.overload
+            @axe.arg("x", axe.LiteralFloat())
+            @axe.arg("y", axe.LiteralFloat())
+            @axe.arg("z", axe.LiteralFloat())
+            def absolute(cls, compiler, x: float, y: float, z: float):
+                offset = PosOffset(compiler)
+                offset.set(0, x, CoordinateType.ABSOLUTE)
+                offset.set(1, y, CoordinateType.ABSOLUTE)
+                offset.set(2, z, CoordinateType.ABSOLUTE)
+                inst = Position(compiler)
                 _, cmds = inst.attribute_table.lookup("apply").call(
                     [offset], {}
                 )
-            else:
-                raise Error(ErrorType.ANY,
-                            message='"Pos" takes 1 to 3 arguments')
-            return inst, cmds
+                return inst, cmds
         self.attribute_table.set(
             '__new__', BinaryFunction(_new, self.compiler)
         )
@@ -263,29 +259,22 @@ class PosOffsetType(Type):
     name = "Offset"
 
     def do_init(self):
-        def _new(func: BinaryFunction):
+        @axe.chop
+        def _new(compiler):
             """Offset(): New object with no offset (~ ~ ~)."""
-            func.assert_no_arg()
-            return PosOffset(func.compiler)
+            return PosOffset(compiler)
         self.attribute_table.set(
             "__new__", BinaryFunction(_new, self.compiler)
         )
-        def _local(func: BinaryFunction):
+        @axe.chop
+        @axe.arg("left", axe.LiteralFloat(), default=0.0)
+        @axe.arg("up", axe.LiteralFloat(), default=0.0)
+        @axe.arg("front", axe.LiteralFloat(), default=0.0)
+        def _local(compiler, left: float, up: float, front: float):
             """Offset.local(left, up, front)
             Return new object using local coordinate.
             """
-            xyz: List[AcaciaExpr] = []
-            for name in ("left", "up", "front"):
-                arg = func.arg_optional(
-                    name, Float(0.0, func.compiler), (FloatType, IntType)
-                )
-                if arg.data_type.raw_matches(IntType):
-                    if not isinstance(arg, IntLiteral):
-                        func.arg_error(name, "integer must be literal")
-                    arg = Float.from_int(arg)
-                xyz.append(arg.value)
-            func.assert_no_arg()
-            return PosOffset.local(*xyz, func.compiler)
+            return PosOffset.local(left, up, front, compiler)
         self.attribute_table.set(
             "local", BinaryFunction(_local, self.compiler)
         )
@@ -294,48 +283,34 @@ class RotType(Type):
     name = "Rot"
 
     def do_init(self):
-        def _new(func: BinaryFunction):
+        class _new(metaclass=axe.OverloadChopped):
             """
             Rot(entity): rotation of an entity.
             Rot(int-literal, int-literal): absolute rotation
             """
-            args, kwds = func.arg_raw()
-            if kwds:
-                raise Error(ErrorType.ANY,
-                            '"Rot" does not accept keyword arguments')
-            L = len(args)
-            args_tuple = tuple(args)
-            if L == 1:
-                if not args[0].data_type.is_entity:
-                    func.arg_error("#1", "must be an entity")
-                inst = Rotation(func.compiler)
-                inst.context.append("rotated as %s" % args_tuple)
-            elif L == 2:
-                for i, arg in enumerate(args):
-                    if not (arg.data_type.raw_matches(FloatType)
-                            or isinstance(arg, IntLiteral)):
-                        func.arg_error("#%d" % (i + 1),
-                                       "must be an int literal or float")
-                inst = Rotation(func.compiler)
-                inst.context.append("rotated %s %s" % args_tuple)
-            else:
-                raise Error(ErrorType.ANY,
-                            message='"Rot" takes 1 or 2 arguments')
-            return inst
+            @axe.overload
+            @axe.arg("target", EntityType)
+            def from_entity(cls, compiler, entity: "_EntityBase"):
+                inst = Rotation(compiler)
+                inst.context.append("rotated as %s" % entity)
+                return inst
+
+            @axe.overload
+            @axe.arg("vertical", axe.LiteralFloat())
+            @axe.arg("horizontal", axe.LiteralFloat())
+            def absolute(cls, compiler, vertical: float, horizontal: float):
+                inst = Rotation(compiler)
+                inst.context.append("rotated %s %s" % (vertical, horizontal))
+                return inst
         self.attribute_table.set(
             "__new__", BinaryFunction(_new, self.compiler)
         )
-        def _face_entity(func: BinaryFunction):
-            """Rot.face_entity(target: entity): facing `target`."""
-            arg = func.arg_require("target", EntityType)
-            arg_anchor = func.arg_optional(
-                "anchor", String(DEFAULT_ANCHOR, func.compiler), StringType
-            )
-            func.assert_no_arg()
-            inst = Rotation(func.compiler)
-            inst.context.append(
-                "facing entity %s %s" % (arg, arg_anchor.value)
-            )
+        @axe.chop
+        @axe.arg("target", EntityType)
+        @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
+        def _face_entity(compiler, target: "_EntityBase", anchor: str):
+            inst = Rotation(compiler)
+            inst.context.append("facing entity %s %s" % (target, anchor))
             return inst
         self.attribute_table.set(
             "face_entity", BinaryFunction(_face_entity, self.compiler)

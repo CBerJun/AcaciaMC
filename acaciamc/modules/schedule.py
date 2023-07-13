@@ -39,16 +39,23 @@ result:
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.ast import Operator
+from acaciamc.tools import axe, resultlib
 
 class TaskType(Type):
-    """Task(target: function): A task manager"""
+    """
+    Task(target: function, *args, **kwds)
+    A task manager that calls the given function after a period of time.
+    The `args` and `kwds` are passed to the function.
+    """
     name = "Task"
 
     def do_init(self):
-        def _new(func: BinaryFunction):
-            target = func.arg_require("target", FunctionType)
-            other_arg, other_kw = func.arg_raw()
-            return Task(target, other_arg, other_kw, self.compiler)
+        @axe.chop
+        @axe.arg("target", FunctionType)
+        @axe.star_arg("args", axe.AnyValue())
+        @axe.kwds("kwds", axe.AnyValue())
+        def _new(compiler, target, args, kwds):
+            return Task(target, args, kwds, compiler)
         self.attribute_table.set(
             "__new__", BinaryFunction(_new, self.compiler)
         )
@@ -65,31 +72,32 @@ class Task(AcaciaExpr):
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
         self.timer = compiler.types[IntType].new_var()
-        # self._target_args, self._target_keywords: args to pass to `target`
         self._target_args, self._target_keywords = [], {}
-        def _timer_reset(func: BinaryFunction):
+        def _timer_reset():
             cmds = IntLiteral(-1, compiler).export(self.timer)
-            return result_cmds(cmds, compiler)
-        def _after(func: BinaryFunction):
+            return resultlib.commands(cmds, compiler)
+        @axe.chop
+        @axe.arg("delay", IntType)
+        def _after(compiler, delay: AcaciaExpr):
             """.after(delay: int): Run the target after `delay`"""
-            delay = func.arg_require("delay", IntType)
-            func.assert_no_arg()
             cmds = delay.export(self.timer)
-            return result_cmds(cmds, compiler)
-        def _cancel(func: BinaryFunction):
+            return resultlib.commands(cmds, compiler)
+        @axe.chop
+        def _cancel(compiler):
             """.cancel(): Cancel the schedule"""
-            func.assert_no_arg()
-            return _timer_reset(func)
-        def _has_schedule(func: BinaryFunction):
+            return _timer_reset()
+        def _init(func: BinaryFunction):
+            return _timer_reset()
+        @axe.chop
+        def _has_schedule(compiler):
             """.has_schedule() -> bool: Get whether a schedule exists"""
             # Just return whether timer >= 0
-            func.assert_no_arg()
             return BoolCompare(
                 self.timer, Operator.greater_equal, IntLiteral(0, compiler),
                 compiler
             )
         self.attribute_table.set(
-            "__init__", BinaryFunction(_timer_reset, compiler)
+            "__init__", BinaryFunction(_init, compiler)
         )
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("after", BinaryFunction(_after, compiler))
@@ -116,42 +124,45 @@ class Task(AcaciaExpr):
             for cmd in self.timer.isub(IntLiteral(1, self.compiler))
         )
 
-def _register_loop(func: BinaryFunction):
-    """
-    schedule.register_loop(
-        target: function, interval: int = 1, *args, **kwds
-    )
-    Call a function repeatly every `interval` ticks with `args` and `kwds`.
-    """
-    # Parse args
-    target = func.arg_require("target", FunctionType)
-    arg_interval = func.arg_optional(
-        "interval", IntLiteral(1, func.compiler), IntType
-    )
-    other_arg, other_kw = func.arg_raw()
-    # Allocate an int for timer
-    timer = func.compiler.types[IntType].new_var()
-    # Initialize
-    init_cmds = IntLiteral(0, func.compiler).export(timer)
-    # Tick loop
-    func.compiler.file_tick.write_debug("# schedule.register_loop")
-    ## Call on times up AND reset timer
-    _res, cmds = target.call(other_arg, other_kw)
-    cmds.extend(arg_interval.export(timer))
-    func.compiler.file_tick.extend(
-        export_execute_subcommands(
-            ["if score %s matches ..0" % timer], main=cmd
+def _create_register_loop(compiler):
+    @axe.chop
+    @axe.arg("target", FunctionType)
+    @axe.arg("interval", IntType, default=IntLiteral(1, compiler))
+    @axe.star_arg("args", axe.AnyValue())
+    @axe.kwds("kwds", axe.AnyValue())
+    def _register_loop(compiler, target: AcaciaExpr,
+                    interval: AcaciaExpr, args, kwds):
+        """
+        schedule.register_loop(
+            target: function, interval: int-literal = 1, *args, **kwds
         )
-        for cmd in cmds
-    )
-    ## Let the timer -1
-    func.compiler.file_tick.extend(timer.isub(IntLiteral(1, func.compiler)))
-    # Result
-    return result_cmds(init_cmds, func.compiler)
+        Call a function repeatly every `interval` ticks with `args` and `kwds`.
+        """
+        # Allocate an int for timer
+        timer = compiler.types[IntType].new_var()
+        # Initialize
+        init_cmds = IntLiteral(0, compiler).export(timer)
+        # Tick loop
+        compiler.file_tick.write_debug("# schedule.register_loop")
+        ## Call on times up AND reset timer
+        _res, cmds = target.call(args, kwds)
+        cmds.extend(interval.export(timer))
+        compiler.file_tick.extend(
+            export_execute_subcommands(
+                ["if score %s matches ..0" % timer], main=cmd
+            )
+            for cmd in cmds
+        )
+        ## Let the timer -1
+        compiler.file_tick.extend(timer.isub(IntLiteral(1, compiler)))
+        # Result
+        return resultlib.commands(init_cmds, compiler)
+    return _register_loop
 
 def acacia_build(compiler):
     compiler.add_type(TaskType)
+    register_loop = _create_register_loop(compiler)
     return {
         "Task": compiler.types[TaskType],
-        "register_loop": BinaryFunction(_register_loop, compiler)
+        "register_loop": BinaryFunction(register_loop, compiler)
     }

@@ -6,6 +6,24 @@ import json
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.error import *
+from acaciamc.tools import axe, resultlib
+
+class ArgFString(axe.Multityped):
+    """Accepts an fstring as argument. A string is also accepted and
+    converted to an fstring.
+    """
+    def __init__(self):
+        super().__init__((StringType, FStringType))
+
+    def convert(self, origin: AcaciaExpr) -> "FString":
+        origin = super().convert(origin)
+        if isinstance(origin, String):
+            fstr = FString([], [], origin.compiler)
+            fstr.add_text(origin.value)
+        else:
+            assert isinstance(origin, FString)
+            fstr = origin
+        return fstr
 
 class _FStrError(Exception):
     def __str__(self):
@@ -167,18 +185,17 @@ class FStringType(Type):
     name = 'fstring'
 
     def do_init(self):
-        def _new(func: BinaryFunction):
-            # constructor of fstring type
-            arg_pattern = func.arg_require('_pattern', StringType)
-            arg_fargs, arg_fkws = func.arg_raw()
+        @axe.chop
+        @axe.arg("_pattern", axe.LiteralString(), rename="pattern")
+        @axe.star_arg("args", axe.AnyValue())
+        @axe.kwds("kwds", axe.AnyValue())
+        def _new(compiler, pattern: str, args, kwds):
             try:
-                dependencies, json = _FStrParser(
-                    arg_pattern.value, arg_fargs, arg_fkws
-                ).parse()
+                dependencies, json = _FStrParser(pattern, args, kwds).parse()
             except _FStrError as err:
                 raise Error(ErrorType.ANY, message=str(err))
             # scan pattern
-            return FString(dependencies, json, func.compiler)
+            return FString(dependencies, json, compiler)
         self.attribute_table.set(
             '__new__', BinaryFunction(_new, self.compiler)
         )
@@ -226,29 +243,23 @@ class FString(AcaciaExpr):
 
 # output functions
 
-def _tell(func: BinaryFunction):
-    """tell(text: str|fstring, target: str = "@a")
+@axe.chop
+@axe.arg("text", ArgFString())
+@axe.arg("target", axe.LiteralString(), default="@a")
+def _tell(compiler, text: FString, target: str):
+    """tell(text: str | fstring, target: str = "@a")
     Tell the `target` the `text` using /tellraw.
     """
     cmds = []
-    # arg parse
-    arg_text = func.arg_require('text', (StringType, FStringType))
-    ## convert str to fstring
-    if isinstance(arg_text, String):
-        arg_text, _cmds = func.compiler.types[FStringType].call(
-            args=[arg_text], keywords={}
+    # Convert str to fstring
+    if isinstance(text, String):
+        text, _cmds = compiler.types[FStringType].call(
+            args=[text], keywords={}
         )
         cmds.extend(_cmds)
-    arg_target = func.arg_optional(
-        'target', String('@a', func.compiler), StringType
-    )
-    func.assert_no_arg()
-    # add to tellraw
-    cmds.extend(arg_text.dependencies)
-    cmds.append('tellraw %s %s' % (
-        arg_target.value, arg_text.export_json_str()
-    ))
-    return result_cmds(cmds, func.compiler)
+    cmds.extend(text.dependencies)
+    cmds.append('tellraw %s %s' % (target, text.export_json_str()))
+    return resultlib.commands(cmds, compiler)
 
 # Title modes
 _TITLE = 'title'
@@ -260,9 +271,19 @@ _STAY_TIME = 70
 _FADE_OUT = 20
 _DEF_TITLE_CONFIG = (_FADE_IN, _STAY_TIME, _FADE_OUT)
 
-def _title(func: BinaryFunction):
+@axe.chop
+@axe.arg("text", ArgFString())
+@axe.arg("target", axe.LiteralString(), default="@a")
+@axe.arg("mode", axe.LiteralString(), default=_TITLE)
+@axe.arg("fade_in", axe.LiteralInt(), default=_FADE_IN)
+@axe.arg("stay_time", axe.LiteralInt(), default=_STAY_TIME)
+@axe.arg("fade_out", axe.LiteralInt(), default=_FADE_OUT)
+def _title(compiler, text: FString, target: str, mode: str,
+           fade_in: int, stay_time: int, fade_out: int):
     """title(
-        text: str|fstring, target: str = "@a", mode: str = TITLE,
+        text: str | fstring,
+        target: str = "@a",
+        mode: str = TITLE,
         fade_in: int-literal = 10,
         stay_time: int-literal = 70,
         fade_out: int-literal = 20
@@ -271,71 +292,34 @@ def _title(func: BinaryFunction):
     `fade_in`, `stay_time` and `fade_out` are in ticks.
     """
     cmds = []
-    # Arg parse
-    arg_text = func.arg_require('text', (StringType, FStringType))
-    arg_target = func.arg_optional(
-        'target', String('@a', func.compiler), StringType
-    )
-    arg_mode = func.arg_optional(
-        'mode', String(_TITLE, func.compiler), StringType
-    )
-    arg_fade_in = func.arg_optional(
-        'fade_in', IntLiteral(_FADE_IN, func.compiler), IntType
-    )
-    arg_stay_time = func.arg_optional(
-        'stay_time', IntLiteral(_STAY_TIME, func.compiler), IntType
-    )
-    arg_fade_out = func.arg_optional(
-        'fade_out', IntLiteral(_FADE_OUT, func.compiler), IntType
-    )
-    func.assert_no_arg()
-    ## convert str to fstring
-    if isinstance(arg_text, String):
-        arg_text, _cmds = func.compiler.types[FStringType].call(
-            args=[arg_text], keywords={}
-        )
-        cmds.extend(_cmds)
-    ## check arg int literal
-    if not isinstance(arg_fade_in, IntLiteral):
-        func.arg_error('fade_in', 'should be a literal')
-    if not isinstance(arg_stay_time, IntLiteral):
-        func.arg_error('stay_time', 'should be a literal')
-    if not isinstance(arg_fade_out, IntLiteral):
-        func.arg_error('fade_out', 'should be a literal')
-    ## check valid mode
-    mode = arg_mode.value
+    # Check valid mode
     if mode not in (_TITLE, _SUBTITLE, _ACTIONBAR):
-        func.arg_error('mode', 'invalid mode: %s' % mode)
+        raise axe.ArgumentError('mode', 'invalid mode: %s' % mode)
     # Start
     ## set config
-    target = arg_target.value
-    conf = (arg_fade_in.value, arg_stay_time.value, arg_fade_out.value)
+    conf = (fade_in, stay_time, fade_out)
     if conf != _DEF_TITLE_CONFIG:
         # only set config when it's not the default one
         cmds.append('titleraw %s times %d %d %d' % ((target,) + conf))
     ## titleraw
-    cmds.extend(arg_text.dependencies)
+    cmds.extend(text.dependencies)
     cmds.append('titleraw %s %s %s' % (
-        target, mode, arg_text.export_json_str()
+        target, mode, text.export_json_str()
     ))
     ## reset config
     if conf != _DEF_TITLE_CONFIG:
         # only reset when config is not the default one
         cmds.append('titleraw %s reset' % target)
     ## return
-    return result_cmds(cmds, func.compiler)
+    return resultlib.commands(cmds, compiler)
 
-def _title_clear(func: BinaryFunction):
+@axe.chop
+@axe.arg("target", axe.LiteralString(), default="@a")
+def _title_clear(compiler, target: str):
     """title_clear(target: str = "@a")
     Clear `target`'s title text.
     """
-    # Parse arg
-    arg_target = func.arg_optional(
-        'target', String('@a', func.compiler), StringType
-    )
-    func.assert_no_arg()
-    # Write
-    return result_cmds(['titleraw %s clear' % arg_target.value], func.compiler)
+    return resultlib.commands(['titleraw %s clear' % target], compiler)
 
 def acacia_build(compiler):
     compiler.add_type(FStringType)

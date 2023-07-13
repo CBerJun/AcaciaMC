@@ -7,16 +7,17 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.generator import MCFunctionFile
 from acaciamc.ast import ModuleMeta
 from acaciamc.error import ErrorType
+from acaciamc.tools import axe, resultlib
 
 class MusicType(Type):
     """
     Music(
         path: str,
-        looping: bool = False,
-        loop_interval: int = 50,
+        looping: bool-literal = False,
+        loop_interval: int-literal = 50,
         execute_condition: str = "as @a at @s",
-        note_offset: int = 0,
-        chunk_size: int = 500,
+        note_offset: int-literal = 0,
+        chunk_size: int-literal = 500,
         speed: float = 1.0,
         volume: float = 1.0
     )
@@ -39,57 +40,37 @@ class MusicType(Type):
     name = "Music"
 
     def do_init(self):
-        def _new(func: BinaryFunction):
-            arg_path = func.arg_require("path", StringType)
-            arg_loop = func.arg_optional(
-                "looping", BoolLiteral(False, func.compiler), BoolType)
-            arg_loop_intv = func.arg_optional(
-                "loop_interval", IntLiteral(50, func.compiler), IntType)
-            if not isinstance(arg_loop, BoolLiteral):
-                func.arg_error("looping", "must be a constant")
-            if not isinstance(arg_loop_intv, IntLiteral):
-                func.arg_error("loop_interval", "must be a constant")
-            arg_exec = func.arg_optional(
-                "execute_condition",
-                String("as @a at @s", func.compiler),
-                StringType
-            )
-            arg_note = func.arg_optional(
-                "note_offset", IntLiteral(0, func.compiler), IntType)
-            arg_chunk = func.arg_optional(
-                "chunk_size", IntLiteral(500, func.compiler), IntType)
-            arg_speed = func.arg_optional(
-                "speed", Float(1.0, func.compiler), FloatType)
-            arg_volume = func.arg_optional(
-                "volume", Float(1.0, func.compiler), FloatType)
-            if not isinstance(arg_note, IntLiteral):
-                func.arg_error("note_offset", "must be a constant")
-            if not isinstance(arg_chunk, IntLiteral):
-                func.arg_error("chunk_size", "must be a constant")
-            if arg_chunk.value < 1:
-                func.arg_error("chunk_size", "must be positive")
-            if arg_speed.value <= 0:
-                func.arg_error("speed", "must be positive")
-            if arg_volume.value <= 0:
-                func.arg_error("volume", "must be positive")
-            func.assert_no_arg()
+        @axe.chop
+        @axe.arg("path", axe.LiteralString())
+        @axe.arg("looping", axe.LiteralBool(), default=False)
+        @axe.arg("loop_interval", axe.LiteralInt(), default=50)
+        @axe.arg("execute_condition", axe.LiteralString(),
+                 default="as @a at @s")
+        @axe.arg("note_offset", axe.LiteralInt(), default=0)
+        @axe.arg("chunk_size", axe.LiteralInt(), default=500)
+        @axe.arg("speed", axe.LiteralFloat(), default=1.0)
+        @axe.arg("volume", axe.LiteralFloat(), default=1.0)
+        def _new(compiler, path: str, looping: bool, loop_interval: int,
+                 execute_condition: str, note_offset: int,
+                 chunk_size: int, speed: float, volume: float):
             try:
-                midi = mido.MidiFile(arg_path.value)
+                midi = mido.MidiFile(path)
             except Exception as err:
                 raise Error(ErrorType.IO, message="MIDI parser: %s" % err)
-            exec_condition = arg_exec.value
-            note_offset = arg_note.value
-            looping = arg_loop_intv.value if arg_loop.value else -1
-            chunk_size = arg_chunk.value
-            speed = arg_speed.value
-            volume = arg_volume.value
+            if chunk_size <= 0:
+                raise axe.ArgumentError("chunk_size", "must be positive")
+            if speed <= 0:
+                raise axe.ArgumentError("speed", "must be positive")
+            if volume <= 0:
+                raise axe.ArgumentError("volume", "must be positive")
+            looping_info = loop_interval if looping else -1
             return Music(
-                midi, exec_condition, looping, note_offset,
-                chunk_size, speed, volume, func.compiler
+                midi, execute_condition, looping_info, note_offset,
+                chunk_size, speed, volume, compiler
             )
-
-        self.attribute_table.set("__new__",
-            BinaryFunction(_new, self.compiler))
+        self.attribute_table.set(
+            "__new__", BinaryFunction(_new, self.compiler)
+        )
 
 class Music(AcaciaExpr):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
@@ -307,8 +288,8 @@ class Music(AcaciaExpr):
             self.compiler.add_file(file)
         self.file_sep_gt.append(GT_LEN + 1)
         # Create GT loop using `schedule` module
-        def _gt_loop(func: BinaryFunction):
-            func.assert_no_arg()
+        @axe.chop
+        def _gt_loop(compiler):
             cmds = []
             cmds.extend(
                 export_execute_subcommands(
@@ -330,9 +311,9 @@ class Music(AcaciaExpr):
                 cmds.extend(export_execute_subcommands(
                     ["if score %s matches %d" % (self.timer, GT_LEN + 1)],
                     main=cmd
-                ) for cmd in IntLiteral(-looping, func.compiler)
+                ) for cmd in IntLiteral(-looping, compiler)
                              .export(self.timer))
-            return result_cmds(cmds, func.compiler)
+            return resultlib.commands(cmds, compiler)
         # Register this to be called every tick
         _res, cmds = register_loop.call(
             args=(BinaryFunction(_gt_loop, self.compiler),),
@@ -341,12 +322,15 @@ class Music(AcaciaExpr):
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
-        def _init(func: BinaryFunction):
+        @axe.chop
+        def _init(compiler):
             """.__init__(): Register dependencies"""
-            return result_cmds(cmds, func.compiler)
+            return resultlib.commands(cmds, compiler)
         self.attribute_table.set("__init__",
                                  BinaryFunction(_init, self.compiler))
-        def _play(func: BinaryFunction):
+        @axe.chop
+        @axe.arg("timer", IntType, default=IntLiteral(0, self.compiler))
+        def _play(compiler, timer: AcaciaExpr):
             """
             .play(timer: int = 0)
 
@@ -354,17 +338,14 @@ class Music(AcaciaExpr):
             of playing. When `timer` >= 0, its where the music starts
             playing.
             """
-            arg_timer = func.arg_optional("timer",
-                IntLiteral(0, func.compiler), IntType)
-            func.assert_no_arg()
-            cmds = arg_timer.export(self.timer)
-            return result_cmds(cmds, func.compiler)
+            cmds = timer.export(self.timer)
+            return resultlib.commands(cmds, compiler)
         self.attribute_table.set("play", BinaryFunction(_play, self.compiler))
-        def _stop(func: BinaryFunction):
+        @axe.chop
+        def _stop(compiler):
             """.stop(): Stop the music"""
-            func.assert_no_arg()
-            cmds = IntLiteral(GT_LEN + 2, func.compiler).export(self.timer)
-            return result_cmds(cmds, func.compiler)
+            cmds = IntLiteral(GT_LEN + 2, compiler).export(self.timer)
+            return resultlib.commands(cmds, compiler)
         self.attribute_table.set("stop", BinaryFunction(_stop, self.compiler))
 
     def main_loop(self):
@@ -442,7 +423,10 @@ class Music(AcaciaExpr):
         )
         self.cur_chunk_size += 1
 
-def _set_instrument(func: BinaryFunction):
+@axe.chop
+@axe.arg("id", axe.LiteralInt(), rename="id_")
+@axe.arg("sound", axe.LiteralString())
+def _set_instrument(compiler, id_: int, sound: str):
     """
     music.set_instrument(id: int-literal, sound: str):
         Set instrument mapping
@@ -453,39 +437,26 @@ def _set_instrument(func: BinaryFunction):
         # Set MC sound of ID 127 instrument to `note.hat`
         music.set_instrument(127, "note.hat")
     """
-    # Parse args
-    arg_id = func.arg_require("id", IntType)
-    if not isinstance(arg_id, IntLiteral):
-        func.arg_error('id', 'must be a constant')
-    id_ = arg_id.value
     if id_ >= 128 or id_ < 0:
-        func.arg_error('id', 'must in 0~127')
-    arg_sound = func.arg_require("sound", StringType)
-    func.assert_no_arg()
-    # Modify
-    Music.ID2INSTRUMENT[id_] = arg_sound.value
-    return NoneVar(func.compiler)
+        raise axe.ArgumentError('id', 'must in 0~127')
+    Music.ID2INSTRUMENT[id_] = sound
+    return resultlib.nothing(compiler)
 
-def _channel_volume(func: BinaryFunction):
+@axe.chop
+@axe.arg("channel", axe.LiteralInt())
+@axe.arg("volume", axe.LiteralFloat())
+def _channel_volume(compiler, channel: int, volume: float):
     """
     music.channel_volume(channel: int-literal, volume: float)
 
     Modify volume of specified channel.
     """
-    # Parse args
-    arg_channel = func.arg_require("channel", IntType)
-    arg_volume = func.arg_require("volume", FloatType)
-    if not isinstance(arg_channel, IntLiteral):
-        func.arg_error('channel', 'must be a constant')
-    channel = arg_channel.value
     if channel >= 16 or channel < 0:
-        func.arg_error('channel', 'must in 0~15')
-    volume = arg_volume.value
+        raise axe.ArgumentError('channel', 'must in 0~15')
     if volume < 0:
-        func.arg_error('volume', "can't be negative")
-    # Modify
+        raise axe.ArgumentError('volume', "can't be negative")
     Music.CHANNEL_VOLUME[channel] = volume
-    return NoneVar(func.compiler)
+    return resultlib.nothing(compiler)
 
 def acacia_build(compiler):
     global mido, register_loop

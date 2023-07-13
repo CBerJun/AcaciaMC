@@ -105,7 +105,7 @@ def _parser_component(func: Callable[[_BuildingParser], Any]):
             return res
     return _decorated
 
-_TYPED_TYPE = Union[Type[acacia.Type], acacia.DataType]
+_TYPED_TYPE = Union[Type["acacia.Type"], "acacia.DataType"]
 _ARG_TYPE = Union[_TYPED_TYPE, "Converter",
                   Callable[["Compiler"], "Converter"]]
 
@@ -443,8 +443,8 @@ class _Chopper:
             raise
 
     """def __call__(self, args: acacia.ARGS_T,
-                 kwds: acacia.KEYWORDS_T) -> acacia.CALLRET_T:"""
-    def __call__(self, func: acacia.BinaryFunction) -> acacia.CALLRET_T:
+                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":"""
+    def __call__(self, func: "acacia.BinaryFunction") -> "acacia.CALLRET_T":
         args, kwds = func.arg_raw()
         compiler = func.compiler
         res: Dict[str, Any] = {}
@@ -633,8 +633,8 @@ class OverloadChopped(type):
                           [arg_def.rename for arg_def in arg_defs])
         return cls
     """def __call__(self, args: acacia.ARGS_T,
-                 kwds: acacia.KEYWORDS_T) -> acacia.CALLRET_T:"""
-    def __call__(self, func: acacia.BinaryFunction) -> acacia.CALLRET_T:
+                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":"""
+    def __call__(self, func: "acacia.BinaryFunction") -> "acacia.CALLRET_T":
         args, kwds = func.arg_raw()
         compiler = func.compiler
         if kwds:
