@@ -17,9 +17,6 @@ class Result(NamedTuple):
 def commands(cmds: List[str], compiler: "Compiler") -> Result:
     return Result(acacia.NoneVar(compiler), cmds)
 
-def nothing(compiler: "Compiler") -> Result:
-    return Result(acacia.NoneVar(compiler), [])
-
 def literal(value: Union[bool, int, str, float, None],
             compiler: "Compiler") -> acacia.AcaciaExpr:
     if isinstance(value, bool):  # `bool` in front of `int`

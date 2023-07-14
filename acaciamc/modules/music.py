@@ -440,7 +440,6 @@ def _set_instrument(compiler, id_: int, sound: str):
     if id_ >= 128 or id_ < 0:
         raise axe.ArgumentError('id', 'must in 0~127')
     Music.ID2INSTRUMENT[id_] = sound
-    return resultlib.nothing(compiler)
 
 @axe.chop
 @axe.arg("channel", axe.LiteralInt())
@@ -456,7 +455,6 @@ def _channel_volume(compiler, channel: int, volume: float):
     if volume < 0:
         raise axe.ArgumentError('volume', "can't be negative")
     Music.CHANNEL_VOLUME[channel] = volume
-    return resultlib.nothing(compiler)
 
 def acacia_build(compiler):
     global mido, register_loop

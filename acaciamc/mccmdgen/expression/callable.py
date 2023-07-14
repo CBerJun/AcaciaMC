@@ -113,7 +113,7 @@ class BinaryFunction(AcaciaExpr):
             self,
             implementation: Callable[
                 ["Compiler", "ARGS_T", "KEYWORDS_T"],
-                Union["CALLRET_T", AcaciaExpr]
+                Union["CALLRET_T", AcaciaExpr, None]
             ],
             compiler):
         """implementation: it handles a call to this binary function.
@@ -124,9 +124,10 @@ class BinaryFunction(AcaciaExpr):
           representing keyword name and values are argument values)
         NOTE Dealing with arguments can be annoying, BUT we provide an
         argument parsing tool called Axe (see acaciamc/tools/axe.py).
-        It should return any `AcaciaExpr` as the result value or a tuple
+        It should return any `AcaciaExpr` as the result value, a tuple
         (element 1 is result value, element 2 is list of strings
-        representing commands).
+        representing commands) or None (returns acacia None and writes
+        no command).
         """
         super().__init__(
             DataType.from_type_cls(FunctionType, compiler), compiler
@@ -134,15 +135,13 @@ class BinaryFunction(AcaciaExpr):
         self.implementation = implementation
 
     def call(self, args, keywords: dict):
-        self._calling_args = list(args)
-        self._calling_keywords = keywords.copy()
-        # Implementation needs to return tuple[AcaciaExpr, list[str]],
-        # but we allow `list[str]` to be omitted.
         res = self.implementation(self.compiler, args, keywords)
-        if isinstance(res, tuple):
+        if isinstance(res, tuple):  # CALLRET_T
             return res
         elif isinstance(res, AcaciaExpr):
             return res, []
+        elif res is None:
+            return NoneVar(self.compiler), []
         else:
             raise ValueError("Invalid return of binary func "
                              "implementation: {}".format(res))
