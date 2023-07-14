@@ -26,9 +26,7 @@ There are 5 types of functions:
 __all__ = ['AcaciaFunction', 'InlineFunction', 'BinaryFunction',
            'BoundMethod', 'BoundMethodDispatcher']
 
-from typing import (
-    List, Dict, Union, TYPE_CHECKING, Callable, Type as PythonType
-)
+from typing import List, Dict, Union, TYPE_CHECKING, Callable
 
 from acaciamc.error import *
 from .base import *
@@ -99,33 +97,36 @@ class InlineFunction(AcaciaExpr):
             self, args, keywords)
         return self.result_var, cmds
 
-CHECKTYPE_T = Union[None, PythonType[Type], Tuple[PythonType[Type]],
-                     DataType, Tuple[DataType]]
-
 class BinaryFunction(AcaciaExpr):
     """These are the functions that are written in Python,
     rather than `AcaciaFunction`s which are written in Acacia.
-    The arguments passed to `AcaicaFunction` are assigned to local vars
-    (AcaciaFunction.arg_vars) using commands; but args passed to
-    `BinaryFunction` are directly handled in Python and no commands
-    will be generated for parsing the args.
-    Therefore, the args are not static anymore -- any args of any type
-    will be accepted; if the implementation of function is not satisfied
-    with the args given, it can raise an error using `arg_error`.
-    Also, the result value is not static -- any type of result can be
-    returned.
+    The arguments passed to `AcaicaFunction` are *assigned* to local
+    vars (AcaciaFunction.arg_vars) using commands, while arguments
+    passed to `BinaryFunction` are directly handled in Python and no
+    command will be generated for passing the arguments (similar to
+    inline functions).
+    As a result, the arguments can be "unstorable" -- argument of any
+    type will be accepted. Also, the result value can be "unstorable"
+    -- any type of result can be returned.
     """
     def __init__(
             self,
             implementation: Callable[
-                ["BinaryFunction"], Union["CALLRET_T", AcaciaExpr]],
+                ["Compiler", "ARGS_T", "KEYWORDS_T"],
+                Union["CALLRET_T", AcaciaExpr]
+            ],
             compiler):
-        """implementation: it handles a call to this binary function,
-        and this `BinaryFunction` object is passed as its first argument.
-        The implementation should then parse the arguments using the
-        methods in this class (such as `arg_require`). At last, it needs
-        to give a result which could be any `AcaciaExpr` and a list of
-        commands to run (commands can be omitted).
+        """implementation: it handles a call to this binary function.
+        It should accept 3 arguments: compiler, args and keywords.
+          compiler: the `Compiler` object
+          args: list of positional arguments passed to this function
+          keywords: dict that holds keyword arguments (keys are strings
+          representing keyword name and values are argument values)
+        NOTE Dealing with arguments can be annoying, BUT we provide an
+        argument parsing tool called Axe (see acaciamc/tools/axe.py).
+        It should return any `AcaciaExpr` as the result value or a tuple
+        (element 1 is result value, element 2 is list of strings
+        representing commands).
         """
         super().__init__(
             DataType.from_type_cls(FunctionType, compiler), compiler
@@ -135,103 +136,16 @@ class BinaryFunction(AcaciaExpr):
     def call(self, args, keywords: dict):
         self._calling_args = list(args)
         self._calling_keywords = keywords.copy()
-        # We need to return tuple[AcaciaExpr, list[str]],
-        # but we allow the implementation to omit `list[str]`
-        res = self.implementation(self)
+        # Implementation needs to return tuple[AcaciaExpr, list[str]],
+        # but we allow `list[str]` to be omitted.
+        res = self.implementation(self.compiler, args, keywords)
         if isinstance(res, tuple):
             return res
         elif isinstance(res, AcaciaExpr):
             return res, []
         else:
-            raise ValueError("Invalid return of binary func implementation")
-
-    # These are utils for implementation to parse arg more easily
-    # the `type_` args are optional to check the type of args
-    # it can be a Type or a tuple of Type
-
-    def _check_arg_type(self, arg: str, value: AcaciaExpr, type_: CHECKTYPE_T):
-        """Check type of argument."""
-        if type_ is None:
-            return
-        # Convert `Type` to `DataType`
-        if isinstance(type_, type) and issubclass(type_, Type):
-            type_ = DataType.from_type_cls(type_, self.compiler)
-        # Make `type_` a tuple
-        if isinstance(type_, tuple):
-            nt: List[DataType] = []
-            for t in type_:
-                if issubclass(t, Type):
-                    nt.append(DataType.from_type_cls(t, self.compiler))
-                else:
-                    nt.append(t)
-            type_ = tuple(nt)
-        else:
-            type_ = (type_,)
-        if not any(dt.is_type_of(value) for dt in type_):
-            # If all the DataType can't match the `value`, raise error
-            raise Error(
-                ErrorType.WRONG_ARG_TYPE, arg=arg,
-                expect=', '.join(map(str, type_)), got=str(value.data_type)
-            )
-
-    def _find_arg(self, name: str) -> Union[AcaciaExpr, None]:
-        """find the given arg and return its value.
-        If not found, return None.
-        """
-        res1, res2 = None, None
-        ## find it in positioned args
-        if self._calling_args:
-            res1 = self._calling_args.pop(0)
-        ## find it in keyword
-        if name in self._calling_keywords:
-            res2 = self._calling_keywords.pop(name)
-        ## decide result
-        if res1 is None and res2 is None:
-            return None
-        if res1 is not None and res2 is not None:
-            raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=name)
-        res = res2 if res1 is None else res1
-        return res
-
-    def arg_raw(self) -> Tuple["ARGS_T", "KEYWORDS_T"]:
-        """Get all arguments, unhandled."""
-        res = (self._calling_args.copy(), self._calling_keywords.copy())
-        self._calling_args.clear()
-        self._calling_keywords.clear()
-        return res
-
-    def arg_require(self, name: str, type_: CHECKTYPE_T = None):
-        """Get a required argument named `name`."""
-        res = self._find_arg(name)
-        # Check
-        if res is None:
-            raise Error(ErrorType.MISSING_ARG, arg=name)
-        self._check_arg_type(name, res, type_)
-        return res
-
-    def arg_optional(self, name: str, default: AcaciaExpr,
-                     type_: CHECKTYPE_T = None):
-        """Get an optional argument named `name`."""
-        res = self._find_arg(name)
-        # Check
-        if res is None:
-            res = default
-        self._check_arg_type(name, res, type_)
-        return res
-
-    def assert_no_arg(self):
-        """Assert there is no argument left."""
-        if bool(self._calling_args):
-            raise Error(ErrorType.TOO_MANY_ARGS)
-        if bool(self._calling_keywords):
-            raise Error(
-                ErrorType.UNEXPECTED_KEYWORD_ARG,
-                arg=', '.join(self._calling_keywords.keys())
-            )
-
-    def arg_error(self, arg: str, message: str):
-        """Raise an argument parsing error."""
-        raise Error(ErrorType.INVALID_BIN_FUNC_ARG, arg=arg, message=message)
+            raise ValueError("Invalid return of binary func "
+                             "implementation: {}".format(res))
 
 METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 

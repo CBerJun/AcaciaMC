@@ -442,11 +442,8 @@ class _Chopper:
             err.error_args["arg"] = arg_name
             raise
 
-    """def __call__(self, args: acacia.ARGS_T,
-                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":"""
-    def __call__(self, func: "acacia.BinaryFunction") -> "acacia.CALLRET_T":
-        args, kwds = func.arg_raw()
-        compiler = func.compiler
+    def __call__(self, compiler: "Compiler", args: acacia.ARGS_T,
+                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":
         res: Dict[str, Any] = {}
         arg_got: List[str] = []
         # Positional arguments
@@ -632,11 +629,9 @@ class OverloadChopped(type):
             _check_repeat([arg_def.name for arg_def in arg_defs],
                           [arg_def.rename for arg_def in arg_defs])
         return cls
-    """def __call__(self, args: acacia.ARGS_T,
-                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":"""
-    def __call__(self, func: "acacia.BinaryFunction") -> "acacia.CALLRET_T":
-        args, kwds = func.arg_raw()
-        compiler = func.compiler
+
+    def __call__(self, compiler: "Compiler", args: acacia.ARGS_T,
+                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":
         if kwds:
             raise AcaciaError(ErrorType.ANY,
                               message="Overload functions don't support "

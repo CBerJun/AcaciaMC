@@ -85,10 +85,9 @@ class Position(AcaciaExpr):
             "context", BinaryFunction(_context, self.compiler))
 
     def _create_offset_alia(self, method: str):
-        def _offset_alia(func: BinaryFunction):
+        def _offset_alia(compiler, args, kwds):
             offset = PosOffset(self.compiler)
-            all_args = func.arg_raw()
-            _, cmds = offset.attribute_table.lookup(method).call(*all_args)
+            _, cmds = offset.attribute_table.lookup(method).call(args, kwds)
             _, _cmds = self.attribute_table.lookup("apply").call([offset], {})
             cmds.extend(_cmds)
             return self, cmds

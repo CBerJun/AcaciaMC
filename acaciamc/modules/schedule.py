@@ -86,7 +86,7 @@ class Task(AcaciaExpr):
         def _cancel(compiler):
             """.cancel(): Cancel the schedule"""
             return _timer_reset()
-        def _init(func: BinaryFunction):
+        def _init(compiler, args, keywords):
             return _timer_reset()
         @axe.chop
         def _has_schedule(compiler):
