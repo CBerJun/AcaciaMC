@@ -52,11 +52,10 @@ _BP_SLASH = 4
 _BP_KWDS = 5
 
 class _Argument:
-    def __init__(self, name: str, rename: str,
-                 get_converter: Callable[["Compiler"], "Converter"]) -> None:
+    def __init__(self, name: str, rename: str, converter: "Converter") -> None:
         self.name = name
         self.rename = rename
-        self.get_converter = get_converter
+        self.converter = converter
 
     def set_default(self, value):
         self._default = value
@@ -70,11 +69,10 @@ class _Argument:
         raise ValueError("don't have default")
 
 class _ArgumentList:
-    def __init__(self, name: str, rename: str,
-                 get_converter: Callable[["Compiler"], "Converter"]) -> None:
+    def __init__(self, name: str, rename: str, converter: "Converter") -> None:
         self.name = name
         self.rename = rename
-        self.get_converter = get_converter
+        self.converter = converter
 
 class _BuildingParser(List[Tuple[int, Any]]):
     def __init__(self, target: Callable):
@@ -106,8 +104,7 @@ def _parser_component(func: Callable[[_BuildingParser], Any]):
     return _decorated
 
 _TYPED_TYPE = Union[Type["acacia.Type"], "acacia.DataType"]
-_ARG_TYPE = Union[_TYPED_TYPE, "Converter",
-                  Callable[["Compiler"], "Converter"]]
+_ARG_TYPE = Union[_TYPED_TYPE, "Converter"]
 
 ### Building Stage Interface
 
@@ -118,15 +115,11 @@ def arg(name: str, type_: _ARG_TYPE, rename: Optional[str] = None,
     """Return a decorator for adding an argument"""
     if rename is None:
         rename = name
-    if ((isinstance(type_, type) and issubclass(type_, acacia.Type))
-        or isinstance(type_, acacia.DataType)):
-        type_ = Typed(type_)
     if isinstance(type_, Converter):
-        def get_converter(compiler: "Compiler"):
-            return type_
+        converter = type_
     else:
-        get_converter = type_
-    definition = _Argument(name, rename, get_converter)
+        converter = Typed(type_)
+    definition = _Argument(name, rename, converter)
     if default is not _NO_DEFAULT:
         definition.set_default(default)
     @_parser_component
@@ -148,18 +141,14 @@ def _arg_list(bd_type: int, name: str, type_: _ARG_TYPE,
               rename: Optional[str] = None):
     if rename is None:
         rename = name
-    if ((isinstance(type_, type) and issubclass(type_, acacia.Type))
-        or isinstance(type_, acacia.DataType)):
-        type_ = Typed(type_)
     if isinstance(type_, Converter):
-        def get_converter(compiler: "Compiler"):
-            return type_
+        converter = type_
     else:
-        get_converter = type_
+        converter = Typed(type_)
     @_parser_component
     def _decorator(building: _BuildingParser):
         building.push_component(
-            bd_type, _ArgumentList(name, rename, get_converter)
+            bd_type, _ArgumentList(name, rename, converter)
         )
     return _decorator
 
@@ -452,10 +441,9 @@ class _Chopper:
             if self.args is None:
                 raise AcaciaError(ErrorType.TOO_MANY_ARGS)
             else:
-                converter = self.args.get_converter(compiler)
                 res[self.args.rename] = [
                     self._convert(
-                        arg, converter,
+                        arg, self.args.converter,
                         "#%d(*%s)" % (i + 1, self.args.name)
                     )
                     for i, arg in enumerate(args)
@@ -464,7 +452,7 @@ class _Chopper:
                 arg_got.append(self.args.name)
         for arg_def, arg in zip(chain(self.pos_only, self.pos_n_kw), args):
             res[arg_def.rename] = self._convert(
-                arg, arg_def.get_converter(compiler), arg_def.name
+                arg, arg_def.converter, arg_def.name
             )
             arg_got.append(arg_def.name)
         # Keyword arguments
@@ -487,15 +475,14 @@ class _Chopper:
                 raise AcaciaError(ErrorType.ARG_MULTIPLE_VALUES, arg=arg_name)
             arg_def = self.kw_name2def[arg_name]
             res[arg_def.rename] = self._convert(
-                arg, arg_def.get_converter(compiler), arg_def.name
+                arg, arg_def.converter, arg_def.name
             )
             arg_got.append(arg_name)
         if extra_kwds:
             assert self.kwds
-            converter = self.kwds.get_converter(compiler)
             res[self.kwds.rename] = {
                 arg_name: self._convert(
-                    arg, converter,
+                    arg, self.kwds.converter,
                     "%s(**%s)" % (arg_name, self.kwds.name)
                 )
                 for arg_name, arg in extra_kwds.items()
@@ -531,7 +518,7 @@ def _create_signature(arg_defs: List[_Argument], compiler: "Compiler") -> str:
     return "(%s)" % ", ".join(
         "%s: %s" % (
             arg_def.name,
-            arg_def.get_converter(compiler).get_show_name()
+            arg_def.converter.get_show_name()
         )
         for arg_def in arg_defs
     )
@@ -642,9 +629,8 @@ class OverloadChopped(type):
                 continue
             res = {}
             for arg_def, arg in zip(arg_defs, args):
-                converter = arg_def.get_converter(compiler)
                 try:
-                    converted = converter.convert(arg)
+                    converted = arg_def.converter.convert(arg)
                 except AcaciaError:
                     break
                 else:

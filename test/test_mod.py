@@ -3,22 +3,28 @@ Test module for `acaciamc.tools`.
 See "test/module.aca".
 """
 
+from typing import TYPE_CHECKING
 from acaciamc.tools import axe, resultlib
 from acaciamc.mccmdgen.expression import *
 
-@axe.chop
-@axe.arg("x", IntType, "y")
-@axe.slash
-@axe.arg("g", lambda compiler: axe.Typed(
-    DataType.from_entity(compiler.base_template, compiler))
-)
-@axe.arg("y", axe.Typed(StringType), "x", default=None)
-@axe.star
-@axe.arg("z", axe.Nullable(axe.LiteralString()), default="aa")
-@axe.kwds("k", axe.AnyOf(axe.LiteralInt(), axe.LiteralString()))
-def _foo(compiler, **kwds):
-    print("foo called:", kwds)
-    return resultlib.commands([], compiler)
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
+
+def _build_foo(compiler: "Compiler"):
+    @axe.chop
+    @axe.arg("x", IntType, "y")
+    @axe.slash
+    @axe.arg("g", axe.Typed(
+        DataType.from_entity(compiler.base_template, compiler))
+    )
+    @axe.arg("y", axe.Typed(StringType), "x", default=None)
+    @axe.star
+    @axe.arg("z", axe.Nullable(axe.LiteralString()), default="aa")
+    @axe.kwds("k", axe.AnyOf(axe.LiteralInt(), axe.LiteralString()))
+    def _foo(compiler, **kwds):
+        print("foo called:", kwds)
+        return resultlib.commands([], compiler)
+    return _foo
 
 class _bar(metaclass=axe.OverloadChopped):
     @axe.overload
@@ -41,6 +47,6 @@ class _extbar(_bar):
         return cls.b(compiler, x=IntLiteral(30, compiler), **kwds)
 
 def acacia_build(compiler):
-    return {"foo": BinaryFunction(_foo, compiler),
+    return {"foo": BinaryFunction(_build_foo(compiler), compiler),
             "bar": BinaryFunction(_bar, compiler),
             "extbar": BinaryFunction(_extbar, compiler)}
