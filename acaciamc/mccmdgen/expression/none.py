@@ -1,6 +1,6 @@
 """Builtin None value."""
 
-__all__ = ['NoneVar', 'NoneLiteral', 'result_cmds']
+__all__ = ['NoneVar', 'NoneLiteral']
 
 from .base import *
 from .types import NoneType, DataType
@@ -12,11 +12,6 @@ class NoneVar(VarValue):
 
     def export(self, var: "NoneVar"):
         return []
-
-def result_cmds(dependencies: list, compiler):
-    # API for `BinaryFunction`s, used to return None and just run
-    # some commands.
-    return NoneVar(compiler), dependencies
 
 class NoneLiteral(AcaciaExpr):
     """Represents a literal None. Used by "None" keyword."""
