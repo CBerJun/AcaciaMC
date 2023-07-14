@@ -28,8 +28,7 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import List, Union
-from copy import deepcopy
+from typing import List
 import operator as builtin_op
 
 from .base import *
@@ -62,7 +61,7 @@ class IntLiteral(AcaciaExpr):
     def export(self, var: "IntVar"):
         return ['scoreboard players set %s %s' % (var, self)]
 
-    def deepcopy(self):
+    def copy(self):
         return IntLiteral(self.value, self.compiler)
 
     def __str__(self):
@@ -74,7 +73,7 @@ class IntLiteral(AcaciaExpr):
         return self
 
     def __neg__(self):
-        res = self.deepcopy()
+        res = self.copy()
         res.value = -res.value
         return res
 
@@ -83,7 +82,7 @@ class IntLiteral(AcaciaExpr):
     def _bin_op(self, other, name):
         if isinstance(other, IntLiteral):
             # just calculate `self.value` and `other.value`
-            res = self.deepcopy()
+            res = self.copy()
             try:
                 res.value = getattr(res.value, name)(other.value)
             except ArithmeticError as err:
@@ -263,7 +262,8 @@ class IntOpGroup(AcaciaExpr):
             subvar = self.data_type.new_var(tmp=True)
             subvars.append(subvar)
             res.extend(subexpr.export(subvar))
-        res.extend(map(lambda s: s.format(*subvars, this = var), self.main))
+        res.extend(cmd.format(*subvars, this=var)
+                   for cmd in self.main)
         return res
 
     def _add_lib(self, lib: "IntOpGroup") -> int:
@@ -272,21 +272,14 @@ class IntOpGroup(AcaciaExpr):
         self._current_lib_index += 1
         return self._current_lib_index - 1
 
-    def write(self, *commands: str, pos: Union[int, None] = None):
-        """Write commands.
-        if `pos` is None, write to `self.main`
-        else to `self.libs[pos]`.
-        """
-        if pos is None:
-            target = self.main
-        else:
-            target = self.libs[pos]
-        target.extend(commands)
+    def write(self, *commands: str):
+        """Write commands."""
+        self.main.extend(commands)
 
-    def deepcopy(self):
+    def copy(self):
         res = IntOpGroup(init=None, compiler=self.compiler)
-        res.main = deepcopy(self.main)
-        res.libs = deepcopy(self.libs)
+        res.main.extend(self.main)
+        res.libs.extend(self.libs)
         res._current_lib_index = self._current_lib_index
         return res
 
@@ -306,7 +299,7 @@ class IntOpGroup(AcaciaExpr):
         """Implementation of __add__ and __sub__
         `operator` is '+' or '-'.
         """
-        res = self.deepcopy()
+        res = self.copy()
         if isinstance(other, IntLiteral):
             res.write('scoreboard players %s {this} %s' % (
                 _to_mcop(operator), other
@@ -324,10 +317,10 @@ class IntOpGroup(AcaciaExpr):
         return res
 
     def _mul_div_mod(self, other, operator: str):
-        """Implementation of __mul__, __div__ and __mod__
+        """Implementation of __mul__, __floordiv__ and __mod__
         operator is '*' or '/' or '%'.
         """
-        res = self.deepcopy()
+        res = self.copy()
         if isinstance(other, IntLiteral):
             const = self.compiler.add_int_const(other.value)
             res.write('scoreboard players operation {this} %s= %s' % (

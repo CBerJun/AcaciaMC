@@ -26,8 +26,7 @@ __all__ = [
     'to_BoolVar'
 ]
 
-from typing import Iterable, List, Tuple
-from copy import deepcopy
+from typing import Iterable, List, Tuple, Set
 import operator as builtin_op
 
 from .base import *
@@ -49,7 +48,7 @@ class BoolLiteral(AcaciaExpr):
     def cmdstr(self) -> str:
         return "true" if self.value else "false"
 
-    def deepcopy(self) -> "BoolLiteral":
+    def copy(self) -> "BoolLiteral":
         return BoolLiteral(value=self.value, compiler=self.compiler)
 
     def __str__(self):
@@ -58,7 +57,7 @@ class BoolLiteral(AcaciaExpr):
 
     # Unary operator
     def not_(self):
-        res = self.deepcopy()
+        res = self.copy()
         res.value = not res.value
         return res
 
@@ -157,7 +156,7 @@ class BoolCompare(AcaciaExpr):
         ))
         return res
 
-    def deepcopy(self):
+    def copy(self):
         return BoolCompare(self.left, self.operator, self.right, self.compiler)
 
     def as_execute(self) -> Tuple[List[str], List[str]]:
@@ -216,7 +215,7 @@ class BoolCompare(AcaciaExpr):
 
     # Unary operator
     def not_(self):
-        res = self.deepcopy()
+        res = self.copy()
         res.operator = {
             Operator.greater: Operator.less_equal,
             Operator.greater_equal: Operator.less,
@@ -252,12 +251,12 @@ def new_compare(left: AcaciaExpr, operator: Operator,
 class AndGroup(AcaciaExpr):
     def __init__(self, operands: Iterable[AcaciaExpr], compiler):
         super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
-        self.main = []  # list of subcommands of /execute (See `export`)
-        self.dependencies = []  # commands that runs before `self.main`
+        self.main: List[str] = []  # list of subcommands of /execute (See `export`)
+        self.dependencies: List[str] = []  # commands that runs before `self.main`
         # `compare_operands` stores `BoolCompare` operands -- they are
         # converted to commands when `export`ed since there may be
         # optimizations.
-        self.compare_operands = set()
+        self.compare_operands: Set[BoolCompare] = set()
         self.inverted = False  # if this is "not"ed
         for operand in operands:
             self._add_operand(operand)
@@ -370,17 +369,17 @@ class AndGroup(AcaciaExpr):
             # (which is illegal) should have been detected by that too.
             raise ValueError
 
-    def deepcopy(self):
+    def copy(self):
         res = AndGroup(operands=(), compiler=self.compiler)
-        res.main = deepcopy(self.main)
-        res.dependencies = deepcopy(self.dependencies)
+        res.main.extend(self.main)
+        res.dependencies.extend(self.dependencies)
         res.inverted = self.inverted
-        res.compare_operands = deepcopy(self.compare_operands)
+        res.compare_operands.update(self.compare_operands)
         return res
 
     # Unary operator
     def not_(self):
-        res = self.deepcopy()
+        res = self.copy()
         res.inverted = not res.inverted
         return res
 

@@ -221,14 +221,13 @@ class FString(AcaciaExpr):
         else:  # fallback
             self.json.append({"text": text})
 
-    def deepcopy(self):
-        return FString(
-            deepcopy(self.dependencies), deepcopy(self.json), self.compiler
-        )
+    def copy(self):
+        return FString(self.dependencies.copy(),
+                       deepcopy(self.json), self.compiler)
 
     def __add__(self, other):
         # connect strings
-        res = self.deepcopy()
+        res = self.copy()
         if isinstance(other, String):
             res.add_text(other.value)
         elif isinstance(other, FString):
