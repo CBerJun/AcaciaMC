@@ -6,7 +6,7 @@ NOTE Python package `mido` is required.
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.generator import MCFunctionFile
 from acaciamc.ast import ModuleMeta
-from acaciamc.error import ErrorType
+from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 
 class MusicType(Type):
