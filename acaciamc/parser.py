@@ -7,7 +7,7 @@ from typing import Callable, Optional
 from acaciamc.error import *
 from acaciamc.tokenizer import *
 from acaciamc.ast import *
-from acaciamc.constants import *
+from acaciamc.constants import Config
 
 class Parser:
     def __init__(self, tokenizer: Tokenizer):

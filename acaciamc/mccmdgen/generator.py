@@ -10,7 +10,7 @@ from acaciamc.ast import *
 from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.mccmdgen.expression import *
-from acaciamc.mccmdgen.symbol import *
+from acaciamc.mccmdgen.symbol import ScopedSymbolTable
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler

@@ -34,9 +34,9 @@ import operator as builtin_op
 from .base import *
 from .types import Type, DataType
 from .integer import IntType, IntLiteral, to_IntVar
-from ...ast import Operator
-from ...error import *
-from ...constants import INT_MAX, INT_MIN
+from acaciamc.ast import Operator
+from acaciamc.error import *
+from acaciamc.constants import INT_MAX, INT_MIN
 
 class BoolType(Type):
     name = 'bool'

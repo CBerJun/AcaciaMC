@@ -13,9 +13,9 @@ from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.tokenizer import Tokenizer
 from acaciamc.parser import Parser
-from acaciamc.mccmdgen.generator import *
+from acaciamc.mccmdgen.generator import Generator, MCFunctionFile
 from acaciamc.mccmdgen.expression import *
-from acaciamc.mccmdgen.symbol import *
+from acaciamc.mccmdgen.symbol import SymbolTable
 
 class Compiler:
     """Start compiling the project

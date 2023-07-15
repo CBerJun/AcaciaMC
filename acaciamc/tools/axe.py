@@ -12,7 +12,6 @@ __all__ = [
     "ChopError", "ArgumentError"
 ]
 
-from collections.abc import Callable
 from typing import (
     Callable, Optional, Type, Any, Union, List, Tuple, Dict, Iterable,
     TYPE_CHECKING

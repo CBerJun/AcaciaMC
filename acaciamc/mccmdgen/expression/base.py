@@ -10,7 +10,7 @@ __all__ = [
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T'
 ]
 
-from typing import List, TYPE_CHECKING, Union, Callable, Dict, Tuple
+from typing import List, TYPE_CHECKING, Union, Dict, Tuple
 
 from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *

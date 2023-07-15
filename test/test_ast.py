@@ -7,8 +7,8 @@ sys.path.append(os.path.realpath(
     os.path.join(__file__, os.pardir, os.pardir)
 ))
 
-from acaciamc.tokenizer import *
-from acaciamc.parser import *
+from acaciamc.tokenizer import Tokenizer, TokenType
+from acaciamc.parser import Parser
 from acaciamc.error import *
 from acaciamc.ast import *
 
