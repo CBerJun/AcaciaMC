@@ -18,6 +18,8 @@ this is done by `new_or_expression`.
 """
 
 __all__ = [
+    # Type
+    'BoolType',
     # Expressions
     'BoolLiteral', 'BoolVar', 'NotBoolVar', 'BoolCompare', 'AndGroup',
     # Factory functions
@@ -30,11 +32,25 @@ from typing import Iterable, List, Tuple, Set
 import operator as builtin_op
 
 from .base import *
-from .integer import *
-from .types import IntType, BoolType, DataType
+from .types import Type, DataType
+from .integer import IntType, IntLiteral, to_IntVar
 from ...ast import Operator
 from ...error import *
 from ...constants import INT_MAX, INT_MIN
+
+class BoolType(Type):
+    name = 'bool'
+
+    def new_var(self, tmp=False):
+        objective, selector = self._new_score(tmp)
+        return BoolVar(objective, selector, self.compiler)
+
+    def new_entity_field(self):
+        return {"scoreboard": self.compiler.add_scoreboard()}
+
+    def new_var_as_field(self, entity, **meta) -> "BoolVar":
+        return BoolVar(meta["scoreboard"], str(entity),
+                      self.compiler, with_quote=False)
 
 class BoolLiteral(AcaciaExpr):
     """Literal boolean."""

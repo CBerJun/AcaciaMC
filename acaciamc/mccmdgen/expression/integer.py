@@ -22,6 +22,8 @@ other's method `other.__rxxx__` is used
 """
 
 __all__ = [
+    # Type
+    'IntType',
     # Expression
     'IntLiteral', 'IntVar', 'IntOpGroup',
     # Utils
@@ -32,15 +34,68 @@ from typing import List
 import operator as builtin_op
 
 from .base import *
-from .types import IntType, DataType
+from .types import Type, DataType
+from .callable import BinaryFunction
+from . import boolean
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
+from acaciamc.tools import axe, resultlib
 
 def _to_mcop(operator: str):
     # convert "+" to "add", "-" to "remove"
     if operator == '+': return 'add'
     elif operator == '-': return 'remove'
     raise ValueError
+
+class IntType(Type):
+    name = 'int'
+
+    def do_init(self):
+        self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
+        self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
+        class _new(metaclass=axe.OverloadChopped):
+            """
+            int() -> literal 0
+            int(x: int) -> x
+            int(x: bool) -> 1 if x else 0
+            """
+            @axe.overload
+            def zero(cls, compiler):
+                return resultlib.literal(0, compiler)
+
+            @axe.overload
+            @axe.arg("x", IntType)
+            def copy(cls, compiler, x):
+                return x
+
+            @axe.overload
+            @axe.arg("b", boolean.BoolType)
+            def from_bool(cls, compiler, b):
+                if isinstance(b, boolean.BoolLiteral):
+                    return resultlib.literal(int(b.value), compiler)
+                # Fallback: convert `b` to `BoolVar`,
+                # Since 0 is used to store False, 1 is for True, just
+                # "cast" it to `IntVar`.
+                dependencies, bool_var = boolean.to_BoolVar(b)
+                return IntVar(
+                    objective=bool_var.objective, selector=bool_var.selector,
+                    with_quote=bool_var.with_quote,
+                    compiler=self.compiler
+                ), dependencies
+        self.attribute_table.set(
+            '__new__', BinaryFunction(_new, self.compiler)
+        )
+
+    def new_var(self, tmp=False) -> "IntVar":
+        objective, selector = self._new_score(tmp)
+        return IntVar(objective, selector, self.compiler)
+
+    def new_entity_field(self):
+        return {"scoreboard": self.compiler.add_scoreboard()}
+
+    def new_var_as_field(self, entity, **meta) -> "IntVar":
+        return IntVar(meta["scoreboard"], str(entity),
+                      self.compiler, with_quote=False)
 
 class IntLiteral(AcaciaExpr):
     """Represents a literal integer.

@@ -1,6 +1,6 @@
 # Export useful things
 from .base import *
-from .types import *  # import these first!
+from .types import *
 from .callable import *
 from .module import *
 from .boolean import *
@@ -13,3 +13,9 @@ from .float_ import *
 from .position import *
 from .position_offset import *
 from .rotation import *
+
+BUILTIN_TYPES = (
+    TypeType, IntType, BoolType, FunctionType, NoneType, StringType,
+    ModuleType, ETemplateType, EntityType, FloatType, PosType, PosOffsetType,
+    RotType
+)

@@ -5,14 +5,56 @@ implemented. Workaround: summon an entity and teleport it to
 facing position. Then use "Rot.face_entity".
 """
 
-__all__ = ["Rotation"]
+__all__ = ["RotType", "Rotation"]
 
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from acaciamc.tools import axe
+from acaciamc.constants import DEFAULT_ANCHOR
 from .base import *
-from .types import DataType, RotType
+from .types import Type, DataType
 from .callable import BinaryFunction
+from .entity import EntityType
+
+if TYPE_CHECKING:
+    from .entity import _EntityBase
+
+class RotType(Type):
+    name = "Rot"
+
+    def do_init(self):
+        class _new(metaclass=axe.OverloadChopped):
+            """
+            Rot(entity): rotation of an entity.
+            Rot(int-literal, int-literal): absolute rotation
+            """
+            @axe.overload
+            @axe.arg("target", EntityType)
+            def from_entity(cls, compiler, entity: "_EntityBase"):
+                inst = Rotation(compiler)
+                inst.context.append("rotated as %s" % entity)
+                return inst
+
+            @axe.overload
+            @axe.arg("vertical", axe.LiteralFloat())
+            @axe.arg("horizontal", axe.LiteralFloat())
+            def absolute(cls, compiler, vertical: float, horizontal: float):
+                inst = Rotation(compiler)
+                inst.context.append("rotated %s %s" % (vertical, horizontal))
+                return inst
+        self.attribute_table.set(
+            "__new__", BinaryFunction(_new, self.compiler)
+        )
+        @axe.chop
+        @axe.arg("target", EntityType)
+        @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
+        def _face_entity(compiler, target: "_EntityBase", anchor: str):
+            inst = Rotation(compiler)
+            inst.context.append("facing entity %s %s" % (target, anchor))
+            return inst
+        self.attribute_table.set(
+            "face_entity", BinaryFunction(_face_entity, self.compiler)
+        )
 
 class Rotation(AcaciaExpr):
     def __init__(self, compiler):

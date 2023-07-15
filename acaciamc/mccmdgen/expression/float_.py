@@ -1,12 +1,15 @@
 """Builtin float point values."""
 
-__all__ = ["Float"]
+__all__ = ["FloatType", "Float"]
 
 from functools import partialmethod
 
 from .base import *
-from .types import DataType, FloatType
+from .types import Type, DataType
 from .integer import IntLiteral
+
+class FloatType(Type):
+    name = "float"
 
 class Float(AcaciaExpr):
     def __init__(self, value: float, compiler):

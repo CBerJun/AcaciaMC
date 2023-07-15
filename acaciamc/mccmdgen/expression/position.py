@@ -1,19 +1,84 @@
 """Builtin support for positions."""
 
-__all__ = ["Position"]
+__all__ = ["PosType", "Position"]
 
 from typing import List, TYPE_CHECKING
 
 from acaciamc.error import *
 from acaciamc.tools import axe
+from acaciamc.constants import DEFAULT_ANCHOR, XYZ
 from .base import *
-from .types import DataType, PosType, PosOffsetType
-from .position_offset import PosOffset, XYZ
+from .types import Type, DataType
+from .position_offset import PosOffsetType, PosOffset, CoordinateType
 from .callable import BinaryFunction
 from .rotation import RotType
+from .string import String
+from .entity import EntityType
 
 if TYPE_CHECKING:
     from .rotation import Rotation
+    from .entity import _EntityBase
+
+class PosType(Type):
+    name = "Pos"
+
+    def do_init(self):
+        self.attribute_table.set(
+            "OVERWORLD", String("overworld", self.compiler)
+        )
+        self.attribute_table.set("NETHER", String("nether", self.compiler))
+        self.attribute_table.set("THE_END", String("the_end", self.compiler))
+        self.attribute_table.set("FEET", String("feet", self.compiler))
+        self.attribute_table.set("EYES", String("eyes", self.compiler))
+        self.attribute_table.set("X", String("x", self.compiler))
+        self.attribute_table.set("Y", String("y", self.compiler))
+        self.attribute_table.set("Z", String("z", self.compiler))
+        class _new(metaclass=axe.OverloadChopped):
+            """
+            Pos(entity, [str]):
+                position of entity. `str` is anchor (`Pos.EYES` or
+                `Pos.FEET`).
+            Pos(Pos):
+                make a copy of another `Pos`.
+            Pos(int-literal, int-literal, int-literal):
+                absolute position.
+            """
+            @axe.overload
+            @axe.arg("pos", PosType)
+            def copy(cls, compiler, pos: Position):
+                return pos.copy()
+
+            @axe.overload
+            @axe.arg("target", EntityType)
+            @axe.arg("anchor", axe.LiteralString())
+            def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
+                inst = Position(compiler)
+                inst.context.append("at %s" % target)
+                inst.context.append("anchored %s" % anchor)
+                return inst
+
+            @axe.overload
+            @axe.arg("target", EntityType)
+            def from_entity_no_anchor(cls, compiler, target: "_EntityBase"):
+                return cls.from_entity(compiler, target, DEFAULT_ANCHOR)
+
+            @axe.overload
+            @axe.arg("x", axe.LiteralFloat())
+            @axe.arg("y", axe.LiteralFloat())
+            @axe.arg("z", axe.LiteralFloat())
+            def absolute(cls, compiler, x: float, y: float, z: float):
+                offset = PosOffset(compiler)
+                offset.set(0, x, CoordinateType.ABSOLUTE)
+                offset.set(1, y, CoordinateType.ABSOLUTE)
+                offset.set(2, z, CoordinateType.ABSOLUTE)
+                inst = Position(compiler)
+                _, cmds = inst.attribute_table.lookup("apply").call(
+                    [offset], {}
+                )
+                return inst, cmds
+        self.attribute_table.set(
+            '__new__', BinaryFunction(_new, self.compiler)
+        )
 
 class Position(AcaciaExpr):
     def __init__(self, compiler):

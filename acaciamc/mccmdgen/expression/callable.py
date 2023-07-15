@@ -23,21 +23,31 @@ There are 5 types of functions:
   )
 """
 
-__all__ = ['AcaciaFunction', 'InlineFunction', 'BinaryFunction',
-           'BoundMethod', 'BoundMethodDispatcher']
+__all__ = [
+    # Type
+    'FunctionType',
+    # Expressions
+    'AcaciaFunction', 'InlineFunction', 'BinaryFunction',
+    'BoundMethod', 'BoundMethodDispatcher'
+]
 
-from typing import List, Dict, Union, TYPE_CHECKING, Callable
+from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple
 
 from acaciamc.error import *
+from acaciamc.mccmdgen import generator
 from .base import *
-from .types import *
-from .. import generator
+from .types import Type, DataType
+from .none import NoneVar
 
 if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.generator import MCFunctionFile
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
+
+class FunctionType(Type):
+    name = 'function'
 
 class AcaciaFunction(AcaciaExpr):
     def __init__(self, name: str, args: List[str],

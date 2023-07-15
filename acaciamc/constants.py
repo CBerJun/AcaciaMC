@@ -2,6 +2,8 @@
 
 INT_MIN = -2 ** 31
 INT_MAX = 2 ** 31 - 1
+DEFAULT_ANCHOR = "feet"
+XYZ = ("x", "y", "z")
 
 class Config:
     indent = 4  # number of spaces that an indent block have

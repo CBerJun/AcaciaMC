@@ -1,9 +1,12 @@
 """Builtin string."""
 
-__all__ = ['String']
+__all__ = ['StringType', 'String']
 
 from .base import *
-from .types import StringType, DataType
+from .types import Type, DataType
+
+class StringType(Type):
+    name = 'str'
 
 class String(AcaciaExpr):
     def __init__(self, value: str, compiler):

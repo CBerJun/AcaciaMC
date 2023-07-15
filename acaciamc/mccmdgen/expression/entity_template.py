@@ -1,21 +1,25 @@
 """Entity template of Acacia."""
 
-__all__ = ["EntityTemplate"]
+__all__ = ["ETemplateType", "EntityTemplate"]
 
 from typing import List, Tuple, Dict, TYPE_CHECKING, Union, Any
 import itertools
 
 from acaciamc.error import *
 from .base import *
-from .types import ETemplateType, NoneType, DataType
+from .types import Type, DataType
 from .entity import TaggedEntity
-from .callable import *
+from .callable import BoundMethodDispatcher, BoundMethod
 from .string import String
+from .none import NoneType
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .callable import METHODDEF_T
     from .entity import _EntityBase
+
+class ETemplateType(Type):
+    name = 'entity_template'
 
 class _MethodDispatcher:
     def __init__(self, method_name: str, compiler: "Compiler"):

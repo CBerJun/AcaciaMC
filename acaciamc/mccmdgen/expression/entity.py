@@ -1,17 +1,26 @@
 """Entity of Acacia."""
 
-__all__ = ['TaggedEntity', 'EntityReference']
+__all__ = ['EntityType', 'TaggedEntity', 'EntityReference']
 
 from typing import Tuple, TYPE_CHECKING, List, Optional
 
 from acaciamc.constants import Config
 from acaciamc.error import *
 from .base import *
-from .types import DataType
+from .types import Type, DataType
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .entity_template import EntityTemplate
+
+class EntityType(Type):
+    name = 'entity'
+
+    def new_var(self, template: "EntityTemplate", tmp=False):
+        var = TaggedEntity.from_empty(template, self.compiler)
+        if tmp:
+            self.compiler.add_tmp_entity(var)
+        return var
 
 class _EntityBase(AcaciaExpr):
     def __init__(self, template: "EntityTemplate", compiler,

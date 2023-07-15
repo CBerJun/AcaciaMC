@@ -5,23 +5,46 @@ For instance, "~ ~5 ~" is a position offset, while
 "~ ~5 ~ from xxx entity" is a position.
 """
 
-__all__ = ["PosOffset", "CoordinateType"]
+__all__ = ["PosOffsetType", "PosOffset", "CoordinateType"]
 
 from typing import Set, List
 from enum import Enum
 
 from acaciamc.error import *
 from acaciamc.tools import axe
+from acaciamc.constants import XYZ
 from .base import *
-from .types import DataType, PosOffsetType
+from .types import Type, DataType
 from .callable import BinaryFunction
-
-XYZ = ("x", "y", "z")
 
 class CoordinateType(Enum):
     ABSOLUTE = ""
     RELATIVE = "~"
     LOCAL = "^"
+
+class PosOffsetType(Type):
+    name = "Offset"
+
+    def do_init(self):
+        @axe.chop
+        def _new(compiler):
+            """Offset(): New object with no offset (~ ~ ~)."""
+            return PosOffset(compiler)
+        self.attribute_table.set(
+            "__new__", BinaryFunction(_new, self.compiler)
+        )
+        @axe.chop
+        @axe.arg("left", axe.LiteralFloat(), default=0.0)
+        @axe.arg("up", axe.LiteralFloat(), default=0.0)
+        @axe.arg("front", axe.LiteralFloat(), default=0.0)
+        def _local(compiler, left: float, up: float, front: float):
+            """Offset.local(left, up, front)
+            Return new object using local coordinate.
+            """
+            return PosOffset.local(left, up, front, compiler)
+        self.attribute_table.set(
+            "local", BinaryFunction(_local, self.compiler)
+        )
 
 class PosOffset(AcaciaExpr):
     def __init__(self, compiler):

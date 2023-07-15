@@ -2,7 +2,16 @@
 e.g. "int" is a "type".
 """
 
-from typing import Tuple, TYPE_CHECKING, Type as PythonType, Union, List
+__all__ = [
+    # Type of type
+    'TypeType',
+    # Base class
+    'Type',
+    # Data type
+    'DataType'
+]
+
+from typing import Tuple, TYPE_CHECKING, Type as PythonType, Union
 
 try:  # Python 3.8+
     from typing import final
@@ -12,15 +21,11 @@ except ImportError:
 
 from .base import *
 from acaciamc.error import *
-from acaciamc.constants import INT_MIN, INT_MAX
-from acaciamc.tools import axe, resultlib
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
-
-DEFAULT_ANCHOR = "feet"
 
 class Type(AcaciaExpr):
     """Base class for type of a variable that is a type
@@ -92,229 +97,13 @@ class Type(AcaciaExpr):
         initializer = instance.attribute_table.lookup('__init__')
         if initializer is not None:
             ret, _cmds = initializer.call(args, keywords)
-            if not ret.data_type.raw_matches(NoneType):
+            if not ret.data_type.raw_matches(none.NoneType):
                 raise Error(ErrorType.INITIALIZER_RESULT, type_=self.name)
             cmds.extend(_cmds)
         return instance, cmds
 
 class TypeType(Type):
     name = 'type'
-
-class IntType(Type):
-    name = 'int'
-
-    def do_init(self):
-        self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
-        self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
-        class _new(metaclass=axe.OverloadChopped):
-            """
-            int() -> literal 0
-            int(x: int) -> x
-            int(x: bool) -> 1 if x else 0
-            """
-            @axe.overload
-            def zero(cls, compiler):
-                return resultlib.literal(0, compiler)
-
-            @axe.overload
-            @axe.arg("x", IntType)
-            def copy(cls, compiler, x):
-                return x
-
-            @axe.overload
-            @axe.arg("b", BoolType)
-            def from_bool(cls, compiler, b):
-                if isinstance(b, BoolLiteral):
-                    return resultlib.literal(int(b.value), compiler)
-                # Fallback: convert `b` to `BoolVar`,
-                # Since 0 is used to store False, 1 is for True, just
-                # "cast" it to `IntVar`.
-                dependencies, bool_var = to_BoolVar(b)
-                return IntVar(
-                    objective=bool_var.objective, selector=bool_var.selector,
-                    with_quote=bool_var.with_quote,
-                    compiler=self.compiler
-                ), dependencies
-        self.attribute_table.set(
-            '__new__', BinaryFunction(_new, self.compiler)
-        )
-
-    def new_var(self, tmp=False) -> "IntVar":
-        objective, selector = self._new_score(tmp)
-        return IntVar(objective, selector, self.compiler)
-
-    def new_entity_field(self):
-        return {"scoreboard": self.compiler.add_scoreboard()}
-
-    def new_var_as_field(self, entity, **meta) -> "IntVar":
-        return IntVar(meta["scoreboard"], str(entity),
-                      self.compiler, with_quote=False)
-
-class BoolType(Type):
-    name = 'bool'
-
-    def new_var(self, tmp=False):
-        objective, selector = self._new_score(tmp)
-        return BoolVar(objective, selector, self.compiler)
-
-    def new_entity_field(self):
-        return {"scoreboard": self.compiler.add_scoreboard()}
-
-    def new_var_as_field(self, entity, **meta) -> "BoolVar":
-        return BoolVar(meta["scoreboard"], str(entity),
-                      self.compiler, with_quote=False)
-
-class FunctionType(Type):
-    name = 'function'
-
-class NoneType(Type):
-    name = 'nonetype'
-
-    def new_var(self, tmp=False) -> "NoneVar":
-        return NoneVar(self.compiler)
-
-class StringType(Type):
-    name = 'str'
-
-class ModuleType(Type):
-    name = 'module'
-
-class ETemplateType(Type):
-    name = 'entity_template'
-
-class EntityType(Type):
-    name = 'entity'
-
-    def new_var(self, template: "EntityTemplate", tmp=False):
-        var = TaggedEntity.from_empty(template, self.compiler)
-        if tmp:
-            self.compiler.add_tmp_entity(var)
-        return var
-
-class FloatType(Type):
-    name = "float"
-
-class PosType(Type):
-    name = "Pos"
-
-    def do_init(self):
-        self.attribute_table.set(
-            "OVERWORLD", String("overworld", self.compiler)
-        )
-        self.attribute_table.set("NETHER", String("nether", self.compiler))
-        self.attribute_table.set("THE_END", String("the_end", self.compiler))
-        self.attribute_table.set("FEET", String("feet", self.compiler))
-        self.attribute_table.set("EYES", String("eyes", self.compiler))
-        self.attribute_table.set("X", String("x", self.compiler))
-        self.attribute_table.set("Y", String("y", self.compiler))
-        self.attribute_table.set("Z", String("z", self.compiler))
-        class _new(metaclass=axe.OverloadChopped):
-            """
-            Pos(entity, [str]):
-                position of entity. `str` is anchor (`Pos.EYES` or
-                `Pos.FEET`).
-            Pos(Pos):
-                make a copy of another `Pos`.
-            Pos(int-literal, int-literal, int-literal):
-                absolute position.
-            """
-            @axe.overload
-            @axe.arg("pos", PosType)
-            def copy(cls, compiler, pos: Position):
-                return pos.copy()
-
-            @axe.overload
-            @axe.arg("target", EntityType)
-            @axe.arg("anchor", axe.LiteralString())
-            def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
-                inst = Position(compiler)
-                inst.context.append("at %s" % target)
-                inst.context.append("anchored %s" % anchor)
-                return inst
-
-            @axe.overload
-            @axe.arg("target", EntityType)
-            def from_entity_feet(cls, compiler, target: "_EntityBase"):
-                return cls.from_entity(compiler, target, "feet")
-
-            @axe.overload
-            @axe.arg("x", axe.LiteralFloat())
-            @axe.arg("y", axe.LiteralFloat())
-            @axe.arg("z", axe.LiteralFloat())
-            def absolute(cls, compiler, x: float, y: float, z: float):
-                offset = PosOffset(compiler)
-                offset.set(0, x, CoordinateType.ABSOLUTE)
-                offset.set(1, y, CoordinateType.ABSOLUTE)
-                offset.set(2, z, CoordinateType.ABSOLUTE)
-                inst = Position(compiler)
-                _, cmds = inst.attribute_table.lookup("apply").call(
-                    [offset], {}
-                )
-                return inst, cmds
-        self.attribute_table.set(
-            '__new__', BinaryFunction(_new, self.compiler)
-        )
-
-class PosOffsetType(Type):
-    name = "Offset"
-
-    def do_init(self):
-        @axe.chop
-        def _new(compiler):
-            """Offset(): New object with no offset (~ ~ ~)."""
-            return PosOffset(compiler)
-        self.attribute_table.set(
-            "__new__", BinaryFunction(_new, self.compiler)
-        )
-        @axe.chop
-        @axe.arg("left", axe.LiteralFloat(), default=0.0)
-        @axe.arg("up", axe.LiteralFloat(), default=0.0)
-        @axe.arg("front", axe.LiteralFloat(), default=0.0)
-        def _local(compiler, left: float, up: float, front: float):
-            """Offset.local(left, up, front)
-            Return new object using local coordinate.
-            """
-            return PosOffset.local(left, up, front, compiler)
-        self.attribute_table.set(
-            "local", BinaryFunction(_local, self.compiler)
-        )
-
-class RotType(Type):
-    name = "Rot"
-
-    def do_init(self):
-        class _new(metaclass=axe.OverloadChopped):
-            """
-            Rot(entity): rotation of an entity.
-            Rot(int-literal, int-literal): absolute rotation
-            """
-            @axe.overload
-            @axe.arg("target", EntityType)
-            def from_entity(cls, compiler, entity: "_EntityBase"):
-                inst = Rotation(compiler)
-                inst.context.append("rotated as %s" % entity)
-                return inst
-
-            @axe.overload
-            @axe.arg("vertical", axe.LiteralFloat())
-            @axe.arg("horizontal", axe.LiteralFloat())
-            def absolute(cls, compiler, vertical: float, horizontal: float):
-                inst = Rotation(compiler)
-                inst.context.append("rotated %s %s" % (vertical, horizontal))
-                return inst
-        self.attribute_table.set(
-            "__new__", BinaryFunction(_new, self.compiler)
-        )
-        @axe.chop
-        @axe.arg("target", EntityType)
-        @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
-        def _face_entity(compiler, target: "_EntityBase", anchor: str):
-            inst = Rotation(compiler)
-            inst.context.append("facing entity %s %s" % (target, anchor))
-            return inst
-        self.attribute_table.set(
-            "face_entity", BinaryFunction(_face_entity, self.compiler)
-        )
 
 class DataType:
     """Data type like `int`, `bool` or entity like `entity(Template)`.
@@ -343,7 +132,7 @@ class DataType:
     @classmethod
     def from_entity(cls, template: "EntityTemplate", compiler: "Compiler"):
         """Generate `DataType` from an entity with given `template`."""
-        inst = cls(compiler.types[EntityType], is_entity=True)
+        inst = cls(compiler.types[entity.EntityType], is_entity=True)
         inst.template = template
         return inst
 
@@ -386,31 +175,5 @@ class DataType:
     def raw_matches(self, type_: PythonType[Type]) -> bool:
         return isinstance(self.type, type_)
 
-# These imports are for builtin attributes (e.g. int.MAX; int.__new__)
-# Import these later to prevent circular import
-from .callable import BinaryFunction
-from .boolean import BoolVar, BoolLiteral, to_BoolVar
-from .integer import IntVar, IntLiteral
-from .none import NoneVar
-from .entity import TaggedEntity
-from .position_offset import PosOffset, CoordinateType
-from .position import Position
-from .float_ import Float
-from .string import String
-from .rotation import Rotation
-
-BUILTIN_TYPES = (
-    TypeType, IntType, BoolType, FunctionType, NoneType, StringType,
-    ModuleType, ETemplateType, EntityType, FloatType, PosType, PosOffsetType,
-    RotType
-)
-
-__all__ = [
-    # Base class
-    'Type',
-    # Tuple of builtin types
-    'BUILTIN_TYPES',
-    # Data type
-    'DataType'
-]
-__all__.extend(map(lambda t: t.__name__, BUILTIN_TYPES))
+# Import these later to avoid circular import
+from . import entity, none

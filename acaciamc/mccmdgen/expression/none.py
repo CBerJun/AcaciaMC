@@ -1,9 +1,15 @@
 """Builtin None value."""
 
-__all__ = ['NoneVar', 'NoneLiteral']
+__all__ = ['NoneType', 'NoneVar', 'NoneLiteral']
 
 from .base import *
-from .types import NoneType, DataType
+from .types import Type, DataType
+
+class NoneType(Type):
+    name = 'nonetype'
+
+    def new_var(self, tmp=False) -> "NoneVar":
+        return NoneVar(self.compiler)
 
 class NoneVar(VarValue):
     """Used when function's result is nothing."""

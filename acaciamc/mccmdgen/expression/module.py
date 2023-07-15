@@ -1,13 +1,16 @@
 """Modules."""
 
-__all__ = ['BinaryModule', 'AcaciaModule']
+__all__ = ['ModuleType', 'BinaryModule', 'AcaciaModule']
 
 import importlib.util
 
 from .base import *
-from .types import ModuleType, DataType
-from acaciamc.mccmdgen.symbol import *
+from .types import Type, DataType
+from acaciamc.mccmdgen.symbol import SymbolTable, AttributeTable
 from acaciamc.error import *
+
+class ModuleType(Type):
+    name = 'module'
 
 class BinaryModule(AcaciaExpr):
     """A binary module that is implemented in Python."""
