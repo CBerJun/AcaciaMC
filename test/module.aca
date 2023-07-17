@@ -32,6 +32,32 @@ def foo2(n: int):
     x += n
 schedule.register_loop(foo2, interval=5, n=1)
 
+#* iterlib: Generating repetitive commands *#
+# For-in structures usually comes with this module. A for-in structure
+# is a compile time loop 
+import iterlib
+inline def squared(a: int) -> int:
+    #* Return an integer squared. *#
+    result a * a
+# `square_nums` contains 0, 1, 4, 9, ..., 81
+square_nums -> iterlib.map(squared, iterlib.range(10))
+# `slice` works the same as Python's slice and itertools.islice
+# The example below binds elements from index 2 (4) to end with step
+# two. `i` gets bound to 4, 16, 36 and 64 in turn. `i` is local in
+# the for-in scope and can't be accessed from outside.
+for i in iterlib.slice(square_nums, 2, None, 2):
+    print.tell(print.format("%0", i))
+# Values from iterator are *bound* to variable so it's possible to do:
+x = 10
+y = 20
+z = 30
+# This will increase `x`, `y` and `z` by 10.
+for i in iterlib.enum(x, y, z):
+    i += 10
+# This will increase `x` by 5 for 10 times.
+for i in iterlib.repeat(x, 10):
+    i += 5
+
 #* Importing another Acacia program *#
 # Import `mod` module from current directory and rename it as `testmod`
 import .mod as testmod

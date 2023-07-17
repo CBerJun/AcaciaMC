@@ -49,6 +49,21 @@ while x > 0:
 # a lot of commands. Minecraft limits the amount of commands that one
 # function could trigger to 10000. Be careful when using loops.
 
+## For-in structure
+# A for-in structure is a "compile time loop" that instructs the
+# compiler to *generate repetitive commands* for each iteration. This is
+# very different from a while loop (that's a "runtime loop" and is done
+# in Minecraft).
+# Common bisection algorithm implemented with this feature:
+import iterlib
+y_length = 23
+for i in iterlib.reversed(iterlib.geometric(1, ratio=2, times=5)):
+    if y_length >= i:
+        y_length -= i
+        /execute as CBerJun run tp @s ~ ~${i} ~
+# See module.aca for more information about iterlib and for-in
+# structure.
+
 #* Great builtin modules! *#
 #*
  * The builtin modules are actually separated from the compiler itself,
