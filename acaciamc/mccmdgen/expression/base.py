@@ -7,7 +7,7 @@ __all__ = [
     # Base class
     'AcaciaExpr', 'VarValue',
     # Type checking
-    'ARGS_T', 'KEYWORDS_T', 'CALLRET_T'
+    'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T'
 ]
 
 from typing import List, TYPE_CHECKING, Union, Dict, Tuple
@@ -59,6 +59,7 @@ def export_need_tmp(func):
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
 CALLRET_T = Tuple["AcaciaExpr", List[str]]  # Result
+ITERLIST_T = List[Union["AcaciaExpr", Tuple["AcaciaExpr", List[str]]]]
 
 class AcaciaExpr:
     """Base class for EVERYTHING that represents an Acacia expression.
@@ -140,6 +141,15 @@ class AcaciaExpr:
         """Return a string representation of this expression, used in
         raw commands. If not implemented, then the object can not be
         formatted in a command.
+        """
+        raise NotImplementedError
+
+    def iterate(self) -> ITERLIST_T:
+        """Implements for-in iteration. Should return an iterable
+        of `AcaciaExpr` or `CALLRET_T`, in which values are bound to
+        "for" variable one by one and commands (if given) are written
+        before each iteration of suite. If not implemented, then the
+        object can't be iterated in a for-in structure.
         """
         raise NotImplementedError
 

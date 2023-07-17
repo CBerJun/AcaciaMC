@@ -60,6 +60,7 @@ class ErrorType(enum.Enum):
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
     UNCALLABLE = '"{expr_type}" is not callable'
+    NOT_ITERABLE = '"{type_}" is not iterable'
     INVALID_CMD_FORMATTING = 'Invalid formatted expression'
     INVALID_RAWSCORE_SELECTOR = 'Invalid raw score selector of "{got}" type'
     INVALID_RAWSCORE_OBJECTIVE = 'Invalid raw score objective of "{got}" type'

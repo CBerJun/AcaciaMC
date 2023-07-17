@@ -628,6 +628,23 @@ class Generator(ASTVisitor):
     def visit_EntityMeta(self, node: EntityMeta):
         return node.name, self.visit(node.value)
 
+    def visit_For(self, node: For):
+        iterable = self.visit(node.expr)
+        try:
+            items = iterable.iterate()
+        except NotImplementedError:
+            raise Error(ErrorType.NOT_ITERABLE, type_=str(iterable.data_type))
+        for value in items:
+            if isinstance(value, tuple):
+                expr, cmds = value
+                self.current_file.extend(cmds)
+            else:
+                expr = value
+            with self.new_scope():
+                self.current_scope.set(node.name, expr)
+                for stmt in node.body:
+                    self.visit(stmt)
+
     # --- EXPRESSION VISITORS ---
     # literal
 

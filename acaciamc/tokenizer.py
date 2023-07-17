@@ -75,6 +75,8 @@ class TokenType(enum.Enum):
     as_ = 'as'
     from_ = 'from'
     none = 'None'
+    for_ = 'for'
+    in_ = 'in'
     false = 'False'  # must at end of keyword part
 
 KEYWORDS = {}

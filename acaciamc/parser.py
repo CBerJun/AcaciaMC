@@ -592,6 +592,18 @@ class Parser:
                 alias.append(self.alia())
             return FromImport(meta, names, alias, **pos)
 
+    def for_stmt(self):
+        """for_stmt := FOR IDENTIFIER IN expr COLON statement_block"""
+        pos = self.current_pos
+        self.eat(TokenType.for_)
+        name = self.current_token.value
+        self.eat(TokenType.identifier)
+        self.eat(TokenType.in_)
+        expr = self.expr()
+        self.eat(TokenType.colon)
+        body = self.statement_block()
+        return For(name, expr, body, **pos)
+
     def statement(self):
         """statement := LINE_BEGIN (
           (expr (
@@ -599,7 +611,7 @@ class Parser:
             TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
           )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
           command_stmt | result_stmt | import_stmt |
-          from_import_stmt | entity_stmt
+          from_import_stmt | entity_stmt | for_stmt | while_stmt
         )
         """
         # Statements that start with special token
@@ -614,7 +626,8 @@ class Parser:
             TokenType.command: self.command_stmt,
             TokenType.result: self.result_stmt,
             TokenType.import_: self.import_stmt,
-            TokenType.from_: self.from_import_stmt
+            TokenType.from_: self.from_import_stmt,
+            TokenType.for_: self.for_stmt
         }
         stmt_method = TOK2STMT.get(self.current_token.type)
         if stmt_method:
