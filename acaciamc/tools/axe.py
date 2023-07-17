@@ -8,6 +8,7 @@ __all__ = [
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
+    "Iterator",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -337,6 +338,20 @@ class AnyOf(Converter):
                 return res
         else:
             self.wrong_argument(origin)
+
+class Iterator(Converter):
+    """Accepts an Acacia iterable and converts it to Python list."""
+    def get_show_name(self) -> str:
+        return "any iterable"
+
+    def convert(self, origin: acacia.AcaciaExpr) \
+        -> List[acacia.AcaciaExpr]:
+        try:
+            res = origin.iterate()
+        except NotImplementedError:
+            self.wrong_argument(origin)
+        else:
+            return res
 
 ### Parser
 
