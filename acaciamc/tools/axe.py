@@ -528,7 +528,7 @@ class _Chopper:
                 raise AcaciaError(ErrorType.INVALID_BIN_FUNC_ARG,
                                   arg=err.arg, message=err.message)
 
-def _create_signature(arg_defs: List[_Argument], compiler: "Compiler") -> str:
+def _create_signature(arg_defs: List[_Argument]) -> str:
     return "(%s)" % ", ".join(
         "%s: %s" % (
             arg_def.name,
@@ -657,8 +657,8 @@ class OverloadChopped(type):
                 message="No overload matches given arguments: "
                         "got %s, expected %s" % (
                     "(%s)" % ", ".join(str(arg.data_type) for arg in args),
-                    " / ".join(_create_signature(arg_defs, compiler)
-                                for _, arg_defs in self.__overloads)
+                    " / ".join(_create_signature(arg_defs)
+                               for _, arg_defs in self.__overloads)
                 )
             )
 
