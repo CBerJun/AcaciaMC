@@ -56,7 +56,7 @@ class RotType(Type):
             "face_entity", BinaryFunction(_face_entity, self.compiler)
         )
 
-class Rotation(AcaciaExpr):
+class Rotation(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
         super().__init__(DataType.from_type_cls(RotType, compiler), compiler)
         self.context: List[str] = []
@@ -72,11 +72,17 @@ class Rotation(AcaciaExpr):
         self.attribute_table.set(
             "offset", BinaryFunction(_offset, self.compiler))
 
+    def copy(self):
+        res = Rotation(self.compiler)
+        res.context.extend(self.context)
+        return res
+
     def _create_setter(self, type_prefix: str):
         @axe.chop
         @axe.arg("vertical", axe.Nullable(axe.LiteralFloat()), default=None)
         @axe.arg("horizontal", axe.Nullable(axe.LiteralFloat()), default=None)
-        def _setter(compiler, vertical, horizontal):
+        @transform_immutable(self)
+        def _setter(self: Rotation, compiler, vertical, horizontal):
             vh: List[str] = []
             for arg in (vertical, horizontal):
                 if arg is None:

@@ -38,16 +38,9 @@ class PosType(Type):
             Pos(entity, [str]):
                 position of entity. `str` is anchor (`Pos.EYES` or
                 `Pos.FEET`).
-            Pos(Pos):
-                make a copy of another `Pos`.
             Pos(int-literal, int-literal, int-literal):
                 absolute position.
             """
-            @axe.overload
-            @axe.arg("pos", PosType)
-            def copy(cls, compiler, pos: Position):
-                return pos.copy()
-
             @axe.overload
             @axe.arg("target", EntityType)
             @axe.arg("anchor", axe.LiteralString())
@@ -72,22 +65,22 @@ class PosType(Type):
                 offset.set(1, y, CoordinateType.ABSOLUTE)
                 offset.set(2, z, CoordinateType.ABSOLUTE)
                 inst = Position(compiler)
-                _, cmds = inst.attribute_table.lookup("apply").call(
-                    [offset], {}
-                )
-                return inst, cmds
+                new_inst, cmds = (inst.attribute_table.lookup("apply")
+                                  .call([offset], {}))
+                return new_inst, cmds
         self.attribute_table.set(
             '__new__', BinaryFunction(_new, self.compiler)
         )
 
-class Position(AcaciaExpr):
+class Position(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
         super().__init__(DataType.from_type_cls(PosType, compiler), compiler)
         self.context: List[str] = []  # /execute subcommands
 
         @axe.chop
         @axe.arg("id", axe.LiteralString(), rename="id_")
-        def _dim(compiler, id_: str):
+        @transform_immutable(self)
+        def _dim(self: Position, compiler, id_: str):
             """.dim(id: str): change dimension of position."""
             self.context.append("in %s" % id_)
             return self
@@ -101,7 +94,8 @@ class Position(AcaciaExpr):
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
         @axe.arg("up", axe.LiteralFloat(), default=0.0)
         @axe.arg("front", axe.LiteralFloat(), default=0.0)
-        def _local(compiler, rot: "Rotation", left: float,
+        @transform_immutable(self)
+        def _local(self: Position, compiler, rot: "Rotation", left: float,
                    up: float, front: float):
             """.local(rot: Rot, left: float = 0.0, up: float = 0.0,
                       front: float = 0.0)
@@ -109,17 +103,20 @@ class Position(AcaciaExpr):
             """
             offset = PosOffset.local(left, up, front, compiler)
             self.context.extend(rot.context)
-            _, cmds = self.attribute_table.lookup("apply").call([offset], {})
-            return self, cmds
+            new_obj, cmds = (self.attribute_table.lookup("apply")
+                             .call([offset], {}))
+            return new_obj, cmds
         @axe.chop
         @axe.arg("offset", PosOffsetType)
-        def _apply(compiler, offset: PosOffset):
+        @transform_immutable(self)
+        def _apply(self: Position, compiler, offset: PosOffset):
             """.apply(offset: Offset): Apply offset to current position."""
             self.context.append("positioned %s" % offset)
             return self
         @axe.chop
         @axe.arg("axis", axe.LiteralString(), default="xyz")
-        def _align(compiler, axis: str):
+        @transform_immutable(self)
+        def _align(self: Position, compiler, axis: str):
             """.align(axis: str = "xyz"): round position on given axis
             using floor method. The axis must be a combination of "x", "y",
             and "z". For example,
@@ -150,12 +147,15 @@ class Position(AcaciaExpr):
             "context", BinaryFunction(_context, self.compiler))
 
     def _create_offset_alia(self, method: str):
-        def _offset_alia(compiler, args, kwds):
-            offset = PosOffset(self.compiler)
-            _, cmds = offset.attribute_table.lookup(method).call(args, kwds)
-            _, _cmds = self.attribute_table.lookup("apply").call([offset], {})
+        @transform_immutable(self)
+        def _offset_alia(self: Position, compiler, args, kwds):
+            offset = PosOffset(compiler)
+            _, cmds = (offset.attribute_table.lookup(method)
+                       .call(args, kwds))
+            new_obj, _cmds = (self.attribute_table.lookup("apply")
+                              .call([offset], {}))
             cmds.extend(_cmds)
-            return self, cmds
+            return new_obj, cmds
         return _offset_alia
 
     def copy(self) -> "Position":

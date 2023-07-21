@@ -1,16 +1,16 @@
 """Base stuffs for generating codes of Acacia expressions."""
 
 __all__ = [
+    # Base classes
+    'AcaciaExpr', 'VarValue',
     # Utils
     'export_execute_subcommands', 'ArgumentHandler',
-    'export_need_tmp',
-    # Base class
-    'AcaciaExpr', 'VarValue',
+    'export_need_tmp', 'ImmutableMixin', 'transform_immutable',
     # Type checking
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T'
 ]
 
-from typing import List, TYPE_CHECKING, Union, Dict, Tuple
+from typing import List, TYPE_CHECKING, Union, Dict, Tuple, Callable
 
 from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *
@@ -221,3 +221,22 @@ class VarValue(AcaciaExpr):
     e.g. bool -> Type -> Unassignable
     """
     pass
+
+class ImmutableMixin:
+    """An `AcaciaExpr` that can't be changed and only allows
+    transformations into another object of same type.
+    """
+    def copy(self) -> "ImmutableMixin":
+        raise NotImplementedError
+
+def transform_immutable(self: ImmutableMixin):
+    """Return a decorator for binary function implementations that
+    transforms an immutable expression to another one.
+    """
+    if not isinstance(self, ImmutableMixin):
+        raise TypeError("can't transform non-ImmutableMixin")
+    def _decorator(func: Callable):
+        def _decorated(*args, **kwds):
+            return func(self.copy(), *args, **kwds)
+        return _decorated
+    return _decorator
