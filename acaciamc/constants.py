@@ -6,7 +6,6 @@ DEFAULT_ANCHOR = "feet"
 XYZ = ("x", "y", "z")
 
 class Config:
-    indent = 4  # number of spaces that an indent block have
     debug_comments = False  # generate debug comments in .mcfunction files
     function_folder = 'acacia'  # name of the folder of functions
     scoreboard = 'acacia'  # prefix of scoreboard that Acacia uses to hold data

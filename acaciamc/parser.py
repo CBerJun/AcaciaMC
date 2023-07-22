@@ -7,7 +7,6 @@ from typing import Callable, Optional
 from acaciamc.error import *
 from acaciamc.tokenizer import *
 from acaciamc.ast import *
-from acaciamc.constants import Config
 
 class Parser:
     def __init__(self, tokenizer: Tokenizer):
@@ -55,58 +54,22 @@ class Parser:
     def _block(self, func: Callable[[], Statement]):
         """Read a block of structures.
         `func` reads the structure and should return the result AST.
-        Every time when `func` ends, `self.current_char` should fall on
-        either a `line_begin` or an `end_marker`.
+        <func>_block := NEW_LINE INDENT <func>+ DEDENT
         """
         stmts = []
-        self.current_indent += Config.indent
-        while self.current_token.type != TokenType.end_marker:
-            # Check line_begin and indent
-            self._skip_empty_lines()
-            got_indent = self.current_token.value
-            self.eat(TokenType.line_begin)
-            if self.current_indent != got_indent:
-                self.error(
-                    ErrorType.WRONG_INDENT,
-                    got=got_indent, expect=self.current_indent
-                )
-            if self.current_token.type is TokenType.end_marker:
-                break
-            # Parse the structure
-            stmt = func()
-            stmts.append(stmt)
-            # every time statement method ends, current_token is
-            # either line_begin or end_marker
-            # when indent num is less than expected, end loop
-            self._skip_empty_lines()
-            # when a line is empty, the indent num is not considered; e.g.:
-            # if a:
-            #     b
-            # # Empty line
-            #     bc
-            # So we do `_skip_empty_lines` here
-            if self.current_token.type is TokenType.line_begin:
-                if self.current_token.value < self.current_indent:
-                    break
-        self.current_indent -= Config.indent
-        # Python does not allow empty blocks, so it is in Acacia
-        if not stmts:
+        self.eat(TokenType.new_line)
+        if self.current_token.type is not TokenType.indent:
             self.error(ErrorType.EMPTY_BLOCK)
+        self.eat()  # INDENT
+        while self.current_token.type != TokenType.dedent:
+            stmts.append(func())
+        self.eat()  # DEDENT
         return stmts
 
-    def _skip_empty_lines(self):
-        """Skip empty lines and put `self.current_token` on the
-        `line_begin` of first valid line.
-        """
-        self.peek()
-        while (self.current_token.type
-               is self.next_token.type
-               is TokenType.line_begin):
-            self.eat()
-            self.peek()
-
     def statement_block(self):
-        """Read a block of statements."""
+        """Read a block of statements.
+        statement_block := NEW_LINE INDENT statement+ DEDENT
+        """
         return self._block(self.statement)
 
     # Following are different AST generators
@@ -360,12 +323,11 @@ class Parser:
 
     def if_stmt(self):
         """
-        if_statement := IF expr COLON statement_block
+        if_stmt := IF expr COLON statement_block
           (ELIF expr COLON statement_block)*
           (ELSE COLON statement_block)?
         """
         pos = self.current_pos
-        IF_EXTRA = (TokenType.elif_, TokenType.else_)
         def _if_extra():
             """
             if_extra := (ELIF expr COLON statement_block if_extra?)
@@ -376,33 +338,22 @@ class Parser:
                 self.eat()
                 self.eat(TokenType.colon)
                 return self.statement_block()
-            self.eat(TokenType.elif_)
-            condition = self.expr()
-            self.eat(TokenType.colon)
-            stmts = self.statement_block()
-            # To allow empty lines before "elif" or "else"
-            self._skip_empty_lines()
-            # See if there's more "elif" or "else"
-            else_stmts = []
-            next_indent = self.current_token.value
-            self.peek()  # same as below; skip line_begin
-            if ((self.next_token.type in IF_EXTRA)
-                and (next_indent == self.current_indent)):
-                self.eat()  # eat line_begin
+            elif self.current_token.type is TokenType.elif_:
+                self.eat()
+                condition = self.expr()
+                self.eat(TokenType.colon)
+                stmts = self.statement_block()
+                # See if there are more "elif" or "else"
                 else_stmts = _if_extra()
-            return [If(condition, stmts, else_stmts, **self.current_pos)]
-        # if_statement := IF expr COLON statement_block if_extra?
+                return [If(condition, stmts, else_stmts, **self.current_pos)]
+            else:
+                return []
+        # if_stmt := IF expr COLON statement_block if_extra?
         self.eat(TokenType.if_)
         condition = self.expr()
         self.eat(TokenType.colon)
         stmts = self.statement_block()
-        else_stmts = []
-        next_indent = self.current_token.value
-        self.peek()  # current is line_begin, check next
-        if ((self.next_token.type in IF_EXTRA)
-            and (next_indent == self.current_indent)):
-            self.eat()  # eat this line_begin
-            else_stmts = _if_extra()
+        else_stmts = _if_extra()
         return If(condition, stmts, else_stmts, **pos)
 
     def while_stmt(self):
@@ -415,7 +366,7 @@ class Parser:
         return While(condition, body, **pos)
 
     def pass_stmt(self):
-        """pass_statement := PASS"""
+        """pass_stmt := PASS"""
         node = Pass(**self.current_pos)
         self.eat(TokenType.pass_)
         return node
@@ -468,6 +419,7 @@ class Parser:
             self.eat()  # eat IDENTIFIER
             self.eat(TokenType.colon)
             type_ = self.type_spec()
+            self.eat(TokenType.new_line)
             return EntityField(name, type_, **pos)
         elif self.current_token.type is TokenType.at:
             # meta_decl
@@ -476,9 +428,12 @@ class Parser:
             self.eat(TokenType.identifier)
             self.eat(TokenType.colon)
             value = self.expr()
+            self.eat(TokenType.new_line)
             return EntityMeta(name, value, **pos)
         elif self.current_token.type is TokenType.pass_:
-            return self.pass_stmt()
+            res = self.pass_stmt()
+            self.eat(TokenType.new_line)
+            return res
         else:
             # method_decl
             content = self.def_stmt()
@@ -491,7 +446,8 @@ class Parser:
         field_decl := IDENTIFIER COLON type_spec
         method_decl := def_stmt
         meta_decl := AT IDENTIFIER COLON expr
-        entity_body := method_decl | field_decl | meta_decl | pass_stmt
+        entity_body := method_decl | (
+          (field_decl | meta_decl | pass_stmt) NEW_LINE)
         """
         pos = self.current_pos
         self.eat(TokenType.entity)
@@ -519,6 +475,7 @@ class Parser:
                 # XXX which can be optimized
                 parser = Parser(section[1])
                 res.append((section[0], parser.expr()))
+                parser.eat(TokenType.new_line)
                 parser.eat(TokenType.end_marker)
             else:
                 res.append(section)
@@ -605,31 +562,44 @@ class Parser:
         return For(name, expr, body, **pos)
 
     def statement(self):
-        """statement := LINE_BEGIN (
-          (expr (
-            (EQUAL | ARROW | ADD_EQUAL | MINUS_EQUAL|
-            TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
-          )?) | if_stmt | pass_stmt | interface_stmt | def_stmt |
-          command_stmt | result_stmt | import_stmt |
-          from_import_stmt | entity_stmt | for_stmt | while_stmt
+        """
+        expr_statement := (
+          assign_stmt | aug_assign_stmt | bind_stmt | expr_stmt
         )
+        simple_statement := (
+          pass_stmt | command_stmt | result_stmt | import_stmt |
+          from_import_stmt
+        )
+        embedded_statement := (
+          if_stmt | while_stmt | for_stmt | interface_stmt | def_stmt |
+          entity_stmt
+        )
+        statement := ((simple_statement | expr_statement) NEW_LINE) |
+          embedded_statement
         """
         # Statements that start with special token
-        TOK2STMT = {
+        TOK2STMT_EMBEDDED = {
             TokenType.if_: self.if_stmt,
             TokenType.while_: self.while_stmt,
-            TokenType.pass_: self.pass_stmt,
             TokenType.interface: self.interface_stmt,
             TokenType.def_: self.def_stmt,
             TokenType.inline: self.def_stmt,
             TokenType.entity: self.entity_stmt,
+            TokenType.for_: self.for_stmt
+        }
+        TOK2STMT_SIMPLE = {
+            TokenType.pass_: self.pass_stmt,
             TokenType.command: self.command_stmt,
             TokenType.result: self.result_stmt,
             TokenType.import_: self.import_stmt,
             TokenType.from_: self.from_import_stmt,
-            TokenType.for_: self.for_stmt
         }
-        stmt_method = TOK2STMT.get(self.current_token.type)
+        stmt_method = TOK2STMT_SIMPLE.get(self.current_token.type)
+        if stmt_method:
+            res = stmt_method()
+            self.eat(TokenType.new_line)
+            return res
+        stmt_method = TOK2STMT_EMBEDDED.get(self.current_token.type)
         if stmt_method:
             return stmt_method()
 
@@ -653,42 +623,35 @@ class Parser:
             # assign_stmt := assignable EQUAL expr
             self.eat()  # eat equal
             _check_assign_target(expr)
-            return Assign(expr, self.expr(), **pos)
+            node = Assign(expr, self.expr(), **pos)
         elif self.current_token.type in AUG_ASSIGN:
             # aug_assign_stmt := assignable (PLUS_EQUAL |
             #   MINUS_EQUAL | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
             operator = AUG_ASSIGN[self.current_token.type]
             self.eat()  # eat operator
             _check_assign_target(expr)
-            return AugmentedAssign(expr, operator, self.expr(), **pos)
+            node = AugmentedAssign(expr, operator, self.expr(), **pos)
         elif self.current_token.type is TokenType.arrow:
             # bind_stmt := (attribute | identifier) ARROW expr
             self.eat()  # eat arrow
             if not isinstance(expr, (Attribute, Identifier)):
                 self.error(ErrorType.INVALID_BIND_TARGET)
             right = self.expr()  # get assign value
-            return Binding(expr, right, **pos)
+            node = Binding(expr, right, **pos)
         else:  # just an expr
             # expr_stmt := expr
-            return ExprStatement(expr, **pos)
+            node = ExprStatement(expr, **pos)
+        self.eat(TokenType.new_line)
+        return node
 
     ## Other generators
 
     def module(self):
+        """module := statement* END_MARKER"""
         pos = self.current_pos
         stmts = []
         while self.current_token.type != TokenType.end_marker:
             # Check line_begin and indent
-            self._skip_empty_lines()
-            got_indent = self.current_token.value
-            self.eat(TokenType.line_begin)
-            if self.current_indent != got_indent:
-                self.error(
-                    ErrorType.WRONG_INDENT,
-                    got=got_indent, expect=self.current_indent
-                )
-            if self.current_token.type is TokenType.end_marker:
-                break
             stmts.append(self.statement())
         return Module(stmts, **pos)
 

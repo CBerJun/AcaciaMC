@@ -302,13 +302,13 @@ class Compiler:
         for p in self._loading_files:
             if os.path.samefile(p, path):
                 self.raise_error(Error(ErrorType.CIRCULAR_PARSE, file_=path))
-        src = self._read_file(path)
+        src_file = self._open_file(path)
         oldf = self._current_file
         oldg = self.current_generator
         self._current_file = path
         self._loading_files.append(path)
         try:
-            node = Parser(Tokenizer(src)).module()
+            node = Parser(Tokenizer(src_file)).module()
             self.current_generator = Generator(
                 node=node, main_file=self.file_main,
                 compiler=self
@@ -317,19 +317,30 @@ class Compiler:
         except Error as err:
             err.set_file(path)
             raise err
+        finally:
+            src_file.close()
         self._current_file = oldf
         self.current_generator = oldg
         self._loading_files.pop()
 
     # --- I/O Util (Internal use) ---
 
-    def _read_file(self, path: str) -> str:
-        """Read Acacia file and return source code."""
+    def _open_file(self, path: str):
         try:
-            with open(path, 'r', **self.OPEN_ARGS) as f:
-                return f.read()
+            return open(path, 'r', **self.OPEN_ARGS)
         except Exception as err:
             self.raise_error(Error(ErrorType.IO, message=str(err)))
+
+    def _read_file(self, path: str) -> str:
+        """Read Acacia file and return source code."""
+        x = self._open_file(path)
+        try:
+            with x:
+                s = x.read()
+        except Exception as err:
+            self.raise_error(Error(ErrorType.IO, message=str(err)))
+        else:
+            return s
 
     def _write_file(self, content: str, path: str):
         """write `content` to `path`."""

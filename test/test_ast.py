@@ -7,6 +7,8 @@ sys.path.append(os.path.realpath(
     os.path.join(__file__, os.pardir, os.pardir)
 ))
 
+import io
+
 from acaciamc.tokenizer import Tokenizer, TokenType
 from acaciamc.parser import Parser
 from acaciamc.error import *
@@ -89,7 +91,7 @@ class ASTVisualizer(ASTVisitor):
 
 def test_tokenize(src: str):
     print('===TOKENIZER===')
-    tk = Tokenizer(src)
+    tk = Tokenizer(io.StringIO(src))
     while True:
         token = tk.get_next_token()
         print(token)
@@ -98,7 +100,7 @@ def test_tokenize(src: str):
 
 def test_parser(src: str):
     print('===PARSER===')
-    parser = Parser(Tokenizer(src))
+    parser = Parser(Tokenizer(io.StringIO(src)))
     visualizer = ASTVisualizer(parser.module())
     print(visualizer.get_string())
 
@@ -148,7 +150,9 @@ a = \\
     \\
   # a comment
 
-x = 10
+x = \\
+  10 \\
+    + 20
 
 '''
 
@@ -169,8 +173,19 @@ decimal_test = '''
 0x10.f  # (16).f (float does not support hex form)
 '''
 
+multiline_test = '''
+#* mul *# if x:
+    #* xx
+    g \\
+        y
+        *# y \\
+    + z
+        /*sss ${1}
+sss*/ 5
+'''
+
 try:
-    test(decimal_test)
+    test(multiline_test)
 except Error as err:
     err.set_file("<testsrc>")
     print("Error:", err)

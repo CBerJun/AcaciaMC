@@ -2,19 +2,30 @@
 
 __all__  = ['TokenType', 'Token', 'Tokenizer', 'StringMode']
 
-from typing import Union
+from typing import Union, List, TextIO, Tuple
 import enum
+import io
 
 from acaciamc.error import *
 
 class TokenType(enum.Enum):
+    """
+    Token types.
+    Value convension:
+    1. If value is one character (len==1), then a single character
+    token is registered. (e.g. '=')
+    2. If value is defined between `true` and `false`, then it is
+    registered as a keyword.
+    """
     # block
+    indent = 'INDENT'
+    dedent = 'DEDENT'
+    new_line = 'NEW_LINE'
     lparen = '('
     rparen = ')'
     bar = '|'
     colon = ':'
     comma = ','
-    line_begin = 'LINE_BEGIN'  # value:int = indent space counts
     end_marker = 'END_MARKER'  # end of file
     # statement
     command = 'COMMAND'
@@ -47,10 +58,10 @@ class TokenType(enum.Enum):
     ## literal
     integer = 'INTEGER'  # value:int = this integer
     string = 'STRING'
-    # string value: list[tuple(StringMode, str)]
+    # string value: list[tuple(StringMode, Any)]
     # Every tuple in list means a part of string, where mode can be:
     #  text: Normal text
-    #  expression: An formatted expression (e.g. "Value: ${expr}")
+    #  expression: A formatted expression (e.g. "Value: ${expr}")
     float_ = 'FLOAT'  # value:float = this float
     ## id
     identifier = 'IDENTIFIER'  # value:str = this id
@@ -150,20 +161,25 @@ class CommandToken(Token):
         self._dump_text()
 
 class Tokenizer:
-    def __init__(self, src: str):
-        """src: source code"""
+    def __init__(self, src: TextIO, _ln_offset=0, _col_offset=0):
+        """
+        src: source code
+        _ln_offset, _col_offset: position offset
+        """
         self.src = src
         self.current_char = ''
-        self.current_lineno = 1
+        self._col_offset = _col_offset
+        self.current_lineno = _ln_offset
         self.current_col = 0
         self.position = 0  # string pointer
-        self.last_token = None  # the last token we've read
-        self.SRC_LENGTH = len(self.src)
-        # written_line_begin: whether we have written `line_begin`
-        # for current line. When a '\n' is read, this is set to False
-        self.written_line_begin = False
-
-        self.forward()
+        self.buffer_tokens: List[Token] = []
+        self.prespaces = 0
+        self.indent_record: List[int] = [0]
+        self.indent_len: int = 1  # always = len(self.indent_record)
+        self.last_line_continued = False
+        self.continued_command: Union[None, CommandToken] = None
+        self.continued_comment = False
+        self.continued_comment_pos: Union[None, Tuple[int, int]] = None
 
     def error(self, err_type: ErrorType, lineno=None, col=None, **kwargs):
         if lineno is None:
@@ -176,50 +192,41 @@ class Tokenizer:
 
     def forward(self):
         """Read next char and push pointer."""
-        if self.position >= self.SRC_LENGTH:
+        if self.position >= self.line_len:
             self.current_char = None
+            self.current_col = self.line_len + self._col_offset + 1
         else:
-            self.current_char = self.src[self.position]
-        self.position += 1
-        self.current_col += 1
-        if self.current_char == '\n':
-            self.current_lineno += 1
-            self.current_col = 0
-            self.written_line_begin = False
+            self.current_char = self.current_line[self.position]
+            self.position += 1
+            self.current_col += 1
 
     def peek(self, offset=0):
         """Peek the following char without pushing pointer."""
         pos = self.position + offset
-        if pos < self.SRC_LENGTH:
-            return self.src[pos]
+        if pos < self.line_len:
+            return self.current_line[pos]
         return None
 
     def get_next_token(self):
         """Get the next token."""
-        self.last_token = self._next_token()
-        self._handle_line_continuation()
-        return self.last_token
+        while not self.buffer_tokens:
+            self.buffer_tokens = self.parse_line()
+        return self.buffer_tokens.pop(0)
 
-    def _handle_line_continuation(self):
-        """Handle line continuation: if current_char is backslash,
-        connect this line to next line
-        """
-        self.skip_spaces()
-        if self.current_char == '\\':
-            self.forward()  # skip the '\\' itself
-            while self.current_char != '\n' and self.current_char is not None:
-                if not self.current_char.isspace():
-                    self.error(ErrorType.CHAR_AFTER_CONTINUATION)
-                self.forward()
-            self.forward()  # skip '\n'
-            # We don't generate the next `line_begin` token
-            # to implement line continuation
-            self.written_line_begin = True
+    def is_continued(self) -> bool:
+        return (self.continued_command
+                or self.continued_comment
+                or self.last_line_continued)
 
-    def _next_token(self):
-        """Calculate the next token.
-        NOTE do not call this directly
-        """
+    def parse_line(self):
+        """Parse a line."""
+        self.current_line = self.src.readline()
+        self.line_len = len(self.current_line)
+        self.current_lineno += 1
+        self.current_col = self._col_offset
+        self.position = 0
+        res: List[Token] = []
+        self.forward()
         def _gen_token(*args, **kwargs):
             """Generate a token on current pos."""
             return Token(
@@ -236,54 +243,112 @@ class Tokenizer:
             for _ in range(forward_times):
                 self.forward()
             return token
-        # skip
-        flag = True
-        while flag:
-            if self.current_char == ' ':
-                self.skip_spaces()
-            elif self.current_char == '#':
-                if self.peek() == '*':
-                    self.skip_long_comment()
+        # read indent
+        if not self.is_continued():
+            # Continued lines' indent should be the same as the first
+            # line.
+            self.prespaces = 0
+            while self.current_char == ' ':
+                self.prespaces += 1
+                self.forward()
+        # continued token
+        else:
+            if self.continued_comment:
+                self.handle_long_comment()
+            if self.continued_command:
+                token = self.handle_long_command()
+                if token is not None:
+                    res.append(token)
+        while True:
+            # skip spaces
+            self.skip_spaces()
+            # check end of line
+            if self.current_char in ("\n", "\\", None):
+                break
+            # comment
+            if self.current_char == "#":
+                if self.peek() == "*":
+                    self.forward()
+                    self.forward()
+                    self.continued_comment_pos = (self.current_lineno,
+                                                  self.current_col)
+                    self.handle_long_comment()
+                    continue
                 else:
                     self.skip_comment()
-            else:
-                flag = False
-        # check EOF
-        peek = self.peek()
-        if self.current_char is None:
-            return _gen_token(TokenType.end_marker)
-        # start
-        ## special tokens
-        if not self.written_line_begin:
-            self.written_line_begin = True
-            return self.handle_line_begin()
-        if self.current_char.isdecimal():
-            return self.handle_number()
-        elif self.current_char.isalpha() or self.current_char == '_':
-            return self.handle_name()
-        elif self.current_char == '/':
-            if peek == '*':
-                return self.handle_long_command()
-            elif self.last_token.type is TokenType.line_begin:
-                # a '/' at the beginning of a line is command
-                return self.handle_command()
-        elif self.current_char == '"':
-            return self.handle_string()
-        ## 2-char token
-        for pattern in (
-            '==', '>=', '<=', '!=', '->',
-            '+=', '-=', '*=', '/=', '%='
-        ):
-            if self.current_char == pattern[0] and peek == pattern[1]:
-                return _gen_and_forward(TokenType(pattern), 2)
-        ## finally check single char
-        try:
-            token_type = TokenType(self.current_char)
-        except ValueError:
-            ## does not match any tokens
-            self.error(ErrorType.INVALID_CHAR, char=self.current_char)
-        else:
-            return _gen_and_forward(token_type, 1)
+                    break
+            # start
+            ## special tokens
+            if self.current_char.isdecimal():
+                res.append(self.handle_number())
+            elif self.current_char.isalpha() or self.current_char == '_':
+                res.append(self.handle_name())
+            elif self.current_char == '/' and not res:
+                # Only read when "/" is first character of this line
+                if self.peek() == '*':
+                    self.continued_command = CommandToken(
+                        self.current_lineno, self.current_col
+                    )
+                    self.forward()  # skip "/"
+                    self.forward()  # skip "*"
+                    token = self.handle_long_command()
+                    if token is not None:
+                        res.append(token)
+                else:
+                    res.append(self.handle_command())
+            elif self.current_char == '"':
+                res.append(self.handle_string())
+            else:  ## 2-char token
+                peek = self.peek()
+                for pattern in (
+                    '==', '>=', '<=', '!=', '->',
+                    '+=', '-=', '*=', '/=', '%='
+                ):
+                    if self.current_char == pattern[0] and peek == pattern[1]:
+                        res.append(_gen_and_forward(TokenType(pattern), 2))
+                        break
+                else:  ## 1-char token
+                    try:
+                        token_type = TokenType(self.current_char)
+                    except ValueError:
+                        ## does not match any tokens
+                        self.error(ErrorType.INVALID_CHAR,
+                                   char=self.current_char)
+                    else:
+                        res.append(_gen_and_forward(token_type, 1))
+        # Now self.current_char is either '\n', '\\' or None (EOF)
+        has_content = bool(res)
+        if self.current_char == '\n':
+            if has_content:
+                res.append(_gen_token(TokenType.new_line))
+                if not self.last_line_continued:
+                    res = self.handle_indent(self.prespaces) + res
+            self.last_line_continued = False
+        elif self.current_char is None:
+            if self.continued_comment:
+                self.error(ErrorType.UNCLOSED_LONG_COMMENT,
+                           *self.continued_comment_pos)
+            if self.continued_command:
+                self.error(ErrorType.UNCLOSED_LONG_COMMAND,
+                           self.continued_command.lineno,
+                           self.continued_command.col)
+            if self.last_line_continued:
+                self.error(ErrorType.EOF_AFTER_CONTINUATION)
+            if has_content:
+                res.append(_gen_token(TokenType.new_line))
+                res = self.handle_indent(self.prespaces) + res
+            res.extend(self.handle_indent(0))  # dump DEDENTs
+            res.append(_gen_token(TokenType.end_marker))
+        elif self.current_char == '\\':
+            self.forward()  # skip "\\"
+            while self.current_char not in ('\n', None):
+                if not self.current_char.isspace():
+                    self.error(ErrorType.CHAR_AFTER_CONTINUATION)
+                self.forward()
+            if has_content and not self.last_line_continued:
+                res = self.handle_indent(self.prespaces) + res
+            self.last_line_continued = True
+        return res
 
     def skip_spaces(self):
         """Skip white spaces."""
@@ -295,32 +360,37 @@ class Tokenizer:
         while self.current_char is not None and self.current_char != '\n':
             self.forward()
 
-    def skip_long_comment(self):
-        """Skip a multi-line #*...*# comment."""
-        ln, col = self.current_lineno, self.current_col
-        # skip "#*" in case "*" is used both by "#*" and "*#" (like "#*#")
-        self.forward()
-        self.forward()
+    def handle_long_comment(self):
         # we want to leave current_char on next char after "#",
         # so use previous_char
         previous_char = ''
         while not (previous_char == '*' and self.current_char == '#'):
-            if self.current_char is None:
-                self.error(ErrorType.UNCLOSED_LONG_COMMENT, ln, col)
+            if self.current_char in ("\n", None):
+                self.continued_comment = True
+                return
             previous_char = self.current_char
             self.forward()
         self.forward()  # skip char "#"
+        self.continued_comment = False
 
-    def handle_line_begin(self):
-        """Read a LINE_BEGIN token."""
-        count = 0
+    def handle_indent(self, spaces: int) -> List[Token]:
+        """Generate INDENT and DEDENT."""
         ln = self.current_lineno
-        if self.current_char == '\n':  # remove \n (may not exists)
-            self.forward()
-        while self.current_char == ' ':
-            count += 1
-            self.forward()
-        return Token(TokenType.line_begin, value=count, lineno=ln, col=0)
+        tokens = []
+        if spaces > self.indent_record[-1]:
+            self.indent_record.append(spaces)
+            self.indent_len += 1
+            tokens.append(Token(TokenType.indent, lineno=ln, col=0))
+        elif spaces in self.indent_record:
+            i = self.indent_record.index(spaces)
+            dedent_count = self.indent_len - 1 - i
+            self.indent_record = self.indent_record[:i+1]
+            self.indent_len -= dedent_count
+            tokens.extend(Token(TokenType.dedent, lineno=ln, col=0)
+                          for _ in range(dedent_count))
+        else:
+            self.error(ErrorType.INVALID_DEDENT)
+        return tokens
 
     @staticmethod
     def _isdecimal(char: Union[str, None]):
@@ -470,33 +540,29 @@ class Tokenizer:
                 self.forward()
             self.forward()  # skip "}"
             # create the Tokenizer
-            tokenizer = Tokenizer(expr_str)
-            tokenizer.current_lineno = start_ln
-            tokenizer.current_col = start_col
-            tokenizer.get_next_token()  # skip line_begin token
+            tokenizer = Tokenizer(io.StringIO(expr_str),
+                                  start_ln - 1, start_col - 1)
             result_token.add_expression(tokenizer)
         else:  # a normal character
             result_token.add_text(self._read_escapable_char())
 
-    def handle_long_command(self):
-        """Read a multi-line /*...*/ COMMAND token."""
-        ln, col = self.current_lineno, self.current_col
-        token = CommandToken(ln, col)
-        self.forward()  # skip "/"
-        self.forward()  # skip "*"
-        while not (self.peek(0) == '*' and self.peek(1) == '/'):
-            # check whether reach end of file
-            if self.current_char is None:
-                self.error(ErrorType.UNCLOSED_LONG_COMMAND, ln, col)
-            # replace "\n" with " " (space)
-            if self.current_char == '\n':
-                self.current_char = ' '
+    def handle_long_command(self) -> Union[CommandToken, None]:
+        """Help read a multi-line /*...*/ COMMAND token. Return token
+        if we finished, or None otherwise.
+        """
+        while not (self.current_char == '*' and self.peek() == '/'):
+            # check whether reach end of line
+            if self.current_char in ("\n", None):
+                # replace "\n" with " " (space)
+                self.continued_command.add_text(' ')
+                return
             # read unit
-            self._command_unit(token)
-        self.forward()  # skip last character in command
+            self._command_unit(self.continued_command)
         self.forward()  # skip "*"
         self.forward()  # skip "/"
-        token.command_end()
+        self.continued_command.command_end()
+        token = self.continued_command
+        self.continued_command = None
         return token
 
     def handle_command(self):

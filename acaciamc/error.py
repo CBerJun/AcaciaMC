@@ -15,9 +15,10 @@ class ErrorType(enum.Enum):
     UNCLOSED_FEXPR = 'Unclosed formatted expression'
     INVALID_UNICODE_ESCAPE = 'Invalid \\{escape_char} escape'
     CHAR_AFTER_CONTINUATION = 'Unexpected character after line continuation'
+    EOF_AFTER_CONTINUATION = 'End of file in multi-line statement'
+    INVALID_DEDENT = 'Dedent does not match any outer indentation level'
     # Parser
     UNEXPECTED_TOKEN = 'Unexpected token {token}'
-    WRONG_INDENT = 'Expect {expect} spaces indented, got {got}'
     EMPTY_BLOCK = 'Expect an indented block'
     DONT_KNOW_ARG_TYPE = 'Type of argument or its default value ' \
         'must be specified: "{arg}"'

@@ -48,10 +48,6 @@ argparser.add_argument(
     help='entity tag prefix'
 )
 argparser.add_argument(
-    '-i', '--indent', type=int, metavar='NUM',
-    help='count of spaces that an indented block should have'
-)
-argparser.add_argument(
     '-d', '--debug-comments',
     action='store_true',
     help='add debugging comments to output files'
@@ -92,10 +88,6 @@ if not os.path.isfile(args.file):
 
 # --- Config ARGS ---
 
-if args.indent:
-    if args.indent <= 0:
-        error('indent number must be positive')
-    Config.indent = args.indent
 if args.debug_comments:
     Config.debug_comments = True
 if args.scoreboard:
