@@ -651,7 +651,6 @@ class Parser:
         pos = self.current_pos
         stmts = []
         while self.current_token.type != TokenType.end_marker:
-            # Check line_begin and indent
             stmts.append(self.statement())
         return Module(stmts, **pos)
 
