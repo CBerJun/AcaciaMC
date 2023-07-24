@@ -144,7 +144,7 @@ class _FStrParser:
                 # expr is integer or an identifier
                 expr = self.expr_from_id(expr_str)
             elif third.isdecimal():
-                # %1 is the alia to %{1}
+                # %1 is the alias to %{1}
                 expr = self.expr_from_id(third)
             else:
                 # can't be understood, just use raw text
@@ -173,7 +173,7 @@ class FStringType(Type):
     in _pattern:
      "%%" -> character "%"
      "%{" integer "}" -> args[integer]
-     "%" one-digit-number -> alia to `"%{" one-digit-number "}"`
+     "%" one-digit-number -> alias to `"%{" one-digit-number "}"`
      "%{" id "}" -> kwargs[id] (id is an valid Acacia identifier)
     Additionally, you can add following character after the first "%":
      "k": Use localization key

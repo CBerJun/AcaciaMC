@@ -1,6 +1,7 @@
 """Abstarct Syntax Tree definitions for Acacia."""
 from typing import (
-    Union as _Union, List as _List, Tuple as _Tuple, Any as _Any
+    Union as _Union, List as _List, Tuple as _Tuple, Any as _Any,
+    Optional as _Optional
 )
 import enum
 
@@ -199,22 +200,23 @@ class Binding(Statement):  # binding
         self.value = value
 
 class Import(Statement):  # import a module
-    def __init__(self, meta: ModuleMeta, alia: str, lineno, col):
+    def __init__(self, meta: ModuleMeta, alias: _Optional[str], lineno, col):
         super().__init__(lineno, col)
         self.meta = meta
-        self.name = alia
+        self.name = alias
         if self.name is None:
             self.name = self.meta.last_name
 
 class FromImport(Statement):  # import specific things from a module
     def __init__(
-        self, meta: ModuleMeta, names: list, alias: list, lineno, col
+        self, meta: ModuleMeta, names: _List[str],
+        aliases: _List[_Optional[str]], lineno, col
     ):
         super().__init__(lineno, col)
         self.meta = meta
-        self.id2name = {}  # keys are actual IDs and values are alias
-        for name, alia in zip(names, alias):
-            self.id2name[name] = name if alia is None else alia
+        self.id2name = {}  # keys are actual IDs and values are aliases
+        for name, alias in zip(names, aliases):
+            self.id2name[name] = name if alias is None else alias
 
 class FromImportAll(Statement):  # import everything in a module
     def __init__(self, meta: ModuleMeta, lineno, col):

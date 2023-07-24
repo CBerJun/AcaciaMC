@@ -84,8 +84,8 @@ class Position(AcaciaExpr, ImmutableMixin):
             """.dim(id: str): change dimension of position."""
             self.context.append("in %s" % id_)
             return self
-        _abs = self._create_offset_alia("abs")
-        _offset = self._create_offset_alia("offset")
+        _abs = self._create_offset_alias("abs")
+        _offset = self._create_offset_alias("offset")
         """.abs(...) .offset(...)
         Alias of .apply(Offset().abs/offset(...)).
         """
@@ -146,9 +146,9 @@ class Position(AcaciaExpr, ImmutableMixin):
         self.attribute_table.set(
             "context", BinaryFunction(_context, self.compiler))
 
-    def _create_offset_alia(self, method: str):
+    def _create_offset_alias(self, method: str):
         @transform_immutable(self)
-        def _offset_alia(self: Position, compiler, args, kwds):
+        def _offset_alias(self: Position, compiler, args, kwds):
             offset = PosOffset(compiler)
             _, cmds = (offset.attribute_table.lookup(method)
                        .call(args, kwds))
@@ -156,7 +156,7 @@ class Position(AcaciaExpr, ImmutableMixin):
                               .call([offset], {}))
             cmds.extend(_cmds)
             return new_obj, cmds
-        return _offset_alia
+        return _offset_alias
 
     def copy(self) -> "Position":
         res = Position(self.compiler)

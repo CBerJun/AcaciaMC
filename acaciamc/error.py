@@ -35,7 +35,7 @@ class ErrorType(enum.Enum):
     INVALID_BOOLOP_OPERAND = 'Invalid operand for boolean operator ' \
         '"{operator}": "{operand}"'
     UNSUPPORTED_VAR_TYPE = 'Can\'t define variables of "{var_type}" type; ' \
-        'To define alias to expressions, use "alia -> expr"'
+        'To define an alias to expression, use "alias -> expr"'
     UNSUPPORTED_ARG_TYPE = 'Argument "{arg}" can\'t be "{arg_type}" type'
     UNSUPPORTED_RESULT_TYPE = 'Result type can\'t be "{result_type}" type'
     UNSUPPORTED_FIELD_TYPE = 'Entity field can\'t be "{field_type}" type'

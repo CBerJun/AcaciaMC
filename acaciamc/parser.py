@@ -506,9 +506,9 @@ class Parser:
         last_name = names.pop()
         return ModuleMeta(last_name, leadint_dots, names)
 
-    def alia(self) -> str:
-        """Try to read an alia. Return None if no alia is given.
-        alia := (AS IDENTIFIER)?
+    def alias(self) -> str:
+        """Try to read an alias. Return None if no alias is given.
+        alias := (AS IDENTIFIER)?
         """
         if self.current_token.type is TokenType.as_:
             self.eat()
@@ -518,17 +518,17 @@ class Parser:
         return None
 
     def import_stmt(self):
-        """import_stmt := IMPORT module_meta alia"""
+        """import_stmt := IMPORT module_meta alias"""
         pos = self.current_pos
         self.eat(TokenType.import_)
         meta = self.module_meta()
-        alia = self.alia()
-        return Import(meta, alia, **pos)
+        alias = self.alias()
+        return Import(meta, alias, **pos)
 
     def from_import_stmt(self):
         """
         from_import_stmt := FROM module_meta IMPORT (STAR | (
-          IDENTIFIER alia (COMMA IDENTIFIER alia)*
+          IDENTIFIER alias (COMMA IDENTIFIER alias)*
         ))
         """
         pos = self.current_pos
@@ -541,13 +541,13 @@ class Parser:
         else:
             names = [self.current_token.value]
             self.eat(TokenType.identifier)
-            alias = [self.alia()]
+            aliases = [self.alias()]
             while self.current_token.type is TokenType.comma:
                 self.eat()
                 names.append(self.current_token.value)
                 self.eat(TokenType.identifier)
-                alias.append(self.alia())
-            return FromImport(meta, names, alias, **pos)
+                aliases.append(self.alias())
+            return FromImport(meta, names, aliases, **pos)
 
     def for_stmt(self):
         """for_stmt := FOR IDENTIFIER IN expr COLON statement_block"""

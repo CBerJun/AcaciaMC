@@ -111,7 +111,7 @@ else:
 #* Inline functions *#
 #*
  * Inline functions have great differences from normal ones.
- * They are like bindings because they are both just an "alia" to make
+ * They are like bindings because they are both just an "alias" to make
  * code simpler.
  * Inline functions are:
  *  1. Expanded when called. Every time they get called, their body is
