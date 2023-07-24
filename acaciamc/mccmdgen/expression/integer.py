@@ -30,7 +30,7 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import List
+from typing import List, Tuple
 import operator as builtin_op
 
 from .base import *
@@ -432,13 +432,13 @@ class IntOpGroup(AcaciaExpr):
         return self._r_sub_div_mod(other, '__mod__')
 
 # Utils
-def to_IntVar(expr: AcaciaExpr):
+def to_IntVar(expr: AcaciaExpr) -> Tuple[List[str], IntVar]:
     """Convert any integer expression to a `IntVar` and some commands.
     return[0]: the commands to run
     return[1]: the `IntVar`
     """
     if isinstance(expr, IntVar):
-        return (), expr
+        return [], expr
     else:
         tmp = expr.data_type.new_var(tmp=True)
         return expr.export(tmp), tmp
