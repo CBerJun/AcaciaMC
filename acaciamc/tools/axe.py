@@ -189,10 +189,11 @@ class AnyValue(Converter):
 
 def _type_checker(value: acacia.AcaciaExpr, type_: _TYPED_TYPE):
     if isinstance(type_, acacia.DataType):
-        return value.data_type.matches(type_)
+        data_type = type_
     else:
         assert issubclass(type_, acacia.Type)
-        return value.data_type.raw_matches(type_)
+        data_type = acacia.DataType.from_type_cls(type_, value.compiler)
+    return data_type.is_type_of(value)
 
 def _type_to_str(type_: _TYPED_TYPE):
     if isinstance(type_, acacia.DataType):

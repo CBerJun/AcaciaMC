@@ -72,7 +72,9 @@ b = test(-10)
 
 #* Importing a module written in Python *#
 import .test_mod
-ent = Object()
+entity X:
+    pass
+ent = X()
 test_mod.foo(x, g=ent, z="\u0030", k=10, m="ss", l=1)
 test_mod.bar(1)
 test_mod.extbar()
