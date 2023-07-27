@@ -113,21 +113,22 @@ class DataType:
      completely, including template for entity, like `int` or
      `entity(Template)`.
     """
-    def __init__(self, type_: Type, is_entity: bool):
+    def __init__(self, type_: Type, is_entity=False, is_entity_group=False):
         """Do not initialize directly, use factory methods."""
         self.type = type_
         self.is_entity = is_entity
+        self.is_entity_group = is_entity_group
         self.template: Union[None, "EntityTemplate"] = None
 
     @classmethod
     def from_type(cls, type_: Type):
         """Generate `DataType` from a `type_`."""
-        return cls(type_, is_entity=False)
+        return cls(type_)
 
     @classmethod
     def from_type_cls(cls, type_: PythonType[Type], compiler: "Compiler"):
         """Generate `DataType` from `type_` class."""
-        return cls(compiler.types[type_], is_entity=False)
+        return cls(compiler.types[type_])
 
     @classmethod
     def from_entity(cls, template: "EntityTemplate", compiler: "Compiler"):
@@ -136,15 +137,27 @@ class DataType:
         inst.template = template
         return inst
 
+    @classmethod
+    def from_entity_group(cls, template: "EntityTemplate",
+                          compiler: "Compiler"):
+        """Generate `DataType` from an entity group with given `template`."""
+        inst = cls(compiler.types[entity_group.EGroupType],
+                   is_entity_group=True)
+        inst.template = template
+        return inst
+
     def __str__(self) -> str:
         if self.is_entity:
             assert self.template
             return "%s(%s)" % (self.type.name, self.template.name)
+        elif self.is_entity_group:
+            assert self.template
+            return "Engroup.t(%s)" % self.template.name
         else:
             return self.type.name
 
     def new_var(self, *args, **kwargs) -> AcaciaExpr:
-        if self.is_entity:
+        if self.is_entity or self.is_entity_group:
             assert self.template
             return self.type.new_var(template=self.template, *args, **kwargs)
         else:
@@ -162,12 +175,16 @@ class DataType:
 
     def matches(self, type_: "DataType") -> bool:
         """Return whether `type_` is the same type as this type,
-        and if `type_` is entity, check whether the template of
+        and if `type_` is entity (group), check whether the template of
         `type_` is a sub-template of this type's template.
         """
         if self.is_entity:
             assert self.template
             return (type_.is_entity and
+                    type_.template.is_subtemplate_of(self.template))
+        elif self.is_entity_group:
+            assert self.template
+            return (type_.is_entity_group and
                     type_.template.is_subtemplate_of(self.template))
         else:
             return isinstance(type_.type, type(self.type))
@@ -176,4 +193,4 @@ class DataType:
         return isinstance(self.type, type_)
 
 # Import these later to avoid circular import
-from . import entity, none
+from . import entity, none, entity_group

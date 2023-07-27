@@ -73,6 +73,8 @@ class Compiler:
             ('Pos', PosType),
             ('Rot', RotType),
             ('Offset', PosOffsetType),
+            ('Engroup', EGroupType),
+            ('Enfilter', EFilterType),
         ):
             self.builtins.set(name, self.types[cls])
         # builtin names
@@ -215,7 +217,7 @@ class Compiler:
         self._entity_tag_max += 1
         return Config.entity_tag + str(self._entity_tag_max)
 
-    def add_tmp_entity(self, entity: TaggedEntity):
+    def add_tmp_entity(self, entity: Union[TaggedEntity, EntityGroup]):
         self.current_generator.current_tmp_entities.append(entity)
 
     # -- End allocation --

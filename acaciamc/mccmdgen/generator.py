@@ -92,7 +92,7 @@ class Generator(ASTVisitor):
         self.current_tmp_scores = []
         # current_tmp_entities: just like `current_tmp_scores`, but
         # store tmp `EntityVar`s.
-        self.current_tmp_entities = []
+        self.current_tmp_entities: List[Union[TaggedEntity, EntityGroup]] = []
 
     def parse(self):
         """Parse the AST and generate commands."""
@@ -441,8 +441,14 @@ class Generator(ASTVisitor):
 
     def visit_TypeSpec(self, node: TypeSpec):
         type_ = self.visit(node.content)
+        if isinstance(type_, GenericEGroup):  # Engroup.t(Template)
+            return type_.dt
         if not isinstance(type_, Type):
             raise Error(ErrorType.INVALID_TYPE_SPEC, got=str(type_.data_type))
+        if isinstance(type_, EGroupType):  # Engroup
+            return DataType.from_entity_group(
+                self.compiler.base_template, self.compiler
+            )
         return DataType.from_type(type_)
 
     def visit_EntityTypeSpec(self, node: EntityTypeSpec):
