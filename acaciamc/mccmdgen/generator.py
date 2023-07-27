@@ -11,6 +11,7 @@ from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.symbol import ScopedSymbolTable
+from acaciamc.mccmdgen.mcselector import MCSelector
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -597,7 +598,7 @@ class Generator(ASTVisitor):
                 # Handle `self`
                 old_self = self.self_value
                 self.self_value = EntityReference(
-                    "@s", template, self.compiler)
+                    MCSelector("s"), template, self.compiler)
                 # Write file
                 with self.set_mcfunc_file(method.file), \
                      self.set_result_var(method.result_var):

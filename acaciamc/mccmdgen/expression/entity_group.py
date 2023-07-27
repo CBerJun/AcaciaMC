@@ -9,6 +9,7 @@ __all__ = [
 from typing import TYPE_CHECKING, List, Optional
 
 from acaciamc.tools import axe, method_of
+from acaciamc.mccmdgen.mcselector import MCSelector
 from .base import *
 from .types import DataType, Type
 from .entity_template import ETemplateType
@@ -150,7 +151,9 @@ class EntityGroup(VarValue):
         @method_of(self, "to_single")
         @axe.chop
         def _to_single(compiler: "Compiler"):
-            return EntityReference(SELF, self.template, compiler)
+            self_selector = MCSelector("e")
+            self_selector.tag(self.tag)
+            return EntityReference(self_selector, self.template, compiler)
 
     def export(self, var: "EntityGroup") -> List[str]:
         cmds = var.clear()

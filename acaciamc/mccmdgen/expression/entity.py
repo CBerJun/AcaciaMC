@@ -6,6 +6,7 @@ from typing import Tuple, TYPE_CHECKING, List, Optional
 
 from acaciamc.constants import Config
 from acaciamc.error import *
+from acaciamc.mccmdgen.mcselector import MCSelector
 from .base import *
 from .types import Type, DataType
 
@@ -31,6 +32,10 @@ class _EntityBase(AcaciaExpr):
         self.template.register_entity(self)
 
     def __str__(self) -> str:
+        return self.get_selector().to_str()
+
+    def get_selector(self) -> MCSelector:
+        # Caller owns the selector
         raise NotImplementedError
 
     def cast_to(self, template: "EntityTemplate"):
@@ -42,7 +47,7 @@ class _EntityBase(AcaciaExpr):
         return cmds
 
 class EntityReference(_EntityBase):
-    def __init__(self, selector: str, template: "EntityTemplate",
+    def __init__(self, selector: MCSelector, template: "EntityTemplate",
                  compiler, cast_to: Optional["EntityTemplate"] = None):
         self.selector = selector
         super().__init__(template, compiler, cast_to)
@@ -50,8 +55,8 @@ class EntityReference(_EntityBase):
     def cmdstr(self) -> str:
         return str(self)
 
-    def __str__(self) -> str:
-        return self.selector
+    def get_selector(self) -> MCSelector:
+        return self.selector.copy()
 
     def cast_to(self, template):
         return EntityReference(
@@ -101,9 +106,10 @@ class TaggedEntity(_EntityBase, VarValue):
         # Create an entity reference (a tag), pointing to no entity.
         return cls(template, compiler)
 
-    def __str__(self) -> str:
-        # Return selector of this entity
-        return "@e[tag=%s]" % self.tag
+    def get_selector(self) -> MCSelector:
+        res = MCSelector("e")
+        res.tag(self.tag)
+        return res
 
     def cmdstr(self) -> str:
         return str(self)
