@@ -156,6 +156,15 @@ class EntityGroup(VarValue):
             self_selector = MCSelector("e")
             self_selector.tag(self.tag)
             return EntityReference(self_selector, self.template, compiler)
+        @method_of(self, "includes")
+        @axe.chop
+        @axe.arg("ent", DataType.from_entity(self.template, compiler))
+        def _includes(compiler: "Compiler", ent: "_EntityBase"):
+            res = AndGroup(operands=(), compiler=compiler)
+            selector = ent.get_selector()
+            selector.tag(self.tag)
+            res.main.append("if entity %s" % selector.to_str())
+            return res
 
     def export(self, var: "EntityGroup") -> List[str]:
         cmds = var.clear()
