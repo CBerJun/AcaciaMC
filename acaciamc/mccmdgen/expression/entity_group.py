@@ -14,7 +14,7 @@ from .base import *
 from .types import DataType, Type
 from .entity_template import ETemplateType
 from .entity_filter import EFilterType
-from .entity import EntityType, EntityReference
+from .entity import EntityReference
 from .boolean import AndGroup
 from .integer import IntOpGroup
 
@@ -73,6 +73,8 @@ class EntityGroup(VarValue):
         self.template = template
         self.tag = self.compiler.allocate_entity_tag()
         SELF = "@e[tag=%s]" % self.tag
+        MEMBER_TYPE = DataType.from_entity(template, compiler)
+        OPERAND_TYPE = DataType.from_entity_group(template, compiler)
 
         @method_of(self, "select")
         @axe.chop
@@ -99,17 +101,17 @@ class EntityGroup(VarValue):
             return self, cmds
         @method_of(self, "extend")
         @axe.chop
-        @axe.arg("other", EGroupType)
+        @axe.arg("other", OPERAND_TYPE)
         def _extend(compiler, other: "EntityGroup"):
             return self, ["tag @e[tag=%s] add %s" % (other.tag, self.tag)]
         @method_of(self, "subtract")
         @axe.chop
-        @axe.arg("other", EGroupType)
+        @axe.arg("other", OPERAND_TYPE)
         def _subtract(compiler, other: "EntityGroup"):
             return self, ["tag @e[tag=%s] remove %s" % (other.tag, self.tag)]
         @method_of(self, "intersect")
         @axe.chop
-        @axe.arg("other", EGroupType)
+        @axe.arg("other", OPERAND_TYPE)
         def _intersect(compiler, other: "EntityGroup"):
             return self, ["tag @e[tag=!%s] remove %s" % (other.tag, self.tag)]
         @method_of(self, "copy")
@@ -124,13 +126,13 @@ class EntityGroup(VarValue):
             return self, ["tag %s remove %s" % (SELF, self.tag)]
         @method_of(self, "add")
         @axe.chop
-        @axe.star_arg("entities", EntityType)
+        @axe.star_arg("entities", MEMBER_TYPE)
         def _add(compiler, entities: List["_EntityBase"]):
             return self, ["tag %s add %s" % (entity, self.tag)
                           for entity in entities]
         @method_of(self, "remove")
         @axe.chop
-        @axe.star_arg("entities", EntityType)
+        @axe.star_arg("entities", MEMBER_TYPE)
         def _remove(compiler, entities: List["_EntityBase"]):
             return self, ["tag %s remove %s" % (entity, self.tag)
                           for entity in entities]
