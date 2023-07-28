@@ -72,7 +72,7 @@ class EntityGroup(VarValue):
         )
         self.template = template
         self.tag = self.compiler.allocate_entity_tag()
-        SELF = "@e[tag=%s]" % self.tag
+        SELF = self.get_selector().to_str()
         MEMBER_TYPE = DataType.from_entity(template, compiler)
         OPERAND_TYPE = DataType.from_entity_group(template, compiler)
 
@@ -153,9 +153,8 @@ class EntityGroup(VarValue):
         @method_of(self, "to_single")
         @axe.chop
         def _to_single(compiler: "Compiler"):
-            self_selector = MCSelector("e")
-            self_selector.tag(self.tag)
-            return EntityReference(self_selector, self.template, compiler)
+            return EntityReference(self.get_selector(),
+                                   self.template, compiler)
         @method_of(self, "includes")
         @axe.chop
         @axe.arg("ent", DataType.from_entity(self.template, compiler))
@@ -170,6 +169,11 @@ class EntityGroup(VarValue):
         cmds = var.clear()
         cmds.append("tag @e[tag=%s] add %s" % (self.tag, var.tag))
         return cmds
+
+    def get_selector(self) -> "MCSelector":
+        res = MCSelector("e")
+        res.tag(self.tag)
+        return res
 
     def clear(self) -> List[str]:
         return ["tag @e[tag={0}] remove {0}".format(self.tag)]
