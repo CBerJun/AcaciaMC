@@ -46,7 +46,7 @@ class ErrorType(enum.Enum):
     WRONG_WHILE_CONDITION = '"while" conditions must be "bool", not "{got}"'
     ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
         'always evaluates to True'
-    INVALID_TYPE_SPEC = 'Expecting a type specification, got "{got}"'
+    INVALID_TYPE_SPEC = 'Expecting a type specifier, got "{got}"'
     INVALID_ETEMPLATE = 'Expecting an entity template, got "{got}"'
     INVALID_EGROUP = 'Expecting an entity group, got "{got}"'
     ## INVALID_ARG_TYPE: `def f(a: 1)` "1" (int) is not a type

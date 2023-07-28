@@ -154,7 +154,7 @@ class AcaciaExpr:
         raise NotImplementedError
 
     def datatype_hook(self) -> "DataType":
-        """When this expression is used as a type specification, this
+        """When this expression is used as a type specifier, this
         method is called to obtain the `DataType`.
         """
         raise NotImplementedError
