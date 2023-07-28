@@ -13,7 +13,6 @@ class Parser:
         self.tokenizer = tokenizer
         self.current_token = self.tokenizer.get_next_token()
         self.next_token = None
-        self.current_indent = 0
 
     @property
     def current_pos(self):
