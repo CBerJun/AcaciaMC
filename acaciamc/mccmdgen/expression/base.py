@@ -153,6 +153,12 @@ class AcaciaExpr:
         """
         raise NotImplementedError
 
+    def datatype_hook(self) -> "DataType":
+        """When this expression is used as a type specification, this
+        method is called to obtain the `DataType`.
+        """
+        raise NotImplementedError
+
 class ArgumentHandler:
     """A tool to match function arguments against a given definition."""
     def __init__(self, args: List[str], arg_types: Dict[str, "DataType"],

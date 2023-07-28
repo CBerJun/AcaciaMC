@@ -442,15 +442,11 @@ class Generator(ASTVisitor):
 
     def visit_TypeSpec(self, node: TypeSpec):
         type_ = self.visit(node.content)
-        if isinstance(type_, GenericEGroup):  # Engroup.t(Template)
-            return type_.dt
-        if not isinstance(type_, Type):
+        try:
+            dt = type_.datatype_hook()
+        except NotImplementedError:
             raise Error(ErrorType.INVALID_TYPE_SPEC, got=str(type_.data_type))
-        if isinstance(type_, EGroupType):  # Engroup
-            return DataType.from_entity_group(
-                self.compiler.base_template, self.compiler
-            )
-        return DataType.from_type(type_)
+        return dt
 
     def visit_EntityTypeSpec(self, node: EntityTypeSpec):
         if node.template is None:

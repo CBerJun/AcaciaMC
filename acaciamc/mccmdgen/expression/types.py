@@ -102,6 +102,9 @@ class Type(AcaciaExpr):
             cmds.extend(_cmds)
         return instance, cmds
 
+    def datatype_hook(self) -> "DataType":
+        return DataType.from_type(self)
+
 class TypeType(Type):
     name = 'type'
 

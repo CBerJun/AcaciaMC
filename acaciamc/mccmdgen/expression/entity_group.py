@@ -35,6 +35,9 @@ class GenericEGroup(AcaciaExpr):
         )
         self.dt = data_type
 
+    def datatype_hook(self) -> DataType:
+        return self.dt
+
 class EGroupType(Type):
     name = "Engroup"
 
@@ -64,6 +67,14 @@ class EGroupType(Type):
         if tmp:
             self.compiler.add_tmp_entity(var)
         return var
+
+    def datatype_hook(self) -> DataType:
+        """When "Engroup" is used as a type specifier, it's an alias to
+        "Engroup.t(Object)".
+        """
+        return DataType.from_entity_group(
+            self.compiler.base_template, self.compiler
+        )
 
 class EntityGroup(VarValue):
     def __init__(self, template: "EntityTemplate", compiler):
