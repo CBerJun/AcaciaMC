@@ -652,6 +652,25 @@ class Generator(ASTVisitor):
                 for stmt in node.body:
                     self.visit(stmt)
 
+    def visit_ForEntity(self, node: ForEntity):
+        egroup = self.visit(node.expr)
+        if not egroup.data_type.is_entity_group:
+            self.error_c(ErrorType.INVALID_EGROUP, got=str(egroup.data_type))
+        assert isinstance(egroup, EntityGroup)
+        with self.new_mcfunc_file() as body_file, \
+             self.new_scope():
+            self.write_debug("For entity body")
+            self.current_scope.set(
+                node.name, EntityReference(
+                    MCSelector("s"), egroup.template, self.compiler
+                )
+            )
+            for stmt in node.body:
+                self.visit(stmt)
+        self.current_file.write(export_execute_subcommands(
+            ["as %s" % egroup.get_selector().to_str()], main=body_file.call()
+        ))
+
     # --- EXPRESSION VISITORS ---
     # literal
 

@@ -48,6 +48,7 @@ class ErrorType(enum.Enum):
         'always evaluates to True'
     INVALID_TYPE_SPEC = 'Expecting a type specification, got "{got}"'
     INVALID_ETEMPLATE = 'Expecting an entity template, got "{got}"'
+    INVALID_EGROUP = 'Expecting an entity group, got "{got}"'
     ## INVALID_ARG_TYPE: `def f(a: 1)` "1" (int) is not a type
     ## UNSUPPORTED_ARG_TYPE: `def f(a = int)` args can't be of `type` type
     UNMATCHED_ARG_DEFAULT_TYPE = 'Specified type "{arg_type}" for arg ' \

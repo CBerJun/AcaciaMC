@@ -230,6 +230,13 @@ class For(Statement):  # for enumeration
         self.expr = expr
         self.body = body
 
+class ForEntity(Statement):  # entity group iteration
+    def __init__(self, name: str, expr: Expression, body: list, lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.expr = expr
+        self.body = body
+
 class Literal(Expression):  # a literal constant
     def __init__(self, literal, lineno, col):
         super().__init__(lineno, col)
