@@ -3,6 +3,7 @@
 import argparse
 import os
 import shutil
+import sys
 
 from acaciamc.constants import Config
 from acaciamc.error import Error as CompileError
@@ -12,10 +13,6 @@ DESCRIPTION = '''
 Compiler of Acacia, a language that dedicates
 to simplize the command system of Minecraft
 '''
-
-def error(msg):
-    print('acacia: error: ' + msg)
-    exit(2)
 
 # --- SET ARGPARSER ---
 
@@ -73,18 +70,20 @@ args = argparser.parse_args()
 def check_id(name: str, option: str):
     # check if name is a valid Acacia identifier
     if not name:
-        error('option "%s" can\'t be empty' % option)
+        argparser.error('option "%s" can\'t be empty' % option)
     if name[0].isdecimal():
-        error('option "%s" can\'t start with a number' % option)
+        argparser.error('option "%s" can\'t start with a number' % option)
     for s in name:
         if not (s.isalnum() or s == '_'):
-            error('invalid character "%s" for option "%s"' % (s, option))
+            argparser.error(
+                'invalid character "%s" for option "%s"' % (s, option)
+            )
 
 # make sure that the file is available
 if not os.path.exists(args.file):
-    error('file not found: %s' % args.file)
+    argparser.error('file not found: %s' % args.file)
 if not os.path.isfile(args.file):
-    error('not a file: %s' % args.file)
+    argparser.error('not a file: %s' % args.file)
 
 # --- Config ARGS ---
 
@@ -122,15 +121,24 @@ if not os.path.exists(out_path):
 
 # --- START COMPILE ---
 
+def compile_error(message: str):
+    print("acacia: error: %s" % message)
+    sys.exit(1)
+
 try:
     Compiler(args.file, open_args={
         'encoding': encoding
     }).output(out_path)
 except CompileError as err:
-    error(str(err))
+    compile_error(str(err))
 except Exception as err:
+    import traceback
     if args.verbose:
-        raise
+        traceback.print_exc()
+        print()
+        compile_error("the above unexpected error occurred")
     else:
-        error('unexpected error when compiling: %s: %s'
-              % (type(err).__name__, str(err)))
+        compile_error(
+            'unexpected error when compiling: %s'
+            % traceback.format_exception_only(err)[-1].strip()
+        )
