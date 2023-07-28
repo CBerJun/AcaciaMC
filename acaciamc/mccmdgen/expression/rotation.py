@@ -9,7 +9,7 @@ __all__ = ["RotType", "Rotation"]
 
 from typing import List, TYPE_CHECKING
 
-from acaciamc.tools import axe
+from acaciamc.tools import axe, method_of
 from acaciamc.constants import DEFAULT_ANCHOR
 from .base import *
 from .types import Type, DataType
@@ -23,6 +23,7 @@ class RotType(Type):
     name = "Rot"
 
     def do_init(self):
+        @method_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
             Rot(entity): rotation of an entity.
@@ -42,9 +43,7 @@ class RotType(Type):
                 inst = Rotation(compiler)
                 inst.context.append("rotated %s %s" % (vertical, horizontal))
                 return inst
-        self.attribute_table.set(
-            "__new__", BinaryFunction(_new, self.compiler)
-        )
+        @method_of(self, "face_entity")
         @axe.chop
         @axe.arg("target", EntityType)
         @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
@@ -52,9 +51,6 @@ class RotType(Type):
             inst = Rotation(compiler)
             inst.context.append("facing entity %s %s" % (target, anchor))
             return inst
-        self.attribute_table.set(
-            "face_entity", BinaryFunction(_face_entity, self.compiler)
-        )
 
 class Rotation(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):

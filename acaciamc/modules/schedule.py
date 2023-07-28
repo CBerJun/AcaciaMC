@@ -39,7 +39,7 @@ result:
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.ast import Operator
-from acaciamc.tools import axe, resultlib
+from acaciamc.tools import axe, resultlib, method_of
 
 class TaskType(Type):
     """
@@ -50,15 +50,13 @@ class TaskType(Type):
     name = "Task"
 
     def do_init(self):
+        @method_of(self, "__new__")
         @axe.chop
         @axe.arg("target", FunctionType)
         @axe.star_arg("args", axe.AnyValue())
         @axe.kwds("kwds", axe.AnyValue())
         def _new(compiler, target, args, kwds):
             return Task(target, args, kwds, compiler)
-        self.attribute_table.set(
-            "__new__", BinaryFunction(_new, self.compiler)
-        )
 
 class Task(AcaciaExpr):
     def __init__(self, target: AcaciaExpr, other_arg, other_kw, compiler):
@@ -76,18 +74,22 @@ class Task(AcaciaExpr):
         def _timer_reset():
             cmds = IntLiteral(-1, compiler).export(self.timer)
             return resultlib.commands(cmds, compiler)
+        @method_of(self, "after")
         @axe.chop
         @axe.arg("delay", IntType)
         def _after(compiler, delay: AcaciaExpr):
             """.after(delay: int): Run the target after `delay`"""
             cmds = delay.export(self.timer)
             return resultlib.commands(cmds, compiler)
+        @method_of(self, "cancel")
         @axe.chop
         def _cancel(compiler):
             """.cancel(): Cancel the schedule"""
             return _timer_reset()
+        @method_of(self, "__init__")
         def _init(compiler, args, keywords):
             return _timer_reset()
+        @method_of(self, "has_schedule")
         @axe.chop
         def _has_schedule(compiler):
             """.has_schedule() -> bool: Get whether a schedule exists"""
@@ -96,17 +98,7 @@ class Task(AcaciaExpr):
                 self.timer, Operator.greater_equal, IntLiteral(0, compiler),
                 compiler
             )
-        self.attribute_table.set(
-            "__init__", BinaryFunction(_init, compiler)
-        )
         self.attribute_table.set("_timer", self.timer)
-        self.attribute_table.set("after", BinaryFunction(_after, compiler))
-        self.attribute_table.set(
-            "cancel", BinaryFunction(_cancel, compiler)
-        )
-        self.attribute_table.set(
-            "has_schedule", BinaryFunction(_has_schedule, compiler)
-        )
         # Write tick.mcfunction
         self.compiler.file_tick.write_debug("# schedule.Task")
         _res, cmds = target.call(other_arg, other_kw)

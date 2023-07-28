@@ -39,7 +39,7 @@ from .callable import BinaryFunction
 from . import boolean
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
-from acaciamc.tools import axe, resultlib
+from acaciamc.tools import axe, resultlib, method_of
 
 def _to_mcop(operator: str):
     # convert "+" to "add", "-" to "remove"
@@ -53,6 +53,7 @@ class IntType(Type):
     def do_init(self):
         self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
         self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
+        @method_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
             int() -> literal 0
@@ -82,9 +83,6 @@ class IntType(Type):
                     with_quote=bool_var.with_quote,
                     compiler=self.compiler
                 ), dependencies
-        self.attribute_table.set(
-            '__new__', BinaryFunction(_new, self.compiler)
-        )
 
     def new_var(self, tmp=False) -> "IntVar":
         objective, selector = self._new_score(tmp)

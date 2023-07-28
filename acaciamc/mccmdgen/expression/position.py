@@ -5,7 +5,7 @@ __all__ = ["PosType", "Position"]
 from typing import List, TYPE_CHECKING
 
 from acaciamc.error import *
-from acaciamc.tools import axe
+from acaciamc.tools import axe, method_of
 from acaciamc.constants import DEFAULT_ANCHOR, XYZ
 from .base import *
 from .types import Type, DataType
@@ -33,6 +33,7 @@ class PosType(Type):
         self.attribute_table.set("X", String("x", self.compiler))
         self.attribute_table.set("Y", String("y", self.compiler))
         self.attribute_table.set("Z", String("z", self.compiler))
+        @method_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
             Pos(entity, [str]):
@@ -68,15 +69,13 @@ class PosType(Type):
                 new_inst, cmds = (inst.attribute_table.lookup("apply")
                                   .call([offset], {}))
                 return new_inst, cmds
-        self.attribute_table.set(
-            '__new__', BinaryFunction(_new, self.compiler)
-        )
 
 class Position(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
         super().__init__(DataType.from_type_cls(PosType, compiler), compiler)
         self.context: List[str] = []  # /execute subcommands
 
+        @method_of(self, "dim")
         @axe.chop
         @axe.arg("id", axe.LiteralString(), rename="id_")
         @transform_immutable(self)
@@ -89,6 +88,7 @@ class Position(AcaciaExpr, ImmutableMixin):
         """.abs(...) .offset(...)
         Alias of .apply(Offset().abs/offset(...)).
         """
+        @method_of(self, "local")
         @axe.chop
         @axe.arg("rot", RotType)
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
@@ -106,6 +106,7 @@ class Position(AcaciaExpr, ImmutableMixin):
             new_obj, cmds = (self.attribute_table.lookup("apply")
                              .call([offset], {}))
             return new_obj, cmds
+        @method_of(self, "apply")
         @axe.chop
         @axe.arg("offset", PosOffsetType)
         @transform_immutable(self)
@@ -113,6 +114,7 @@ class Position(AcaciaExpr, ImmutableMixin):
             """.apply(offset: Offset): Apply offset to current position."""
             self.context.append("positioned %s" % offset)
             return self
+        @method_of(self, "align")
         @axe.chop
         @axe.arg("axis", axe.LiteralString(), default="xyz")
         @transform_immutable(self)
@@ -128,23 +130,15 @@ class Position(AcaciaExpr, ImmutableMixin):
                 raise Error(ErrorType.INVALID_POS_ALIGN, align=axis)
             self.context.append("align %s" % axis)
             return self
+        @method_of(self, "context")
         @axe.chop
         def _context(compiler):
             """.context(): print current context (debug only)."""
             print(self.context)
             return self
-        self.attribute_table.set("dim", BinaryFunction(_dim, self.compiler))
         self.attribute_table.set("abs", BinaryFunction(_abs, self.compiler))
         self.attribute_table.set(
             "offset", BinaryFunction(_offset, self.compiler))
-        self.attribute_table.set(
-            "local", BinaryFunction(_local, self.compiler))
-        self.attribute_table.set(
-            "apply", BinaryFunction(_apply, self.compiler))
-        self.attribute_table.set(
-            "align", BinaryFunction(_align, self.compiler))
-        self.attribute_table.set(
-            "context", BinaryFunction(_context, self.compiler))
 
     def _create_offset_alias(self, method: str):
         @transform_immutable(self)

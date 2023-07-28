@@ -11,7 +11,7 @@ from typing import Set, List
 from enum import Enum
 
 from acaciamc.error import *
-from acaciamc.tools import axe
+from acaciamc.tools import axe, method_of
 from acaciamc.constants import XYZ
 from .base import *
 from .types import Type, DataType
@@ -26,13 +26,12 @@ class PosOffsetType(Type):
     name = "Offset"
 
     def do_init(self):
+        @method_of(self, "__new__")
         @axe.chop
         def _new(compiler):
             """Offset(): New object with no offset (~ ~ ~)."""
             return PosOffset(compiler)
-        self.attribute_table.set(
-            "__new__", BinaryFunction(_new, self.compiler)
-        )
+        @method_of(self, "local")
         @axe.chop
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
         @axe.arg("up", axe.LiteralFloat(), default=0.0)
@@ -42,9 +41,6 @@ class PosOffsetType(Type):
             Return new object using local coordinate.
             """
             return PosOffset.local(left, up, front, compiler)
-        self.attribute_table.set(
-            "local", BinaryFunction(_local, self.compiler)
-        )
 
 class PosOffset(AcaciaExpr):
     def __init__(self, compiler):

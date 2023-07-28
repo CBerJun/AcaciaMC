@@ -6,7 +6,7 @@ import json
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.error import *
-from acaciamc.tools import axe, resultlib
+from acaciamc.tools import axe, resultlib, method_of
 
 class ArgFString(axe.Multityped):
     """Accepts an fstring as argument. A string is also accepted and
@@ -185,6 +185,7 @@ class FStringType(Type):
     name = 'fstring'
 
     def do_init(self):
+        @method_of(self, "__new__")
         @axe.chop
         @axe.arg("_pattern", axe.LiteralString(), rename="pattern")
         @axe.star_arg("args", axe.AnyValue())
@@ -196,9 +197,6 @@ class FStringType(Type):
                 raise Error(ErrorType.ANY, message=str(err))
             # scan pattern
             return FString(dependencies, json, compiler)
-        self.attribute_table.set(
-            '__new__', BinaryFunction(_new, self.compiler)
-        )
 
 class FString(AcaciaExpr):
     """A formatted string in JSON format."""

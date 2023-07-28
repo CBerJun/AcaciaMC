@@ -7,7 +7,7 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.generator import MCFunctionFile
 from acaciamc.ast import ModuleMeta
 from acaciamc.error import *
-from acaciamc.tools import axe, resultlib
+from acaciamc.tools import axe, resultlib, method_of
 
 class MusicType(Type):
     """
@@ -40,6 +40,7 @@ class MusicType(Type):
     name = "Music"
 
     def do_init(self):
+        @method_of(self, "__new__")
         @axe.chop
         @axe.arg("path", axe.LiteralString())
         @axe.arg("looping", axe.LiteralBool(), default=False)
@@ -68,9 +69,6 @@ class MusicType(Type):
                 midi, execute_condition, looping_info, note_offset,
                 chunk_size, speed, volume, compiler
             )
-        self.attribute_table.set(
-            "__new__", BinaryFunction(_new, self.compiler)
-        )
 
 class Music(AcaciaExpr):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
@@ -322,12 +320,12 @@ class Music(AcaciaExpr):
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
+        @method_of(self, "__init__")
         @axe.chop
         def _init(compiler):
             """.__init__(): Register dependencies"""
             return resultlib.commands(cmds, compiler)
-        self.attribute_table.set("__init__",
-                                 BinaryFunction(_init, self.compiler))
+        @method_of(self, "play")
         @axe.chop
         @axe.arg("timer", IntType, default=IntLiteral(0, self.compiler))
         def _play(compiler, timer: AcaciaExpr):
@@ -340,13 +338,12 @@ class Music(AcaciaExpr):
             """
             cmds = timer.export(self.timer)
             return resultlib.commands(cmds, compiler)
-        self.attribute_table.set("play", BinaryFunction(_play, self.compiler))
+        @method_of(self, "stop")
         @axe.chop
         def _stop(compiler):
             """.stop(): Stop the music"""
             cmds = IntLiteral(GT_LEN + 2, compiler).export(self.timer)
             return resultlib.commands(cmds, compiler)
-        self.attribute_table.set("stop", BinaryFunction(_stop, self.compiler))
 
     def main_loop(self):
         # Read messages
