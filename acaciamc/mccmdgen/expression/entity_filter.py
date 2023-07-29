@@ -6,7 +6,7 @@ from typing import List, Union, Optional, TYPE_CHECKING
 import re
 
 from acaciamc.error import *
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe, versionlib, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
 from .base import *
 from .types import Type, DataType
@@ -332,6 +332,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             self.entity_type = PLAYER
             return self
         @method_of(self, "has_permission")
+        @versionlib.only(versionlib.newer((1, 19, 80)))
         @axe.chop
         @axe.star_arg("permissions", axe.LiteralString())
         @transform_immutable(self)
@@ -342,6 +343,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             self.entity_type = PLAYER
             return self
         @method_of(self, "has_no_permission")
+        @versionlib.only(versionlib.newer((1, 19, 80)))
         @axe.chop
         @axe.star_arg("permissions", axe.LiteralString())
         @transform_immutable(self)
