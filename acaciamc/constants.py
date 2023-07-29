@@ -13,3 +13,4 @@ class Config:
     entity_type = 'armor_stand'  # default type of entity
     entity_pos = '~ ~ ~'  # which place to summon entity
     entity_tag = 'acacia'  # prefix of entity tags
+    mc_version = (1, 20, 20)  # Mineraft version

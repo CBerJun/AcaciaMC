@@ -28,6 +28,10 @@ argparser.add_argument(
     help='output directory'
 )
 argparser.add_argument(
+    "-v", "--mc-version", metavar="VERSION",
+    help="Minecraft version (e.g. 1.19.50)"
+)
+argparser.add_argument(
     '-s', '--scoreboard', metavar='OBJECTIVE',
     help='the scoreboard that Acacia uses to store data (default "acacia")'
 )
@@ -99,6 +103,16 @@ if args.entity_name:
     Config.entity_name = args.entity_name
 if args.entity_tag:
     Config.entity_tag = args.entity_tag
+if args.mc_version:
+    numlist = args.mc_version.split(".")
+    try:
+        Config.mc_version = tuple(map(int, numlist))
+        if len(Config.mc_version) <= 1:
+            raise ValueError
+        if any(v < 0 for v in Config.mc_version):
+            raise ValueError
+    except ValueError:
+        argparser.error('invalid Minecraft version: %s' % args.mc_version)
 encoding = args.encoding
 
 # --- PATH RELATED ARGS ---
