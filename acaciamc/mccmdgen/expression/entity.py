@@ -73,20 +73,21 @@ class TaggedEntity(_EntityBase, VarValue):
         return TaggedEntity(self.template, self.compiler, template)
 
     @classmethod
-    def from_template(cls, template: "EntityTemplate", compiler
+    def from_template(cls, template: "EntityTemplate", compiler: "Compiler"
                       ) -> Tuple["TaggedEntity", List[str]]:
         """Create an entity from the template.
         Return a 2-tuple.
         Element 0: the `TaggedEntity`
         Element 1: initial commands to run
         """
+        # Allocate an entity name to identify it
         name = compiler.allocate_entity_name()
         inst = cls(template, compiler)
         # Analyze template meta
         # NOTE meta only works when you create an entity using
         # `Template()` (Since this code is in `from_template` method).
         e_type = Config.entity_type
-        e_pos = Config.entity_pos
+        e_pos = ([], Config.entity_pos)
         for meta, value in template.metas.items():
             if meta == "type":
                 # Entity type
@@ -94,9 +95,10 @@ class TaggedEntity(_EntityBase, VarValue):
             elif meta == "position":
                 # Position to summon the entity
                 e_pos = value
-        # Allocate an entity name to identify it
         return inst, [
-            "summon %s %s %s" % (e_type, name, e_pos),
+            export_execute_subcommands(
+                e_pos[0], "summon %s %s %s" % (e_type, name, e_pos[1])
+            ),
             "tag @e[name=%s] add %s" % (name, inst.template.runtime_tag),
             "tag @e[name=%s] add %s" % (name, inst.tag)
         ]

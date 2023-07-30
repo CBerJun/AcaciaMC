@@ -12,6 +12,7 @@ from .entity import TaggedEntity
 from .callable import BoundMethodDispatcher, BoundMethod
 from .string import String
 from .none import NoneType
+from .position import Position
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -95,17 +96,28 @@ class EntityTemplate(AcaciaExpr):
         self.metas: Dict[str, Any] = {}
         self.mro_: List[EntityTemplate] = [self]  # Method Resolution Order
         # Handle meta
+        def _meta_error(name: str, expect: str):
+            raise Error(ErrorType.ENTITY_META, meta=name,
+                        msg='should be %s, got "%s"'
+                        % (expect, str(meta.data_type)))
         # We convert meta `AcaciaExpr`s to Python objects here:
-        #  `@type`, `@position` are converted to `str`
+        #  `@type`: str
+        #  `@position`: Tuple[List[str], str]  # context, position
         for name, meta in metas.items():
-            if name not in ("type", "position"):
+            if name == "type":
+                if not isinstance(meta, String):
+                    _meta_error(name, "str")
+                converted = meta.value
+            elif name == "position":
+                if isinstance(meta, Position):
+                    converted = (meta.context, "~ ~ ~")
+                elif isinstance(meta, String):
+                    converted = ([], meta.value)
+                else:
+                    _meta_error(name, "str or Pos")
+            else:
                 raise Error(ErrorType.INVALID_ENTITY_META, meta=name)
-            # Both `@type` and `@position` requires literal string
-            if not isinstance(meta, String):
-                raise Error(ErrorType.ENTITY_META, meta=name,
-                            msg='should be a literal string, got "%s"'
-                                % str(meta.data_type))
-            self._orig_metas[name] = meta.value
+            self._orig_metas[name] = converted
         # Runtime identification tag
         # Mark which template an entity is using at runtime.
         # This tag is added to all entities that uses this template
