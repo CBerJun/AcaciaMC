@@ -4,7 +4,7 @@ __all__ = [
     # Decorators
     "chop", "arg", "slash", "star", "star_arg", "kwds",
     # Overload interfaces
-    "OverloadChopped", "overload",
+    "OverloadChopped", "overload", "overload_versioned",
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
@@ -21,11 +21,14 @@ from itertools import chain
 from functools import partial
 import inspect
 
-from acaciamc.error import Error as AcaciaError, ErrorType
 import acaciamc.mccmdgen.expression as acacia
+from acaciamc.error import Error as AcaciaError, ErrorType
+from acaciamc.constants import Config
+from acaciamc.tools.versionlib import format_version
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.tools.versionlib import VersionRequirement
 
 ### Exception
 
@@ -539,21 +542,25 @@ def _create_signature(arg_defs: List[_Argument]) -> str:
     )
 
 class _OverloadImplWrapper:
-    def __init__(self, method: Callable, building: _BuildingParser):
+    def __init__(self, method: Callable, building: _BuildingParser,
+                 version: Optional["VersionRequirement"]):
         self.method = method
         self.building = building
+        self.version = version
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         return self.method(*args, **kwds)
 
 class _OverloadMethod(classmethod):
-    def __init__(self, building: _BuildingParser):
+    def __init__(self, building: _BuildingParser,
+                 version: Optional["VersionRequirement"] = None):
         super().__init__(building.get_target())
         self.building = building
+        self.version = version
 
     def __get__(self, instance, owner: Union[type, None] = None) -> Callable:
         return _OverloadImplWrapper(
-            super().__get__(instance, owner), self.building
+            super().__get__(instance, owner), self.building, self.version
         )
 
 ### Parser Interface
@@ -611,7 +618,7 @@ class OverloadChopped(type):
     """
 
     # For IDE hint only:
-    __overloads: List[Tuple[Callable, List[_Argument]]]
+    __overloads: List[Tuple[_OverloadImplWrapper, List[_Argument]]]
 
     def __new__(meta_cls, cls_name, bases, attributes):
         cls = type.__new__(meta_cls, cls_name, bases, attributes)
@@ -632,6 +639,13 @@ class OverloadChopped(type):
                           [arg_def.rename for arg_def in arg_defs])
         return cls
 
+    @staticmethod
+    def _format_version(version: Optional["VersionRequirement"]):
+        if version is None:
+            return ""
+        else:
+            return " [MC %s]" % version.to_str()
+
     def __call__(self, compiler: "Compiler", args: acacia.ARGS_T,
                  kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":
         if kwds:
@@ -651,15 +665,33 @@ class OverloadChopped(type):
                 else:
                     res[arg_def.rename] = converted
             else:
-                return implementation(compiler, **res)
+                version = implementation.version
+                if not version or version.validate(Config.mc_version):
+                    return implementation(compiler, **res)
+                else:
+                    raise AcaciaError(
+                        ErrorType.ANY,
+                        message="The overload %s is not available for "
+                                "Minecraft version %s; expecting %s"
+                        % (
+                            _create_signature(arg_defs),
+                            format_version(Config.mc_version),
+                            version.to_str()
+                        )
+                    )
         else:
             raise AcaciaError(
                 ErrorType.ANY,
                 message="No overload matches given arguments: "
                         "got %s, expected %s" % (
                     "(%s)" % ", ".join(str(arg.data_type) for arg in args),
-                    " / ".join(_create_signature(arg_defs)
-                               for _, arg_defs in self.__overloads)
+                    " / ".join(
+                        "%s%s" % (
+                            _create_signature(arg_defs),
+                            self._format_version(impl.version)
+                        )
+                        for impl, arg_defs in self.__overloads
+                    )
                 )
             )
 
@@ -670,3 +702,13 @@ def overload(building: _BuildingParser):
     `classmethod`.
     """
     return _OverloadMethod(building)
+
+def overload_versioned(version: "VersionRequirement"):
+    """Return a decorator that is same as @overload, but decorated
+    implementation will only be available when Config.mc_version
+    satifies given requirements.
+    """
+    @_parser_component
+    def _decorator(building: _BuildingParser):
+        return _OverloadMethod(building, version)
+    return _decorator
