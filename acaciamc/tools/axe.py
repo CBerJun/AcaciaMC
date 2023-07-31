@@ -8,7 +8,7 @@ __all__ = [
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
-    "Iterator", "Selector",
+    "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -367,6 +367,42 @@ class Selector(Multityped):
         # Both `_EntityBase` and `EntityGroup` define `get_selector`.
         origin = super().convert(origin)
         return origin.get_selector()
+
+class LiteralIntEnum(LiteralInt):
+    """Accepts several specific integer literals values and converts
+    input to Python `int`.
+    """
+    def __init__(self, *accepts: int):
+        super().__init__()
+        self.accepts = accepts
+
+    def get_show_name(self) -> str:
+        return (super().get_show_name()
+                + " (one of %s)" % ", ".join(map(str, self.accepts)))
+
+    def convert(self, origin: acacia.AcaciaExpr) -> int:
+        origin_int = super().convert(origin)
+        if origin_int not in self.accepts:
+            self.wrong_argument(origin)
+        return origin_int
+
+class LiteralStringEnum(LiteralString):
+    """Accepts several specific string literals values and converts
+    input to Python `str`.
+    """
+    def __init__(self, *accepts: str):
+        super().__init__()
+        self.accepts = accepts
+
+    def get_show_name(self) -> str:
+        return (super().get_show_name()
+                + " (one of %s)" % ", ".join(map(repr, self.accepts)))
+
+    def convert(self, origin: acacia.AcaciaExpr) -> str:
+        origin_str = super().convert(origin)
+        if origin_str not in self.accepts:
+            self.wrong_argument(origin)
+        return origin_str
 
 ### Parser
 
