@@ -8,7 +8,7 @@ __all__ = [
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
-    "Iterator",
+    "Iterator", "Selector",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -29,6 +29,7 @@ from acaciamc.tools.versionlib import format_version
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.tools.versionlib import VersionRequirement
+    from acaciamc.mccmdgen.mcselector import MCSelector
 
 ### Exception
 
@@ -356,6 +357,16 @@ class Iterator(Converter):
             self.wrong_argument(origin)
         else:
             return res
+
+class Selector(Multityped):
+    """Accepts entity or Engroup and convert it to `MCSelector`."""
+    def __init__(self):
+        super().__init__((acacia.EntityType, acacia.EGroupType))
+
+    def convert(self, origin: acacia.AcaciaExpr) -> "MCSelector":
+        # Both `_EntityBase` and `EntityGroup` define `get_selector`.
+        origin = super().convert(origin)
+        return origin.get_selector()
 
 ### Parser
 
