@@ -88,6 +88,7 @@ class TaggedEntity(_EntityBase, VarValue):
         # `Template()` (Since this code is in `from_template` method).
         e_type = Config.entity_type
         e_pos = ([], Config.entity_pos)
+        e_event = "*"
         for meta, value in template.metas.items():
             if meta == "type":
                 # Entity type
@@ -95,10 +96,17 @@ class TaggedEntity(_EntityBase, VarValue):
             elif meta == "position":
                 # Position to summon the entity
                 e_pos = value
+            elif meta == "spawn_event":
+                # Entity event to execute on spawn
+                e_event = value
+        if Config.mc_version >= (1, 19, 70):
+            SUMMON = "summon {type} {pos} 0 0 {event} {name}"
+        else:
+            SUMMON = "summon {type} {pos} {event} {name}"
         return inst, [
-            export_execute_subcommands(
-                e_pos[0], "summon %s %s %s" % (e_type, name, e_pos[1])
-            ),
+            export_execute_subcommands(e_pos[0], SUMMON.format(
+                type=e_type, name=name,pos=e_pos[1], event=e_event
+            )),
             "tag @e[name=%s] add %s" % (name, inst.template.runtime_tag),
             "tag @e[name=%s] add %s" % (name, inst.tag)
         ]

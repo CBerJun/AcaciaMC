@@ -115,6 +115,13 @@ class EntityTemplate(AcaciaExpr):
                     converted = ([], meta.value)
                 else:
                     _meta_error(name, "str or Pos")
+            elif name == "spawn_event":
+                if isinstance(meta, String):
+                    converted = meta.value
+                elif meta.data_type.raw_matches(NoneType):
+                    converted = "*"
+                else:
+                    _meta_error(name, "str or None")
             else:
                 raise Error(ErrorType.INVALID_ENTITY_META, meta=name)
             self._orig_metas[name] = converted
