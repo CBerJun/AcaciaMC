@@ -31,13 +31,6 @@ class IterDummy(AcaciaExpr):
     def iterate(self) -> ITERLIST_T:
         return self.pool.copy()
 
-def read_iter(iter_: ITERLIST_T):
-    for v in iter_:
-        if isinstance(v, tuple):
-            yield v
-        else:
-            yield v, []
-
 class _range(metaclass=axe.OverloadChopped):
     @classmethod
     def _impl(cls, compiler, *args: int):
@@ -69,18 +62,6 @@ def _reversed(compiler, x: ITERLIST_T):
     """reversed(x, /) -> Reversed iterable."""
     x.reverse()
     return IterDummy(x, compiler)
-
-@axe.chop
-@axe.arg("func", FunctionType)
-@axe.arg("iter", axe.Iterator(), rename="iter_")
-def _map(compiler, func: AcaciaExpr, iter_: ITERLIST_T):
-    """map(func, iter) -> Apply func to each element of iter."""
-    res = []
-    for origin, cmds in read_iter(iter_):
-        ret, _cmds = func.call([origin], {})
-        cmds.extend(_cmds)
-        res.append((ret, cmds))
-    return IterDummy(res, compiler)
 
 @axe.chop
 @axe.arg("object", axe.AnyValue(), rename="obj")
@@ -147,7 +128,6 @@ def acacia_build(compiler: "Compiler"):
     return {
         "range": BinaryFunction(_range, compiler),
         "reversed": BinaryFunction(_reversed, compiler),
-        "map": BinaryFunction(_map, compiler),
         "repeat": BinaryFunction(_repeat, compiler),
         "cycle": BinaryFunction(_cycle, compiler),
         "enum": BinaryFunction(_enum, compiler),

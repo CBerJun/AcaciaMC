@@ -638,13 +638,8 @@ class Generator(ASTVisitor):
         except NotImplementedError:
             raise Error(ErrorType.NOT_ITERABLE, type_=str(iterable.data_type))
         for value in items:
-            if isinstance(value, tuple):
-                expr, cmds = value
-                self.current_file.extend(cmds)
-            else:
-                expr = value
             with self.new_scope():
-                self.current_scope.set(node.name, expr)
+                self.current_scope.set(node.name, value)
                 for stmt in node.body:
                     self.visit(stmt)
 

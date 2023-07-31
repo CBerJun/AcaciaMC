@@ -59,7 +59,7 @@ def export_need_tmp(func):
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
 CALLRET_T = Tuple["AcaciaExpr", List[str]]  # Result
-ITERLIST_T = List[Union["AcaciaExpr", Tuple["AcaciaExpr", List[str]]]]
+ITERLIST_T = List["AcaciaExpr"]
 
 class AcaciaExpr:
     """Base class for EVERYTHING that represents an Acacia expression.
@@ -146,10 +146,9 @@ class AcaciaExpr:
 
     def iterate(self) -> ITERLIST_T:
         """Implements for-in iteration. Should return an iterable
-        of `AcaciaExpr` or `CALLRET_T`, in which values are bound to
-        "for" variable one by one and commands (if given) are written
-        before each iteration of suite. If not implemented, then the
-        object can't be iterated in a for-in structure.
+        of `AcaciaExpr`, in which values are bound to "for" variable
+        one by one. If not implemented, then the object can't be
+        iterated in a for-in structure.
         """
         raise NotImplementedError
 
