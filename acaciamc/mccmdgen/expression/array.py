@@ -15,7 +15,7 @@ from itertools import repeat, chain
 
 from .base import *
 from .types import DataType, Type
-from .integer import IntLiteral
+from .integer import IntType, IntLiteral
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
 
@@ -170,3 +170,18 @@ class Array(AcaciaExpr, ImmutableMixin):
 
     def iterate(self) -> ITERLIST_T:
         return self.items
+
+    def __add__(self, other):
+        if isinstance(other, Array):
+            return Array(self.items + other.items, self.compiler)
+        return NotImplemented
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __mul__(self, other: AcaciaExpr):
+        if isinstance(other, IntLiteral):
+            return Array(self.items * other.value, self.compiler)
+        if other.data_type.raw_matches(IntType):
+            raise Error(ErrorType.ARRAY_MULTIMES_NON_LITERAL)
+        return NotImplemented

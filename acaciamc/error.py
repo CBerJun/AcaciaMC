@@ -86,6 +86,7 @@ class ErrorType(enum.Enum):
         'bounds index {index}'
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
+    ARRAY_MULTIMES_NON_LITERAL = 'Array can only be multiplied by literal int'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{module}"'
