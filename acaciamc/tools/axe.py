@@ -8,7 +8,7 @@ __all__ = [
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
-    "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum",
+    "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -349,8 +349,7 @@ class Iterator(Converter):
     def get_show_name(self) -> str:
         return "any iterable"
 
-    def convert(self, origin: acacia.AcaciaExpr) \
-        -> List[acacia.AcaciaExpr]:
+    def convert(self, origin: acacia.AcaciaExpr) -> "acacia.ITERLIST_T":
         try:
             res = origin.iterate()
         except NotImplementedError:
@@ -403,6 +402,30 @@ class LiteralStringEnum(LiteralString):
         if origin_str not in self.accepts:
             self.wrong_argument(origin)
         return origin_str
+
+class ArrayOf(Typed):
+    """Accepts an array of specified data type and converts it to Python
+    `list`.
+    """
+    def __init__(self, converter: Converter):
+        super().__init__(acacia.ArrayType)
+        self.converter = converter
+
+    def get_show_name(self) -> str:
+        return "array of " + self.converter.get_show_name()
+
+    def convert(self, origin: acacia.AcaciaExpr) -> list:
+        origin = super().convert(origin)
+        assert isinstance(origin, acacia.Array)
+        try:
+            res = list(map(self.converter.convert, origin.items))
+        except AcaciaError as err:
+            if err.type is ErrorType.WRONG_ARG_TYPE:
+                self.wrong_argument(origin)
+            else:
+                raise
+        else:
+            return res
 
 ### Parser
 
