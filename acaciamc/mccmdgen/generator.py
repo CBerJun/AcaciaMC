@@ -724,6 +724,14 @@ class Generator(ASTVisitor):
             compiler=self.compiler, with_quote=False
         )
 
+    def visit_ArrayDef(self, node: ArrayDef):
+        return Array(list(map(self.visit, node.items)), self.compiler)
+
+    def visit_MapDef(self, node: MapDef):
+        keys = list(map(self.visit, node.keys))
+        values = list(map(self.visit, node.values))
+        return Map(keys, values, self.compiler)
+
     # operators
 
     def _wrap_op(self, operator: str, impl: Callable, *operands: AcaciaExpr):

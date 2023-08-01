@@ -184,8 +184,17 @@ multiline_test = '''
 sss*/ 5
 '''
 
+array_map_test = '''
+{1, 2, 3}
+{1, 2,}
+{1: 2, 3: 4}
+{{1: 2,}, 3, {4}}
+{:}
+{}
+'''
+
 try:
-    test(multiline_test)
+    test(array_map_test)
 except Error as err:
     err.set_file("<testsrc>")
     print("Error:", err)

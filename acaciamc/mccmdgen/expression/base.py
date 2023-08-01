@@ -10,7 +10,7 @@ __all__ = [
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T'
 ]
 
-from typing import List, TYPE_CHECKING, Union, Dict, Tuple, Callable
+from typing import List, TYPE_CHECKING, Union, Dict, Tuple, Callable, Hashable
 
 from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *
@@ -155,6 +155,12 @@ class AcaciaExpr:
     def datatype_hook(self) -> "DataType":
         """When this expression is used as a type specifier, this
         method is called to obtain the `DataType`.
+        """
+        raise NotImplementedError
+
+    def map_hash(self) -> Hashable:
+        """When this expression is used as a map's key, this method
+        is called to obtain the hash value.
         """
         raise NotImplementedError
 

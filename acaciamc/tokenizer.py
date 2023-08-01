@@ -23,6 +23,8 @@ class TokenType(enum.Enum):
     new_line = 'NEW_LINE'
     lparen = '('
     rparen = ')'
+    lbrace = '{'
+    rbrace = '}'
     bar = '|'
     colon = ':'
     comma = ','

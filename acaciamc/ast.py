@@ -309,6 +309,18 @@ class RawScore(Expression):  # directly get the score on a scoreboard
         self.objective = objective
         self.selector = selector
 
+class ArrayDef(Expression):  # an array
+    def __init__(self, items: _List[Expression], lineno, col):
+        super().__init__(lineno, col)
+        self.items = items
+
+class MapDef(Expression):  # a map
+    def __init__(self, keys: _List[Expression],
+                 values: _List[Expression], lineno, col):
+        super().__init__(lineno, col)
+        self.keys = keys
+        self.values = values
+
 #############
 ### UTILS ###
 #############

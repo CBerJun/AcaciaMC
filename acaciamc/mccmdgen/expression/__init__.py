@@ -15,9 +15,11 @@ from .position_offset import *
 from .rotation import *
 from .entity_group import *
 from .entity_filter import *
+from .array import *
+from .map_ import *
 
 BUILTIN_TYPES = (
     TypeType, IntType, BoolType, FunctionType, NoneType, StringType,
     ModuleType, ETemplateType, EntityType, FloatType, PosType, PosOffsetType,
-    RotType, EGroupType, EFilterType, GenericEGroupType
+    RotType, EGroupType, EFilterType, GenericEGroupType, ArrayType, MapType,
 )

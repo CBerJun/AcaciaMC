@@ -82,6 +82,10 @@ class ErrorType(enum.Enum):
         'result type "{expect}" as its parent, not "{got}"'
     POS_OFFSET_ALREADY_SET = '"{axis}" set already'
     INVALID_POS_ALIGN = 'Invalid position alignment "{align}"'
+    ARRAY_INDEX_OUT_OF_BOUNDS = 'Array with length {length} got out of ' \
+        'bounds index {index}'
+    MAP_KEY_NOT_FOUND = 'Map key not found'
+    INVALID_MAP_KEY = 'Invalid map key'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{module}"'

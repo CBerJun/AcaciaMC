@@ -113,10 +113,59 @@ class Parser:
         self.eat(TokenType.self)
         return Self(**pos)
 
+    def array_or_map(self):
+        """
+        array := LBRACE (expr COMMA)* expr? RBRACE
+        map_item := expr COLON expr
+        map := LBRACE ((map_item (COMMA map_item)* COMMA?) | COLON)
+          RBRACE
+        """
+        pos = self.current_pos
+        self.eat(TokenType.lbrace)
+        # Check for empty array or map
+        if self.current_token.type is TokenType.rbrace:
+            self.eat()
+            return ArrayDef(items=[], **pos)
+        elif self.current_token.type is TokenType.colon:
+            self.eat()
+            self.eat(TokenType.rbrace)
+            return MapDef(keys=[], values=[], **pos)
+        first = self.expr()
+        if self.current_token.type is TokenType.colon:
+            # Map
+            self.eat()
+            keys = [first]
+            values = [self.expr()]
+            if self.current_token.type is TokenType.comma:
+                self.eat()
+                while self.current_token.type is not TokenType.rbrace:
+                    keys.append(self.expr())
+                    self.eat(TokenType.colon)
+                    values.append(self.expr())
+                    if self.current_token.type is TokenType.comma:
+                        self.eat()
+                    else:
+                        break
+            self.eat(TokenType.rbrace)
+            return MapDef(keys, values, **pos)
+        else:
+            # Array
+            items = [first]
+            if self.current_token.type is TokenType.comma:
+                self.eat()
+                while self.current_token.type is not TokenType.rbrace:
+                    items.append(self.expr())
+                    if self.current_token.type is TokenType.comma:
+                        self.eat()
+                    else:
+                        break
+            self.eat(TokenType.rbrace)
+            return ArrayDef(items, **pos)
+
     def expr_l0(self):
         """
         level 0 expression := (LPAREN expr RPAREN) | literal |
-          identifier | raw_score
+          identifier | raw_score | array | map
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -134,6 +183,8 @@ class Parser:
             return self.raw_score()
         elif self.current_token.type is TokenType.self:
             return self.self()
+        elif self.current_token.type is TokenType.lbrace:
+            return self.array_or_map()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
 
