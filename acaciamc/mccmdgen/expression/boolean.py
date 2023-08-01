@@ -64,6 +64,9 @@ class BoolLiteral(AcaciaExpr):
     def cmdstr(self) -> str:
         return "true" if self.value else "false"
 
+    def map_hash(self):
+        return self.value
+
     def copy(self) -> "BoolLiteral":
         return BoolLiteral(value=self.value, compiler=self.compiler)
 

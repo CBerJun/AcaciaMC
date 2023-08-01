@@ -111,6 +111,9 @@ class IntLiteral(AcaciaExpr):
     def cmdstr(self) -> str:
         return str(self.value)
 
+    def map_hash(self):
+        return self.value
+
     def export(self, var: "IntVar"):
         return ['scoreboard players set %s %s' % (var, self)]
 

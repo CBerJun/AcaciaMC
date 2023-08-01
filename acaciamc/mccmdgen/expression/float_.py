@@ -19,6 +19,9 @@ class Float(AcaciaExpr):
     def cmdstr(self) -> str:
         return str(self)
 
+    def map_hash(self):
+        return self.value
+
     @classmethod
     def from_int(cls, integer: IntLiteral):
         return Float(float(integer.value), integer.compiler)

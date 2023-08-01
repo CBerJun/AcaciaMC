@@ -15,6 +15,9 @@ class String(AcaciaExpr):
         )
         self.value = value
 
+    def map_hash(self):
+        return self.value
+
     def cmdstr(self) -> str:
         return self.value
 
