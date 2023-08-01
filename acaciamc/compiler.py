@@ -75,6 +75,7 @@ class Compiler:
             ('Offset', PosOffsetType),
             ('Engroup', EGroupType),
             ('Enfilter', EFilterType),
+            ('array', ArrayType),
         ):
             self.builtins.set(name, self.types[cls])
         # builtin names
