@@ -76,6 +76,7 @@ class Compiler:
             ('Engroup', EGroupType),
             ('Enfilter', EFilterType),
             ('array', ArrayType),
+            ('map', MapType),
         ):
             self.builtins.set(name, self.types[cls])
         # builtin names

@@ -49,7 +49,7 @@ while x > 0:
 # a lot of commands. Minecraft limits the amount of commands that one
 # function could trigger to 10000. Be careful when using loops.
 
-## For-in structure
+## For-in structure & compile time array
 # A for-in structure is a "compile time loop" that instructs the
 # compiler to *generate repetitive commands* for each iteration. This is
 # very different from a while loop (that's a "runtime loop" and is done
@@ -80,6 +80,14 @@ for i in array.range(10).slice(2, None, 2):
 # This will increase `x` by 5 for 10 times.
 for i in array.repeat(x, 10):
     i += 5
+
+#* Compile-time map *#
+# Map is similar to array since it is compile time only.
+# Its keys can only be several literal types (e.g. int literal or
+# string).
+mp -> {0: "zero", 1: "one", 2: "two", 3: "three"}
+for i in array.range(4):
+    /say ${mp.get(i)}
 
 #* Great builtin modules! *#
 #*

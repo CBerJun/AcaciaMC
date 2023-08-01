@@ -4,19 +4,36 @@ Only a few literal values are supported as keys.
 
 __all__ = ["MapType", "Map"]
 
-from typing import Dict, Hashable, List
+from typing import Dict, Hashable, Iterable
+from itertools import repeat
 
 from .base import *
 from .types import DataType, Type
+from .none import NoneLiteral
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
 
 class MapType(Type):
     name = "map"
 
+    def do_init(self):
+        @method_of(self, "__new__")
+        @axe.chop
+        @axe.arg("iter1", axe.Iterator())
+        @axe.arg("iter2", axe.Iterator())
+        def _new(compiler, iter1: ITERLIST_T, iter2: ITERLIST_T):
+            return Map(iter1, iter2, compiler)
+        @method_of(self, "from_keys")
+        @axe.chop
+        @axe.arg("x", axe.Iterator())
+        @axe.slash
+        @axe.arg("fill", axe.AnyValue(), default=NoneLiteral(self.compiler))
+        def _from_keys(compiler, x: ITERLIST_T, fill: AcaciaExpr):
+            return Map(x, repeat(fill), compiler)
+
 class Map(AcaciaExpr, ImmutableMixin):
-    def __init__(self, keys: List[AcaciaExpr],
-                 values: List[AcaciaExpr], compiler):
+    def __init__(self, keys: Iterable[AcaciaExpr],
+                 values: Iterable[AcaciaExpr], compiler):
         super().__init__(DataType.from_type_cls(MapType, compiler), compiler)
         self.dict: Dict[Hashable, AcaciaExpr] = {}
         self.py_key2key: Dict[Hashable, AcaciaExpr] = {}
