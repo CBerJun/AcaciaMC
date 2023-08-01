@@ -9,6 +9,7 @@ __all__ = [
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
+    "MapOf",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -419,6 +420,35 @@ class ArrayOf(Typed):
         assert isinstance(origin, acacia.Array)
         try:
             res = list(map(self.converter.convert, origin.items))
+        except AcaciaError as err:
+            if err.type is ErrorType.WRONG_ARG_TYPE:
+                self.wrong_argument(origin)
+            else:
+                raise
+        else:
+            return res
+
+class MapOf(Typed):
+    """Accepts a map of specified data type as key and value and
+    converts it to Python `dict`.
+    """
+    def __init__(self, key: Converter, value: Converter):
+        super().__init__(acacia.MapType)
+        self.key = key
+        self.value = value
+
+    def get_show_name(self) -> str:
+        return "map (%s: %s)" % (self.key.get_show_name(),
+                                 self.value.get_show_name())
+
+    def convert(self, origin: acacia.AcaciaExpr) -> dict:
+        origin = super().convert(origin)
+        assert isinstance(origin, acacia.Map)
+        res = {}
+        try:
+            for py_key, key in origin.py_key2key.items():
+                res[self.key.convert(key)] = \
+                    self.value.convert(origin.dict[py_key])
         except AcaciaError as err:
             if err.type is ErrorType.WRONG_ARG_TYPE:
                 self.wrong_argument(origin)
