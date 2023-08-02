@@ -2,7 +2,7 @@
 
 #* math: Math utilities *#
 import math
-x = math.randintc(1, 10)  # Random integer between 1 ~ 10
+x = math.randint(1, 10)  # Random integer between 1 ~ 10
 y = math.pow(2, x)  # 2 to the power of `x`
 x = math.max(x, y, 50)  # Maximum of all the given arguments
 

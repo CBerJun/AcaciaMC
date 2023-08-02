@@ -8,8 +8,8 @@ from acaciamc.tools import axe
 @axe.chop
 @axe.arg("min", axe.LiteralInt(), rename="min_")
 @axe.arg("max", axe.LiteralInt(), rename="max_")
-def _randintc(compiler, min_: int, max_: int):
-    """randintc(min: int-literal, max: int-literal) -> int
+def _randint(compiler, min_: int, max_: int):
+    """randint(min: int-literal, max: int-literal) -> int
     Get a random integer between `min` and `max` (inclusive).
     """
     res = IntOpGroup(init=None, compiler=compiler)
@@ -78,7 +78,7 @@ def acacia_build(compiler):
     global _math_pow
     _math = compiler.get_module(ModuleMeta("_math"))
     attrs = {
-        'randintc': BinaryFunction(_randintc, compiler),
+        'randint': BinaryFunction(_randint, compiler),
         'pow': BinaryFunction(_pow, compiler),
         'min': BinaryFunction(_min, compiler),
         'max': BinaryFunction(_max, compiler)

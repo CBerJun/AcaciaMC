@@ -43,7 +43,7 @@ interface commit:
 
 interface start:
     # Start the game
-    answer = math.randintc(1, MAX_ANSWER)
+    answer = math.randint(1, MAX_ANSWER)
     guess = 0
     /tag @p add ${TAG}
     print.title("Guess the Number", PLAYER)
