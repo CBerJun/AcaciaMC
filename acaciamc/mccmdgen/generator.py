@@ -2,7 +2,7 @@
 
 __all__ = ['MCFunctionFile', 'Generator']
 
-from typing import Union, TYPE_CHECKING, Optional, List, Tuple, Callable
+from typing import Union, TYPE_CHECKING, Optional, List, Tuple, Callable, Dict
 import contextlib
 import operator as builtin_op
 
@@ -612,7 +612,7 @@ class Generator(ASTVisitor):
         try:
             field_meta = data_type.new_entity_field()
         except NotImplementedError:
-            self.error_c(ErrorType.UNSUPPORTED_FIELD_TYPE,
+            self.error_c(ErrorType.UNSUPPORTED_EFIELD_TYPE,
                          field_type=str(data_type))
         return data_type, field_meta
 
@@ -660,6 +660,26 @@ class Generator(ASTVisitor):
                 self.visit(stmt)
         self.current_file.write(export_execute_subcommands(
             ["as %s" % egroup.get_selector().to_str()], main=body_file.call()
+        ))
+
+    def visit_StructField(self, node: StructField):
+        # TODO check whether type is storable.
+        return node.name, self.visit(node.type)
+
+    def visit_StructDef(self, node: StructDef):
+        base_structs = list(map(self.visit, node.bases))
+        fields: Dict[str, DataType] = {}
+        for decl in node.body:
+            res = self.visit(decl)
+            if isinstance(decl, StructField):
+                name, type_ = res
+                if name in fields:
+                    raise Error(ErrorType.SFIELD_MULTIPLE_DEFS, name=name)
+                fields[name] = type_
+            else:
+                assert isinstance(decl, Pass)
+        self.current_scope.set(node.name, StructTemplate(
+            node.name, fields, base_structs, self.compiler
         ))
 
     # --- EXPRESSION VISITORS ---

@@ -464,7 +464,7 @@ class Parser:
     def _entity_body(self):
         pos = self.current_pos
         if self.current_token.type is TokenType.identifier:
-            # field_decl
+            # entity_field_decl
             name = self.current_token.value
             self.eat()  # eat IDENTIFIER
             self.eat(TokenType.colon)
@@ -493,11 +493,11 @@ class Parser:
         """
         entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
           (COMMA expr)*)? COLON entity_body_block
-        field_decl := IDENTIFIER COLON type_spec
+        entity_field_decl := IDENTIFIER COLON type_spec
         method_decl := def_stmt
         meta_decl := AT IDENTIFIER COLON expr
         entity_body := method_decl | (
-          (field_decl | meta_decl | pass_stmt) NEW_LINE)
+          (entity_field_decl | meta_decl | pass_stmt) NEW_LINE)
         """
         pos = self.current_pos
         self.eat(TokenType.entity)
@@ -620,6 +620,41 @@ class Parser:
         cls = ForEntity if is_entity else For
         return cls(name, expr, body, **pos)
 
+    def _struct_body(self):
+        pos = self.current_pos
+        if self.current_token.type is TokenType.identifier:
+            name = self.current_token.value
+            self.eat()
+            self.eat(TokenType.colon)
+            type_ = self.type_spec()
+            res = StructField(name, type_, **pos)
+        else:
+            res = self.pass_stmt()
+        self.eat(TokenType.new_line)
+        return res
+
+    def struct_stmt(self):
+        """
+        struct_field_decl := IDENTIFIER (COLON type_spec)? EQUAL expr
+        struct_body := ((struct_field_decl | pass_stmt) NEW_LINE)*
+        struct_stmt := STRUCT IDENTIFIER (EXTENDS expr (COMMA expr)*)?
+          COLON struct_body_block
+        """
+        pos = self.current_pos
+        self.eat(TokenType.struct)
+        name = self.current_token.value
+        self.eat(TokenType.identifier)
+        bases = []
+        if self.current_token.type is TokenType.extends:
+            self.eat()  # eat EXTENDS
+            bases.append(self.expr())
+            while self.current_token.type is TokenType.comma:
+                self.eat()  # eat COMMA
+                bases.append(self.expr())
+        self.eat(TokenType.colon)
+        body = self._block(self._struct_body)
+        return StructDef(name, bases, body, **pos)
+
     def statement(self):
         """
         expr_statement := (
@@ -631,7 +666,7 @@ class Parser:
         )
         embedded_statement := (
           if_stmt | while_stmt | for_stmt | interface_stmt | def_stmt |
-          entity_stmt | for_entity_stmt
+          entity_stmt | for_entity_stmt | struct_stmt
         )
         statement := ((simple_statement | expr_statement) NEW_LINE) |
           embedded_statement
@@ -644,7 +679,8 @@ class Parser:
             TokenType.def_: self.def_stmt,
             TokenType.inline: self.def_stmt,
             TokenType.entity: self.entity_stmt,
-            TokenType.for_: self.for_stmt
+            TokenType.for_: self.for_stmt,
+            TokenType.struct: self.struct_stmt
         }
         TOK2STMT_SIMPLE = {
             TokenType.pass_: self.pass_stmt,

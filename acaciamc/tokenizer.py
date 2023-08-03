@@ -90,6 +90,7 @@ class TokenType(enum.Enum):
     none = 'None'
     for_ = 'for'
     in_ = 'in'
+    struct = 'struct'
     false = 'False'  # must at end of keyword part
 
 KEYWORDS = {}

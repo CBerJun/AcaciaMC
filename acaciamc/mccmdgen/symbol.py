@@ -1,6 +1,6 @@
 """Acacia symbol table."""
 
-from typing import Optional
+from typing import Optional, Dict, Any
 
 __all__ = ['SymbolTable', 'ScopedSymbolTable', 'AttributeTable']
 
@@ -18,6 +18,10 @@ class SymbolTable:
         """Change value at `name` to `value`.
         If name does not exists, create it."""
         self._table[name] = value
+
+    def update(self, d: Dict[str, Any]):
+        """Update symbol table with `d`."""
+        self._table.update(d)
 
     def lookup(self, name: str):
         """Look up a name; if not found, return None."""

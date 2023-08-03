@@ -162,7 +162,7 @@ class EntityTemplate(AcaciaExpr):
         for parent in reversed(self.mro_):
             for attr in itertools.chain(field_types, methods):
                 if attr in self.field_types:
-                    raise Error(ErrorType.ATTR_MULTIPLE_DEFS, attr=attr)
+                    raise Error(ErrorType.EFIELD_MULTIPLE_DEFS, attr=attr)
             self.metas.update(parent._orig_metas)
             self.methods.insert(0, (parent, parent._orig_methods))
             self.field_types.update(parent._orig_field_types)

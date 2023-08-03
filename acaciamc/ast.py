@@ -237,6 +237,20 @@ class ForEntity(Statement):  # entity group iteration
         self.expr = expr
         self.body = body
 
+class StructField(Statement):  # a struct's field
+    def __init__(self, name: str, type_: AnyTypeSpec, lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.type = type_
+
+class StructDef(Statement):  # struct definition
+    def __init__(self, name: str, bases: _List[Expression],
+                 body: _List[_Union[StructField, Pass]], lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.bases = bases
+        self.body = body
+
 class Literal(Expression):  # a literal constant
     def __init__(self, literal, lineno, col):
         super().__init__(lineno, col)

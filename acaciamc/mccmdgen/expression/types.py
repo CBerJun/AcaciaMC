@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
+    from .struct_template import StructTemplate
 
 class Type(AcaciaExpr):
     """Base class for type of a variable that is a type
@@ -116,12 +117,15 @@ class DataType:
      completely, including template for entity, like `int` or
      `entity(Template)`.
     """
-    def __init__(self, type_: Type, is_entity=False, is_entity_group=False):
+    def __init__(self, type_: Type, is_entity=False, is_entity_group=False,
+                 is_struct=False):
         """Do not initialize directly, use factory methods."""
         self.type = type_
         self.is_entity = is_entity
         self.is_entity_group = is_entity_group
+        self.is_struct = is_struct
         self.template: Union[None, "EntityTemplate"] = None
+        self.struct_template: Union[None, "StructTemplate"] = None
 
     @classmethod
     def from_type(cls, type_: Type):
@@ -149,6 +153,14 @@ class DataType:
         inst.template = template
         return inst
 
+    @classmethod
+    def from_struct(cls, template: "StructTemplate", compiler: "Compiler"):
+        """Data type of a struct object."""
+        inst = cls(compiler.types[struct.StructType],
+                   is_struct=True)
+        inst.struct_template = template
+        return inst
+
     def __str__(self) -> str:
         if self.is_entity:
             assert self.template
@@ -156,6 +168,9 @@ class DataType:
         elif self.is_entity_group:
             assert self.template
             return "Engroup.t(%s)" % self.template.name
+        elif self.is_struct:
+            assert self.struct_template
+            return "struct(%s)" % self.struct_template.name
         else:
             return self.type.name
 
@@ -163,11 +178,19 @@ class DataType:
         if self.is_entity or self.is_entity_group:
             assert self.template
             return self.type.new_var(template=self.template, *args, **kwargs)
+        elif self.is_struct:
+            assert self.struct_template
+            return self.type.new_var(
+                template=self.struct_template, *args, **kwargs
+            )
         else:
             return self.type.new_var(*args, **kwargs)
 
-    def new_entity_field(self, *args, **kwargs):
-        return self.type.new_entity_field(*args, **kwargs)
+    def new_entity_field(self):
+        if self.is_struct:
+            assert self.struct_template
+            return self.type.new_entity_field(self.struct_template)
+        return self.type.new_entity_field()
 
     def new_var_as_field(self, *args, **kwargs):
         return self.type.new_var_as_field(*args, **kwargs)
@@ -189,6 +212,12 @@ class DataType:
             assert self.template
             return (type_.is_entity_group and
                     type_.template.is_subtemplate_of(self.template))
+        elif self.is_struct:
+            assert self.struct_template
+            return (type_.is_struct and
+                    type_.struct_template.is_subtemplate_of(
+                        self.struct_template
+                    ))
         else:
             return isinstance(type_.type, type(self.type))
 
@@ -196,4 +225,4 @@ class DataType:
         return isinstance(self.type, type_)
 
 # Import these later to avoid circular import
-from . import entity, none, entity_group
+from . import entity, none, entity_group, struct

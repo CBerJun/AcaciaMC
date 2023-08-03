@@ -38,7 +38,10 @@ class ErrorType(enum.Enum):
         'To define an alias to expression, use "alias -> expr"'
     UNSUPPORTED_ARG_TYPE = 'Argument "{arg}" can\'t be "{arg_type}" type'
     UNSUPPORTED_RESULT_TYPE = 'Result type can\'t be "{result_type}" type'
-    UNSUPPORTED_FIELD_TYPE = 'Entity field can\'t be "{field_type}" type'
+    UNSUPPORTED_EFIELD_TYPE = 'Entity field can\'t be "{field_type}" type'
+    UNSUPPORTED_SFIELD_TYPE = 'Struct field can\'t be "{field_type}" type'
+    UNSUPPORTED_EFIELD_IN_STRUCT = 'Entity field can\'t be struct ' \
+        '"{template}" type bacause it contains field of "{field_type}" type'
     WRONG_ASSIGN_TYPE = 'Can\'t assign "{got}" to variable of "{expect}" type'
     WRONG_ARG_TYPE = 'Expect "{expect}" type for argument "{arg}", got "{got}"'
     WRONG_RESULT_TYPE = 'Expect "{expect}" type as result, got "{got}"'
@@ -55,7 +58,8 @@ class ErrorType(enum.Enum):
         '"{arg}" does not match type of default value "{default_type}"'
     # ARG_MULTIPLE_VALUES is used by both Generator and Parser
     ARG_MULTIPLE_VALUES = 'Multiple values for argument "{arg}"'
-    ATTR_MULTIPLE_DEFS = 'Multiple definitions for attribute "{attr}"'
+    EFIELD_MULTIPLE_DEFS = 'Multiple definitions for entity attribute "{attr}"'
+    SFIELD_MULTIPLE_DEFS = 'Multiple definitions for struct attribute "{attr}"'
     MISSING_ARG = 'Required argument "{arg}" is missing'
     RESULT_OUT_OF_SCOPE = 'Found "result" statement out of function'
     SELF_OUT_OF_SCOPE = 'Found "self" out of entity method'
