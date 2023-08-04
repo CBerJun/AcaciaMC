@@ -5,9 +5,13 @@ NOTE Python package `mido` is required.
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.generator import MCFunctionFile
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.ast import ModuleMeta
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, method_of
+
+class MusicDataType(DefaultDataType):
+    name = "Music"
 
 class MusicType(Type):
     """
@@ -37,8 +41,6 @@ class MusicType(Type):
     `speed` sets the speed of music.
     `volume` sets the volume factor of music.
     """
-    name = "Music"
-
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
@@ -69,6 +71,9 @@ class MusicType(Type):
                 midi, execute_condition, looping_info, note_offset,
                 chunk_size, speed, volume, compiler
             )
+
+    def datatype_hook(self):
+        return MusicDataType()
 
 class Music(AcaciaExpr):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
@@ -230,7 +235,7 @@ class Music(AcaciaExpr):
     def __init__(self, midi, exec_condition: str, looping: int,
                  note_offset: int, chunk_size: int, speed: float,
                  volume: float, compiler):
-        super().__init__(DataType.from_type_cls(MusicType, compiler), compiler)
+        super().__init__(MusicDataType(), compiler)
         self.midi = midi
         self.execute_condition = exec_condition
         self.note_offset = note_offset
@@ -264,7 +269,7 @@ class Music(AcaciaExpr):
         #   when 0 <= timer <= music length, the music is playing
         #   when timer > music length, the music has ended
         #   when timer < 0, it's the countdown of starting playing
-        self.timer = self.compiler.types[IntType].new_var()
+        self.timer = IntDataType(self.compiler).new_var()
         # Volume
         self.user_volume = volume
         # Create file
@@ -327,7 +332,7 @@ class Music(AcaciaExpr):
             return resultlib.commands(cmds, compiler)
         @method_of(self, "play")
         @axe.chop
-        @axe.arg("timer", IntType, default=IntLiteral(0, self.compiler))
+        @axe.arg("timer", IntDataType, default=IntLiteral(0, self.compiler))
         def _play(compiler, timer: AcaciaExpr):
             """
             .play(timer: int = 0)
@@ -462,9 +467,8 @@ def acacia_build(compiler):
                     message="Python module 'mido' is required")
     schedule = compiler.get_module(ModuleMeta("schedule"))
     register_loop = schedule.attribute_table.lookup("register_loop")
-    compiler.add_type(MusicType)
     return {
-        "Music": compiler.types[MusicType],
+        "Music": MusicType(compiler),
         "set_instrument": BinaryFunction(_set_instrument, compiler),
         "channel_volume": BinaryFunction(_channel_volume, compiler)
     }

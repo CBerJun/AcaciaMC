@@ -1,12 +1,16 @@
 """Builtin None value."""
 
-__all__ = ['NoneType', 'NoneVar', 'NoneLiteral']
+__all__ = ['NoneDataType', 'NoneVar', 'NoneLiteral']
 
 from .base import *
-from .types import Type, DataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
 
-class NoneType(Type):
+class NoneDataType(DefaultDataType):
     name = 'nonetype'
+
+    def __init__(self, compiler):
+        super().__init__()
+        self.compiler = compiler
 
     def new_var(self, tmp=False) -> "NoneVar":
         return NoneVar(self.compiler)
@@ -14,7 +18,7 @@ class NoneType(Type):
 class NoneVar(VarValue):
     """Used when function's result is nothing."""
     def __init__(self, compiler):
-        super().__init__(DataType.from_type_cls(NoneType, compiler), compiler)
+        super().__init__(NoneDataType(compiler), compiler)
 
     def export(self, var: "NoneVar"):
         return []
@@ -22,7 +26,7 @@ class NoneVar(VarValue):
 class NoneLiteral(AcaciaExpr):
     """Represents a literal None. Used by "None" keyword."""
     def __init__(self, compiler):
-        super().__init__(DataType.from_type_cls(NoneType, compiler), compiler)
+        super().__init__(NoneDataType(compiler), compiler)
 
     def export(self, var: "NoneVar"):
         return []

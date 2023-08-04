@@ -8,20 +8,22 @@ Therefore, many of the functions about arrays only accepts literal
 expressions that can be calculated in compile time.
 """
 
-__all__ = ["ArrayType", "Array"]
+__all__ = ["ArrayType", "ArrayDataType", "Array"]
 
 from typing import List, Union
 from itertools import repeat, chain
 
 from .base import *
-from .types import DataType, Type
-from .integer import IntType, IntLiteral
+from .types import Type
+from .integer import IntDataType, IntLiteral
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
+from acaciamc.mccmdgen.datatype import DefaultDataType
 
-class ArrayType(Type):
+class ArrayDataType(DefaultDataType):
     name = "array"
 
+class ArrayType(Type):
     def do_init(self):
         @method_of(self, "range")
         class _range(metaclass=axe.OverloadChopped):
@@ -72,9 +74,12 @@ class ArrayType(Type):
                 cur *= ratio
             return Array(res, compiler)
 
+    def datatype_hook(self):
+        return ArrayDataType()
+
 class Array(AcaciaExpr, ImmutableMixin):
     def __init__(self, items: List[AcaciaExpr], compiler):
-        super().__init__(DataType.from_type_cls(ArrayType, compiler), compiler)
+        super().__init__(ArrayDataType(), compiler)
         self.items = items
         self.length = len(items)
         def _validate_index(self: Array, index: int):
@@ -182,6 +187,6 @@ class Array(AcaciaExpr, ImmutableMixin):
     def __mul__(self, other: AcaciaExpr):
         if isinstance(other, IntLiteral):
             return Array(self.items * other.value, self.compiler)
-        if other.data_type.raw_matches(IntType):
+        if other.data_type.matches_cls(IntDataType):
             raise Error(ErrorType.ARRAY_MULTIMES_NON_LITERAL)
         return NotImplemented

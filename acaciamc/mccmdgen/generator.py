@@ -12,9 +12,11 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.symbol import ScopedSymbolTable
 from acaciamc.mccmdgen.mcselector import MCSelector
+from acaciamc.mccmdgen.datatype import Storable
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.datatype import DataType
 
 class MCFunctionFile:
     """Represents a .mcfunction file."""
@@ -148,12 +150,16 @@ class Generator(ASTVisitor):
         else:
             raise TypeError
 
-    def get_result_type(self, node: Union[AnyTypeSpec, None]) -> DataType:
+    def get_result_type(self, node: Union[AnyTypeSpec, None]) -> "DataType":
         """Get result `DataType` according to AST."""
         if node is None:
-            return DataType.from_type_cls(NoneType, self.compiler)
+            return NoneDataType(self.compiler)
         else:
-            return self.visit(node)
+            res = self.visit(node)
+            if not isinstance(res, Storable):
+                self.error_c(ErrorType.UNSUPPORTED_RESULT_TYPE,
+                             result_type=str(res))
+            return res
 
     def write_debug(self, comment: str,
                     target: Optional[MCFunctionFile] = None):
@@ -254,11 +260,10 @@ class Generator(ASTVisitor):
         # for new defined var, analyze type and apply for score
         if target is None:
             ## apply a var according to type
-            try:
-                target = value.data_type.new_var()
-            except NotImplementedError:
+            if not isinstance(value.data_type, Storable):
                 self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE,
                              var_type=str(value.data_type))
+            target = value.data_type.new_var()
             ## register the var to symbol table
             self.register_symbol(node.target, target)
         else:  # for existing name, check if it is assignable
@@ -326,7 +331,7 @@ class Generator(ASTVisitor):
     def visit_If(self, node: If):
         # condition
         condition = self.visit(node.condition)
-        if not condition.data_type.raw_matches(BoolType):
+        if not condition.data_type.matches_cls(BoolDataType):
             self.error_c(ErrorType.WRONG_IF_CONDITION,
                          got=str(condition.data_type))
         # optimization: if condition is a constant, just run the code
@@ -362,7 +367,7 @@ class Generator(ASTVisitor):
     def visit_While(self, node: While):
         # condition
         condition = self.visit(node.condition)
-        if not condition.data_type.raw_matches(BoolType):
+        if not condition.data_type.matches_cls(BoolDataType):
             self.error_c(ErrorType.WRONG_WHILE_CONDITION,
                          got=str(condition.data_type))
         # optimization: if condition is always False, ommit
@@ -454,19 +459,24 @@ class Generator(ASTVisitor):
             template = self.compiler.base_template
         else:
             template = self.visit(node.template)
-            if not template.data_type.raw_matches(ETemplateType):
+            if not template.data_type.matches_cls(ETemplateDataType):
                 self.error_c(ErrorType.INVALID_ETEMPLATE,
                              got=str(template.data_type))
-        return DataType.from_entity(template, self.compiler)
+        return EntityDataType(template)
 
     def _func_expr(self, node: FuncDef) -> AcaciaFunction:
         """Return the function object to a function definition
         without parsing the body.
         """
-        # get return type (of Type type)
+        # get return type (of DataType type)
         returns = self.get_result_type(node.returns)
         # parse arg
         args, types, defaults = self.visit(node.arg_table)
+        # check argument type
+        for name, value in types.items():
+            if not isinstance(value, Storable):
+                self.error_c(ErrorType.UNSUPPORTED_ARG_TYPE,
+                             arg=name, arg_type=str(value))
         # create function
         return AcaciaFunction(
             name=node.name, args=args, arg_types=types, arg_defaults=defaults,
@@ -555,7 +565,7 @@ class Generator(ASTVisitor):
         parents = []
         for parent_ast in node.parents:
             parent = self.visit(parent_ast)
-            if not parent.data_type.raw_matches(ETemplateType):
+            if not parent.data_type.matches_cls(ETemplateDataType):
                 self.error_c(ErrorType.INVALID_ETEMPLATE,
                              got=str(parent.data_type))
             parents.append(parent)
@@ -645,7 +655,7 @@ class Generator(ASTVisitor):
 
     def visit_ForEntity(self, node: ForEntity):
         egroup = self.visit(node.expr)
-        if not egroup.data_type.is_entity_group:
+        if not egroup.data_type.matches_cls(EGroupDataType):
             self.error_c(ErrorType.INVALID_EGROUP, got=str(egroup.data_type))
         assert isinstance(egroup, EntityGroup)
         with self.new_mcfunc_file() as body_file, \
@@ -663,12 +673,16 @@ class Generator(ASTVisitor):
         ))
 
     def visit_StructField(self, node: StructField):
-        # TODO check whether type is storable.
-        return node.name, self.visit(node.type)
+        # Check whether type is storable.
+        data_type = self.visit(node.type)
+        if not isinstance(data_type, Storable):
+            self.error_c(ErrorType.UNSUPPORTED_SFIELD_TYPE,
+                         field_type=str(data_type))
+        return node.name, data_type
 
     def visit_StructDef(self, node: StructDef):
         base_structs = list(map(self.visit, node.bases))
-        fields: Dict[str, DataType] = {}
+        fields: Dict[str, "DataType"] = {}
         for decl in node.body:
             res = self.visit(decl)
             if isinstance(decl, StructField):
@@ -861,11 +875,11 @@ class Generator(ASTVisitor):
         object_ = self.visit(node.object)
         template = self.visit(node.template)
         # Make sure `object_` is an entity
-        if not object_.data_type.is_entity:
+        if not object_.data_type.matches_cls(EntityDataType):
             self.error_c(ErrorType.INVALID_CAST_ENTITY,
                          got=str(object_.data_type))
         # Make sure `template` is a template
-        if not template.data_type.raw_matches(ETemplateType):
+        if not template.data_type.matches_cls(ETemplateDataType):
             self.error_c(ErrorType.INVALID_ETEMPLATE,
                          got=str(template.data_type))
         # Make sure `template` is a super template of `object_`

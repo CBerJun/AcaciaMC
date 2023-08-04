@@ -1,25 +1,26 @@
 """Struct template."""
 
-__all__ = ["StructTemplateType", "StructTemplate"]
+__all__ = ["StructTemplateDataType", "StructTemplate"]
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
 
 from .base import *
-from .types import DataType, Type
-from .struct import Struct
+from .struct import Struct, StructDataType
 from .callable import BinaryFunction
 from acaciamc.error import *
 from acaciamc.tools import axe
+from acaciamc.mccmdgen.datatype import DefaultDataType
 
-class StructTemplateType(Type):
+if TYPE_CHECKING:
+    from acaciamc.mccmdgen.datatype import Storable
+
+class StructTemplateDataType(DefaultDataType):
     name = "struct_template"
 
 class StructTemplate(AcaciaExpr):
-    def __init__(self, name: str, field: Dict[str, DataType],
+    def __init__(self, name: str, field: Dict[str, "Storable"],
                  bases: List["StructTemplate"], compiler):
-        super().__init__(
-            DataType.from_type_cls(StructTemplateType, compiler), compiler
-        )
+        super().__init__(StructTemplateDataType(), compiler)
         self.name = name
         self.bases = bases
         self.field_types = field
@@ -53,8 +54,8 @@ class StructTemplate(AcaciaExpr):
         """
         return self.call_me.call(args, kwds)
 
-    def datatype_hook(self) -> DataType:
-        return DataType.from_struct(template=self, compiler=self.compiler)
+    def datatype_hook(self):
+        return StructDataType(template=self)
 
     def is_subtemplate_of(self, template: "StructTemplate") -> bool:
         """Return whether `template` is sub-template of this.

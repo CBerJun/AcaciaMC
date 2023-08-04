@@ -4,7 +4,7 @@ It assembles files and classes together and write output.
 
 __all__ = ['Compiler']
 
-from typing import Dict, Type as PythonType, Tuple, Union
+from typing import Tuple, Union
 import os
 from contextlib import contextmanager
 
@@ -39,13 +39,6 @@ class Compiler:
         self.file_main = MCFunctionFile('load')  # load program
         self.file_tick = MCFunctionFile('tick')  # runs every tick
         self.libs = []  # list of MCFunctionFiles, store the libraries
-        # define `types` dict and generate builtin `Type`s
-        self.types: Dict[PythonType[Type], Type] = {}
-        for cls in BUILTIN_TYPES:
-            self.types[cls] = cls(compiler = self)
-        # call `do_init` after creating all builtin instances
-        for type_instance in self.types.values():
-            type_instance.do_init()
         self.current_generator = None  # the Generator that is running
         self._int_consts = {}  # see method `add_int_const`
         self._lib_count = 0  # always equal to len(self.libs)
@@ -78,7 +71,7 @@ class Compiler:
             ('array', ArrayType),
             ('map', MapType),
         ):
-            self.builtins.set(name, self.types[cls])
+            self.builtins.set(name, cls(self))
         # builtin names
         for name, value in (
             ('Object', self.base_template),
@@ -151,12 +144,6 @@ class Compiler:
             file.set_path('lib/acalib%d' % self._lib_count)
         self.libs.append(file)
 
-    def add_type(self, type_: PythonType[Type]):
-        """Add a user defined `Type`."""
-        type_instance = type_(compiler = self)
-        type_instance.do_init()
-        self.types[type_] = type_instance
-
     # -- About allocation --
 
     def allocate(self) -> Tuple[str, str]:
@@ -200,7 +187,7 @@ class Compiler:
         if var is not None:
             return var
         # Apply one and register
-        var = self.types[IntType].new_var()
+        var = IntDataType(self).new_var()
         self._int_consts[value] = var
         return var
 

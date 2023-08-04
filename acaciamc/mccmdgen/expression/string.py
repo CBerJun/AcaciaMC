@@ -1,18 +1,16 @@
 """Builtin string."""
 
-__all__ = ['StringType', 'String']
+__all__ = ['StringDataType', 'String']
 
 from .base import *
-from .types import Type, DataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
 
-class StringType(Type):
+class StringDataType(DefaultDataType):
     name = 'str'
 
 class String(AcaciaExpr):
     def __init__(self, value: str, compiler):
-        super().__init__(
-            DataType.from_type_cls(StringType, compiler), compiler
-        )
+        super().__init__(StringDataType(), compiler)
         self.value = value
 
     def map_hash(self):

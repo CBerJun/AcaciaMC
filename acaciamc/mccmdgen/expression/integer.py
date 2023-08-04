@@ -22,24 +22,29 @@ other's method `other.__rxxx__` is used
 """
 
 __all__ = [
-    # Type
-    'IntType',
+    # Type related
+    'IntType', 'IntDataType',
     # Expression
     'IntLiteral', 'IntVar', 'IntOpGroup',
     # Utils
     'to_IntVar'
 ]
 
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 import operator as builtin_op
 
 from .base import *
-from .types import Type, DataType
-from .callable import BinaryFunction
+from .types import Type
 from . import boolean
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
 from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.mccmdgen.datatype import (
+    DefaultDataType, Storable, SupportsEntityField
+)
+
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
 
 def _to_mcop(operator: str):
     # convert "+" to "add", "-" to "remove"
@@ -47,9 +52,25 @@ def _to_mcop(operator: str):
     elif operator == '-': return 'remove'
     raise ValueError
 
-class IntType(Type):
-    name = 'int'
+class IntDataType(DefaultDataType, Storable, SupportsEntityField):
+    name = "int"
 
+    def __init__(self, compiler: "Compiler"):
+        self.compiler = compiler
+
+    def new_var(self, tmp=False) -> "IntVar":
+        alloc = self.compiler.allocate_tmp if tmp else self.compiler.allocate
+        objective, selector = alloc()
+        return IntVar(objective, selector, self.compiler)
+
+    def new_entity_field(self):
+        return {"scoreboard": self.compiler.add_scoreboard()}
+
+    def new_var_as_field(self, entity, **meta) -> "IntVar":
+        return IntVar(meta["scoreboard"], str(entity),
+                      self.compiler, with_quote=False)
+
+class IntType(Type):
     def do_init(self):
         self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
         self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
@@ -65,12 +86,12 @@ class IntType(Type):
                 return resultlib.literal(0, compiler)
 
             @axe.overload
-            @axe.arg("x", IntType)
+            @axe.arg("x", IntDataType)
             def copy(cls, compiler, x):
                 return x
 
             @axe.overload
-            @axe.arg("b", boolean.BoolType)
+            @axe.arg("b", boolean.BoolDataType)
             def from_bool(cls, compiler, b):
                 if isinstance(b, boolean.BoolLiteral):
                     return resultlib.literal(int(b.value), compiler)
@@ -84,16 +105,8 @@ class IntType(Type):
                     compiler=self.compiler
                 ), dependencies
 
-    def new_var(self, tmp=False) -> "IntVar":
-        objective, selector = self._new_score(tmp)
-        return IntVar(objective, selector, self.compiler)
-
-    def new_entity_field(self):
-        return {"scoreboard": self.compiler.add_scoreboard()}
-
-    def new_var_as_field(self, entity, **meta) -> "IntVar":
-        return IntVar(meta["scoreboard"], str(entity),
-                      self.compiler, with_quote=False)
+    def datatype_hook(self):
+        return IntDataType(self.compiler)
 
 class IntLiteral(AcaciaExpr):
     """Represents a literal integer.
@@ -102,7 +115,7 @@ class IntLiteral(AcaciaExpr):
     in compile time (e.g. compiler can convert "2 + 3" to "5").
     """
     def __init__(self, value: int, compiler):
-        super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
+        super().__init__(IntDataType(compiler), compiler)
         self.value = value
         # check overflow
         if not INT_MIN <= value <= INT_MAX:
@@ -161,7 +174,7 @@ class IntVar(VarValue):
     """An integer variable."""
     def __init__(self, objective: str, selector: str,
                  compiler, with_quote=True):
-        super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
+        super().__init__(IntDataType(compiler), compiler)
         self.objective = objective
         self.selector = selector
         self.with_quote = with_quote
@@ -295,7 +308,7 @@ class IntOpGroup(AcaciaExpr):
     `libs`, where other `IntOpGroup`s are stored (recursively).
     """
     def __init__(self, init, compiler):
-        super().__init__(DataType.from_type_cls(IntType, compiler), compiler)
+        super().__init__(IntDataType(compiler), compiler)
         self.main: List[str] = []
         self.libs: List[IntOpGroup]= []
         self._current_lib_index = 0  # always equals to `len(self.libs)`

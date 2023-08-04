@@ -1,19 +1,19 @@
 """Builtin float point values."""
 
-__all__ = ["FloatType", "Float"]
+__all__ = ["FloatDataType", "Float"]
 
 from functools import partialmethod
 
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
-from .types import Type, DataType
 from .integer import IntLiteral
 
-class FloatType(Type):
+class FloatDataType(DefaultDataType):
     name = "float"
 
 class Float(AcaciaExpr):
     def __init__(self, value: float, compiler):
-        super().__init__(DataType.from_type_cls(FloatType, compiler), compiler)
+        super().__init__(FloatDataType(), compiler)
         self.value = value
 
     def cmdstr(self) -> str:

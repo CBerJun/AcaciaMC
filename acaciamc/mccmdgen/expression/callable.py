@@ -25,7 +25,7 @@ There are 5 types of functions:
 
 __all__ = [
     # Type
-    'FunctionType',
+    'FunctionDataType',
     # Expressions
     'AcaciaFunction', 'InlineFunction', 'BinaryFunction',
     'BoundMethod', 'BoundMethodDispatcher'
@@ -35,28 +35,27 @@ from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple
 
 from acaciamc.error import *
 from acaciamc.mccmdgen import generator
+from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
-from .types import Type, DataType
 from .none import NoneVar
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.generator import MCFunctionFile
+    from acaciamc.ast import InlineFuncDef
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
 
-class FunctionType(Type):
+class FunctionDataType(DefaultDataType):
     name = 'function'
 
 class AcaciaFunction(AcaciaExpr):
     def __init__(self, name: str, args: List[str],
-                 arg_types: Dict[str, Type],
+                 arg_types: Dict[str, "Storable"],
                  arg_defaults: Dict[str, Union[AcaciaExpr, None]],
-                 returns: DataType, compiler):
-        super().__init__(
-            DataType.from_type_cls(FunctionType, compiler), compiler
-        )
+                 returns: "Storable", compiler):
+        super().__init__(FunctionDataType(), compiler)
         self.name = name
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
         # Create a `VarValue` for every args according to their types
@@ -64,13 +63,7 @@ class AcaciaFunction(AcaciaExpr):
         # Meanwhile, check whether arg types are supported.
         self.arg_vars: Dict[str, VarValue] = {}
         for arg in args:
-            type_ = arg_types[arg]
-            try:
-                self.arg_vars[arg] = type_.new_var()
-            except NotImplementedError:
-                # type.new_var() is not implemented
-                raise Error(ErrorType.UNSUPPORTED_ARG_TYPE,
-                            arg=arg, arg_type=type_.name)
+            self.arg_vars[arg] = arg_types[arg].new_var()
         # Allocate a var for result value
         self.result_var = returns.new_var()
         # `file`: the target file of function. When it is None,
@@ -91,12 +84,10 @@ class AcaciaFunction(AcaciaExpr):
         return self.result_var, res
 
 class InlineFunction(AcaciaExpr):
-    def __init__(self, node, args, arg_types, arg_defaults,
-                 returns: DataType, compiler):
+    def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
+                 returns: "Storable", compiler):
+        super().__init__(FunctionDataType(), compiler)
         # We store the InlineFuncDef node directly
-        super().__init__(
-            DataType.from_type_cls(FunctionType, compiler), compiler
-        )
         self.node = node
         self.name = node.name
         self.result_var = returns.new_var()
@@ -139,9 +130,7 @@ class BinaryFunction(AcaciaExpr):
         representing commands) or None (returns acacia None and writes
         no command).
         """
-        super().__init__(
-            DataType.from_type_cls(FunctionType, compiler), compiler
-        )
+        super().__init__(FunctionDataType(), compiler)
         self.implementation = implementation
 
     def call(self, args, keywords: dict):
@@ -161,9 +150,7 @@ METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 class BoundMethod(AcaciaExpr):
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T, compiler):
-        super().__init__(
-            DataType.from_type_cls(FunctionType, compiler), compiler
-        )
+        super().__init__(FunctionDataType(), compiler)
         self.name = method_name
         self.object = object_
         self.definition = definition
@@ -185,9 +172,7 @@ class BoundMethod(AcaciaExpr):
 class BoundMethodDispatcher(AcaciaExpr):
     def __init__(self, object_: "_EntityBase", method_name: str,
                  result_var: VarValue, compiler):
-        super().__init__(
-            DataType.from_type_cls(FunctionType, compiler), compiler
-        )
+        super().__init__(FunctionDataType(), compiler)
         self.name = method_name
         self.object = object_
         self.possible_implementations: \

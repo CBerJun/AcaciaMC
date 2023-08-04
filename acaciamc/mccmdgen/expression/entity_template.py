@@ -1,25 +1,26 @@
 """Entity template of Acacia."""
 
-__all__ = ["ETemplateType", "EntityTemplate"]
+__all__ = ["ETemplateDataType", "EntityTemplate"]
 
 from typing import List, Tuple, Dict, TYPE_CHECKING, Union, Any
 import itertools
 
 from acaciamc.error import *
+from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
-from .types import Type, DataType
 from .entity import TaggedEntity
 from .callable import BoundMethodDispatcher, BoundMethod
 from .string import String
-from .none import NoneType
+from .none import NoneDataType
 from .position import Position
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.datatype import DataType
     from .callable import METHODDEF_T
     from .entity import _EntityBase
 
-class ETemplateType(Type):
+class ETemplateDataType(DefaultDataType):
     name = 'entity_template'
 
 class _MethodDispatcher:
@@ -33,6 +34,7 @@ class _MethodDispatcher:
     def register(self, template: "EntityTemplate",
                  implementation: "METHODDEF_T"):
         res_type = implementation.result_var.data_type
+        assert isinstance(res_type, Storable)
         if self.result_var is None:
             self.result_var = res_type.new_var()
         else:
@@ -72,22 +74,20 @@ class _MethodDispatcher:
 
 class EntityTemplate(AcaciaExpr):
     def __init__(self, name: str,
-                 field_types: Dict[str, DataType],
+                 field_types: Dict[str, "DataType"],
                  field_metas: Dict[str, dict],
                  methods: Dict[str, "METHODDEF_T"],
                  parents: List["EntityTemplate"],
                  metas: Dict[str, AcaciaExpr],
                  compiler):
-        super().__init__(
-            DataType.from_type_cls(ETemplateType, compiler), compiler
-        )
+        super().__init__(ETemplateDataType(), compiler)
         self.name = name
         self.parents = parents
         self._orig_metas = {}  # Metas are to be handled below
         self._orig_field_types = field_types
         self._orig_field_metas = field_metas
         self._orig_methods = methods
-        self.field_types: Dict[str, DataType] = {}
+        self.field_types: Dict[str, "DataType"] = {}
         self.field_metas: Dict[str, dict] = {}
         # methods: sorted in MRO order
         self.methods: \
@@ -118,7 +118,7 @@ class EntityTemplate(AcaciaExpr):
             elif name == "spawn_event":
                 if isinstance(meta, String):
                     converted = meta.value
-                elif meta.data_type.raw_matches(NoneType):
+                elif meta.data_type.matches_cls(NoneDataType):
                     converted = "*"
                 else:
                     _meta_error(name, "str or None")
@@ -214,7 +214,7 @@ class EntityTemplate(AcaciaExpr):
         if initializer:
             res, _cmds = initializer.call(args, keywords)
             cmds.extend(_cmds)
-            if not res.data_type.raw_matches(NoneType):
+            if not res.data_type.matches_cls(NoneDataType):
                 raise Error(ErrorType.INITIALIZER_RESULT,
                             type_=str(inst.data_type))
         return inst, cmds

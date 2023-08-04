@@ -5,23 +5,25 @@ implemented. Workaround: summon an entity and teleport it to
 facing position. Then use "Rot.face_entity".
 """
 
-__all__ = ["RotType", "Rotation"]
+__all__ = ["RotType", "RotDataType", "Rotation"]
 
 from typing import List, TYPE_CHECKING
 
 from acaciamc.tools import axe, method_of
 from acaciamc.constants import DEFAULT_ANCHOR
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
-from .types import Type, DataType
+from .types import Type
 from .callable import BinaryFunction
-from .entity import EntityType
+from .entity import EntityDataType
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
 
-class RotType(Type):
+class RotDataType(DefaultDataType):
     name = "Rot"
 
+class RotType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
@@ -30,7 +32,7 @@ class RotType(Type):
             Rot(int-literal, int-literal): absolute rotation
             """
             @axe.overload
-            @axe.arg("target", EntityType)
+            @axe.arg("target", EntityDataType)
             def from_entity(cls, compiler, entity: "_EntityBase"):
                 inst = Rotation(compiler)
                 inst.context.append("rotated as %s" % entity)
@@ -45,16 +47,19 @@ class RotType(Type):
                 return inst
         @method_of(self, "face_entity")
         @axe.chop
-        @axe.arg("target", EntityType)
+        @axe.arg("target", EntityDataType)
         @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
         def _face_entity(compiler, target: "_EntityBase", anchor: str):
             inst = Rotation(compiler)
             inst.context.append("facing entity %s %s" % (target, anchor))
             return inst
 
+    def datatype_hook(self):
+        return RotDataType()
+
 class Rotation(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(DataType.from_type_cls(RotType, compiler), compiler)
+        super().__init__(RotDataType(), compiler)
         self.context: List[str] = []
 
         _abs = self._create_setter("")

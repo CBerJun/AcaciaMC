@@ -1,6 +1,6 @@
 """Entity filter -- builtin support for selectors."""
 
-__all__ = ["EFilterType", "EntityFilter"]
+__all__ = ["EFilterType", "EFilterDataType", "EntityFilter"]
 
 from typing import List, Union, Optional, TYPE_CHECKING
 import re
@@ -8,9 +8,10 @@ import re
 from acaciamc.error import *
 from acaciamc.tools import axe, versionlib, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
-from .types import Type, DataType
-from .position import PosType
+from .types import Type
+from .position import PosDataType
 
 if TYPE_CHECKING:
     from .position import Position
@@ -56,18 +57,22 @@ class IntRange(axe.AnyOf):
             else:
                 self.wrong_argument(origin)
 
-class EFilterType(Type):
+class EFilterDataType(DefaultDataType):
     name = "Enfilter"
 
+class EFilterType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
         def _new(compiler):
             return EntityFilter(compiler)
 
+    def datatype_hook(self):
+        return EFilterDataType()
+
 class _EFilterData:
     def __init__(self, tag: Union[str, None], subcmds: List[str],
-                    selector: MCSelector):
+                 selector: MCSelector):
         # tag: temporary tag name (is None for last tuple).
         # subcmds: is list of /execute subcommands.
         # selector: selector.
@@ -93,9 +98,7 @@ class _EFilterData:
 
 class EntityFilter(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(
-            DataType.from_type_cls(EFilterType, compiler), compiler
-        )
+        super().__init__(EFilterDataType(), compiler)
         self.context_occupied = False
         self.data: List[_EFilterData] = []
         self._new_data()  # initial data
@@ -152,7 +155,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             return self
         @method_of(self, "nearest_from")
         @axe.chop
-        @axe.arg("origin", PosType)
+        @axe.arg("origin", PosDataType)
         @axe.arg("limit", axe.LiteralInt(), default=1)
         @transform_immutable(self)
         def _nearest_from(self: EntityFilter, compiler,
@@ -166,7 +169,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             return self
         @method_of(self, "farthest_from")
         @axe.chop
-        @axe.arg("origin", PosType)
+        @axe.arg("origin", PosDataType)
         @axe.arg("limit", axe.LiteralInt(), default=1)
         @transform_immutable(self)
         def _farthest_from(self: EntityFilter, compiler,
@@ -196,7 +199,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             return self
         @method_of(self, "distance_from")
         @axe.chop
-        @axe.arg("origin", PosType)
+        @axe.arg("origin", PosDataType)
         @axe.arg("min", axe.Nullable(axe.LiteralFloat()), default=None,
                  rename="min_")
         @axe.arg("max", axe.Nullable(axe.LiteralFloat()), default=None,
@@ -227,7 +230,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             return self
         @method_of(self, "inside")
         @axe.chop
-        @axe.arg("origin", PosType)
+        @axe.arg("origin", PosDataType)
         @axe.arg("dx", axe.LiteralFloat(), default=0.0)
         @axe.arg("dy", axe.LiteralFloat(), default=0.0)
         @axe.arg("dz", axe.LiteralFloat(), default=0.0)

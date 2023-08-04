@@ -1,50 +1,72 @@
 """Entity group -- a group of entities."""
 
 __all__ = [
-    "EGroupType", "EntityGroup",
+    "EGroupType", "EGroupDataType", "EntityGroup",
     # Special value returned by Engroup.t(template)
-    "GenericEGroup", "GenericEGroupType"
+    "GenericEGroup", "GenericEGroupDataType"
 ]
 
 from typing import TYPE_CHECKING, List, Optional
 
 from acaciamc.tools import axe, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector
+from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
-from .types import DataType, Type
-from .entity_template import ETemplateType
-from .entity_filter import EFilterType
-from .entity import EntityReference
+from .types import Type
+from .entity_template import ETemplateDataType
+from .entity_filter import EFilterDataType
+from .entity import EntityDataType, EntityReference
 from .boolean import AndGroup
 from .integer import IntOpGroup
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.datatype import DataType
     from .entity_template import EntityTemplate
     from .entity_filter import EntityFilter
     from .entity import _EntityBase
 
-class GenericEGroupType(Type):
+class GenericEGroupDataType(DefaultDataType):
     name = "Engroup.t"
 
 class GenericEGroup(AcaciaExpr):
     """Thing that is returned by Engroup.t()."""
-    def __init__(self, data_type: DataType, compiler: "Compiler"):
-        super().__init__(
-            DataType.from_type_cls(GenericEGroupType, compiler), compiler
-        )
+    def __init__(self, data_type: "DataType", compiler: "Compiler"):
+        super().__init__(GenericEGroupDataType(), compiler)
         self.dt = data_type
 
-    def datatype_hook(self) -> DataType:
+    def datatype_hook(self) -> "DataType":
         return self.dt
 
-class EGroupType(Type):
+class EGroupDataType(Storable):
     name = "Engroup"
 
+    def __init__(self, template: "EntityTemplate"):
+        self.template = template
+        self.compiler = self.template.compiler
+
+    def __str__(self) -> str:
+        return "Engroup.t(%s)" % self.template.name
+
+    @classmethod
+    def name_no_generic(cls) -> str:
+        return "Engroup"
+
+    def matches(self, other: "DataType") -> bool:
+        return (isinstance(other, EGroupDataType) and
+                other.template.is_subtemplate_of(self.template))
+
+    def new_var(self, template: "EntityTemplate", tmp=False):
+        var = EntityGroup(template, self.compiler)
+        if tmp:
+            self.compiler.add_tmp_entity(var)
+        return var
+
+class EGroupType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
-        @axe.arg("template", ETemplateType, default=None)
+        @axe.arg("template", ETemplateDataType, default=None)
         def _new(compiler: "Compiler", template: Optional["EntityTemplate"]):
             if template is None:
                 template = compiler.base_template
@@ -57,51 +79,40 @@ class EGroupType(Type):
             return res, cmds
         @method_of(self, "t")
         @axe.chop
-        @axe.arg("template", ETemplateType)
+        @axe.arg("template", ETemplateDataType)
         def _t(compiler: "Compiler", template: "EntityTemplate"):
-            return GenericEGroup(
-                DataType.from_entity_group(template, compiler), compiler
-            )
-    def new_var(self, template: "EntityTemplate", tmp=False):
-        var = EntityGroup(template, self.compiler)
-        if tmp:
-            self.compiler.add_tmp_entity(var)
-        return var
+            return GenericEGroup(EGroupDataType(template), compiler)
 
-    def datatype_hook(self) -> DataType:
+    def datatype_hook(self) -> "DataType":
         """When "Engroup" is used as a type specifier, it's an alias to
         "Engroup.t(Object)".
         """
-        return DataType.from_entity_group(
-            self.compiler.base_template, self.compiler
-        )
+        return EGroupDataType(self.compiler.base_template)
 
 class EntityGroup(VarValue):
     def __init__(self, template: "EntityTemplate", compiler):
-        super().__init__(
-            DataType.from_entity_group(template, compiler), compiler
-        )
+        super().__init__(EGroupDataType(template), compiler)
         self.template = template
         self.tag = self.compiler.allocate_entity_tag()
         SELF = self.get_selector().to_str()
-        MEMBER_TYPE = DataType.from_entity(template, compiler)
-        OPERAND_TYPE = DataType.from_entity_group(template, compiler)
+        MEMBER_TYPE = EntityDataType(template)
+        OPERAND_TYPE = EGroupDataType(template)
 
         @method_of(self, "select")
         @axe.chop
-        @axe.arg("filter", EFilterType, rename="filter_")
+        @axe.arg("filter", EFilterDataType, rename="filter_")
         def _select(compiler, filter_: "EntityFilter"):
             cmds = filter_.dump("tag {selected} add %s" % self.tag)
             return self, cmds
         @method_of(self, "drop")
         @axe.chop
-        @axe.arg("filter", EFilterType, rename="filter_")
+        @axe.arg("filter", EFilterDataType, rename="filter_")
         def _drop(compiler, filter_: "EntityFilter"):
             cmds = filter_.dump("tag {selected} remove %s" % self.tag)
             return self, cmds
         @method_of(self, "filter")
         @axe.chop
-        @axe.arg("filter", EFilterType, rename="filter_")
+        @axe.arg("filter", EFilterDataType, rename="filter_")
         def _filter(compiler: "Compiler", filter_: "EntityFilter"):
             tmp = compiler.allocate_entity_tag()
             cmds = filter_.dump("tag {selected} add %s" % tmp)
@@ -168,7 +179,7 @@ class EntityGroup(VarValue):
                                    self.template, compiler)
         @method_of(self, "includes")
         @axe.chop
-        @axe.arg("ent", DataType.from_entity(self.template, compiler))
+        @axe.arg("ent", MEMBER_TYPE)
         def _includes(compiler: "Compiler", ent: "_EntityBase"):
             res = AndGroup(operands=(), compiler=compiler)
             selector = ent.get_selector()

@@ -1,24 +1,38 @@
 """Entity of Acacia."""
 
-__all__ = ['EntityType', 'TaggedEntity', 'EntityReference']
+__all__ = ['EntityDataType', 'TaggedEntity', 'EntityReference']
 
 from typing import Tuple, TYPE_CHECKING, List, Optional
 
 from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.mccmdgen.mcselector import MCSelector
+from acaciamc.mccmdgen.datatype import Storable
 from .base import *
-from .types import Type, DataType
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .entity_template import EntityTemplate
+    from .types import DataType
 
-class EntityType(Type):
-    name = 'entity'
+class EntityDataType(Storable):
+    def __init__(self, template: "EntityTemplate"):
+        self.template = template
+        self.compiler = self.template.compiler
 
-    def new_var(self, template: "EntityTemplate", tmp=False):
-        var = TaggedEntity.from_empty(template, self.compiler)
+    def __str__(self) -> str:
+        return "entity(%s)" % self.template.name
+
+    @classmethod
+    def name_no_generic(cls) -> str:
+        return "entity"
+
+    def matches(self, other: "DataType") -> bool:
+        return (isinstance(other, EntityDataType) and
+                other.template.is_subtemplate_of(self.template))
+
+    def new_var(self, tmp=False) -> "TaggedEntity":
+        var = TaggedEntity.from_empty(self.template, self.compiler)
         if tmp:
             self.compiler.add_tmp_entity(var)
         return var
@@ -26,7 +40,7 @@ class EntityType(Type):
 class _EntityBase(AcaciaExpr):
     def __init__(self, template: "EntityTemplate", compiler,
                  cast_to: Optional["EntityTemplate"] = None):
-        super().__init__(DataType.from_entity(template, compiler), compiler)
+        super().__init__(EntityDataType(template), compiler)
         self.cast_template = cast_to
         self.template = template
         self.template.register_entity(self)

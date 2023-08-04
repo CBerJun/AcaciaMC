@@ -5,7 +5,7 @@ For instance, "~ ~5 ~" is a position offset, while
 "~ ~5 ~ from xxx entity" is a position.
 """
 
-__all__ = ["PosOffsetType", "PosOffset", "CoordinateType"]
+__all__ = ["PosOffsetType", "PosOffsetDataType", "PosOffset", "CoordinateType"]
 
 from typing import Set, List
 from enum import Enum
@@ -13,8 +13,9 @@ from enum import Enum
 from acaciamc.error import *
 from acaciamc.tools import axe, method_of
 from acaciamc.constants import XYZ
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
-from .types import Type, DataType
+from .types import Type
 from .callable import BinaryFunction
 
 class CoordinateType(Enum):
@@ -22,9 +23,10 @@ class CoordinateType(Enum):
     RELATIVE = "~"
     LOCAL = "^"
 
-class PosOffsetType(Type):
+class PosOffsetDataType(DefaultDataType):
     name = "Offset"
 
+class PosOffsetType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
@@ -42,10 +44,12 @@ class PosOffsetType(Type):
             """
             return PosOffset.local(left, up, front, compiler)
 
+    def datatype_hook(self):
+        return PosOffsetDataType()
+
 class PosOffset(AcaciaExpr):
     def __init__(self, compiler):
-        super().__init__(DataType.from_type_cls(PosOffsetType, compiler),
-                         compiler)
+        super().__init__(PosOffsetDataType(), compiler)
         self.values: List[float] = [0.0, 0.0, 0.0]
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]

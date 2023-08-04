@@ -12,12 +12,10 @@ if TYPE_CHECKING:
 
 def _build_foo(compiler: "Compiler"):
     @axe.chop
-    @axe.arg("x", IntType, "y")
+    @axe.arg("x", IntDataType, "y")
     @axe.slash
-    @axe.arg("g", axe.Typed(
-        DataType.from_entity(compiler.base_template, compiler))
-    )
-    @axe.arg("y", axe.Typed(StringType), "x", default=None)
+    @axe.arg("g", EntityDataType)
+    @axe.arg("y", axe.Typed(StringDataType), "x", default=None)
     @axe.star
     @axe.arg("z", axe.Nullable(axe.LiteralString()), default="aa")
     @axe.kwds("k", axe.AnyOf(axe.LiteralInt(), axe.LiteralString()))
@@ -28,14 +26,14 @@ def _build_foo(compiler: "Compiler"):
 
 class _bar(metaclass=axe.OverloadChopped):
     @axe.overload
-    @axe.arg("x", IntType)
+    @axe.arg("x", IntDataType)
     @axe.arg("y", axe.LiteralInt())
     def a(cls, compiler, **kwds):
         print("bar.a called:", kwds)
         return resultlib.commands([], compiler)
 
     @axe.overload
-    @axe.arg("x", IntType)
+    @axe.arg("x", IntDataType)
     def b(cls, compiler, **kwds):
         print("bar.b called")
         return cls.a(compiler, y=1, **kwds)

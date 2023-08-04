@@ -12,11 +12,12 @@ __all__ = [
 
 from typing import List, TYPE_CHECKING, Union, Dict, Tuple, Callable, Hashable
 
+from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *
 
 if TYPE_CHECKING:
-    from .types import DataType
+    from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
 
 ### --- UTILS --- ###
@@ -47,6 +48,7 @@ def export_need_tmp(func):
     """
     def _decorated(self, var: VarValue):
         assert isinstance(self, AcaciaExpr)
+        assert isinstance(self.data_type, Storable)
         temp = self.data_type.new_var(tmp=True)
         cmds = []
         cmds.extend(func(self, temp))
@@ -74,14 +76,9 @@ class AcaciaExpr:
       their values can't be changed.
       e.g. str, module, function
     To define a new type, you need to:
-     - Define a subclass of `Type` that represents this type.
-       The `name` (str) attribute must be given which is the name of
-       type user sees.
-       Please notice not to use `Type.__init__` for initializations!
-       Use `Type.do_init` instead.
-       Remember to use `Compiler.add_type` to register a type.
-       Do NOT create instances of any `Type` by yourself, use
-       `Compiler.types[<Type class>]` to get `Type` instance.
+     - Define a subclass of `DataType` that represents this type.
+       To implement a simple type, just subclass `DefaultDataType`, in
+       which you just need to specify `name` attribute.
      - Define at least one subclass of `AcaciaExpr`, which represents
        the objects of this type.
        `call` is a special method that would be called when this
@@ -94,14 +91,14 @@ class AcaciaExpr:
        to represent this kind of value that is stored in Minecraft.
      - `export` method, called when user assigns the value of this
        expression to a `VarValue` of same type.
-     - the class that defines this type (subclass of `Type`) should have
-       a `new_var` method, to allow creating a new `VarValue` of this
-       type.
+     - the class that defines this type (subclass of `DataType`) should
+       subclass `Storable`. It will have to implement `new_var` method,
+       to allow creating a new `VarValue` of this type.
     Take builtin "int" as an example:
      - `IntVar`, which holds a Minecraft score, is implemented.
      - All the AcaciaExprs of `int` type implements `export`.
-     - `IntType` does have a `new_var` method, which creates a new
-     `IntVar`.
+     - `IntDataType` does have a `new_var` method, which creates a new
+       `IntVar`.
 
     To implement operator for your type, here are some methods:
      - __add__, __sub__, __mul__, __floordiv__, __mod__: represents

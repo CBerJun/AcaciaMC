@@ -17,8 +17,8 @@ def _randint(compiler, min_: int, max_: int):
     return res
 
 @axe.chop
-@axe.arg("base", IntType)
-@axe.arg("exp", IntType)
+@axe.arg("base", IntDataType)
+@axe.arg("exp", IntDataType)
 def _pow(compiler, base, exp):
     """pow(base: int, exp: int) -> int
     return "base" to the power of "exp".
@@ -41,7 +41,7 @@ def _pow(compiler, base, exp):
     return res
 
 @axe.chop
-@axe.star_arg("operands", IntType)
+@axe.star_arg("operands", IntDataType)
 def _min(compiler, operands: List[AcaciaExpr]):
     """min(*operands: int) -> int
     Return the minimum value among `args`.
@@ -58,7 +58,7 @@ def _min(compiler, operands: List[AcaciaExpr]):
     return res
 
 @axe.chop
-@axe.star_arg("operands", IntType)
+@axe.star_arg("operands", IntDataType)
 def _max(compiler, operands: List[AcaciaExpr]):
     """max(*operands: int) -> int
     Return the maximum value among `args`.

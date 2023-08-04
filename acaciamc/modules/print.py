@@ -204,7 +204,7 @@ class FString(AcaciaExpr):
         # dependencies: commands to run before json rawtext is used
         # json: JSON rawtext without {"rawtext": ...}
         super().__init__(
-            DataType.from_type_cls(FStringType, compiler), compiler
+            DefaultDataType.from_type_cls(FStringType, compiler), compiler
         )
         self.dependencies = dependencies
         self.json = json

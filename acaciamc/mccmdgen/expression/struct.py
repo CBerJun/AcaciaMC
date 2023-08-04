@@ -1,49 +1,62 @@
 """Collections of several variables at runtime."""
 
-__all__ = ["StructType", "Struct"]
+__all__ = ["StructDataType", "Struct"]
 
 from typing import TYPE_CHECKING, List, Dict, Tuple
 
 from .base import *
-from .types import DataType, Type
+from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
 from acaciamc.error import *
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
     from .struct_template import StructTemplate
+    from .types import DataType
 
-class StructType(Type):
-    name = "struct"
+class StructDataType(Storable, SupportsEntityField):
+    def __init__(self, template: "StructTemplate"):
+        super().__init__()
+        self.template = template
+        self.compiler = self.template.compiler
 
-    def new_var(self, template: "StructTemplate", tmp=False) -> "Struct":
-        return Struct.from_template(template, self.compiler, tmp=tmp)
+    def __str__(self) -> str:
+        return "struct(%s)" % self.template.name
 
-    def new_entity_field(self, template: "StructTemplate"):
-        field_info: Dict[str, Tuple[dict, DataType]] = {}
-        for name, type_ in template.field_types.items():
-            try:
-                submeta = type_.new_entity_field()
-            except NotImplementedError:
+    @classmethod
+    def name_no_generic(self) -> str:
+        return "struct"
+
+    def matches(self, other: "DataType") -> bool:
+        return (isinstance(other, StructDataType) and
+                other.template.is_subtemplate_of(self.template))
+
+    def new_var(self, tmp=False) -> "Struct":
+        return Struct.from_template(self.template, self.compiler, tmp=tmp)
+
+    def new_entity_field(self):
+        field_info: Dict[str, Tuple[dict, SupportsEntityField]] = {}
+        for name, type_ in self.template.field_types.items():
+            if not isinstance(type_, SupportsEntityField):
                 raise Error(ErrorType.UNSUPPORTED_EFIELD_IN_STRUCT,
-                            template=template.name, field_type=type_)
-            else:
-                field_info[name] = (submeta, type_)
-        return {"template": template, "field_info": field_info}
+                            template=self.template.name, field_type=type_)
+            submeta = type_.new_entity_field()
+            field_info[name] = (submeta, type_)
+        return {"field_info": field_info}
 
-    def new_var_as_field(self, entity: "_EntityBase",
-                         template: "StructTemplate",
-                         field_info: Dict[str, Tuple[dict, DataType]]
-                        ) -> "Struct":
+    def new_var_as_field(
+            self, entity: "_EntityBase",
+            field_info: Dict[str, Tuple[dict, SupportsEntityField]]
+        ) -> "Struct":
         vars_ = {}
         for name, (submeta, type_) in field_info.items():
             subvar = type_.new_var_as_field(entity, **submeta)
             vars_[name] = subvar
-        return Struct(template, vars_, self.compiler)
+        return Struct(self.template, vars_, self.compiler)
 
 class Struct(VarValue):
     def __init__(self, template: "StructTemplate",
                  vars_: Dict[str, VarValue], compiler):
-        super().__init__(DataType.from_struct(template, compiler), compiler)
+        super().__init__(StructDataType(template), compiler)
         self.template = template
         self.vars = vars_
         self.attribute_table.update(vars_)
@@ -52,13 +65,8 @@ class Struct(VarValue):
     def from_template(cls, template: "StructTemplate", compiler, **kwds):
         vars_ = {}
         for name, type_ in template.field_types.items():
-            try:
-                var = type_.new_var(**kwds)
-            except NotImplementedError:
-                raise Error(ErrorType.UNSUPPORTED_SFIELD_TYPE,
-                            field_type=type_)
-            else:
-                vars_[name] = var
+            var = type_.new_var(**kwds)
+            vars_[name] = var
         return cls(template, vars_, compiler)
 
     def export(self, other_struct: "Struct") -> List[str]:

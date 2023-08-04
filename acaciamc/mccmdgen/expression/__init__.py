@@ -19,10 +19,3 @@ from .array import *
 from .map_ import *
 from .struct_template import *
 from .struct import *
-
-BUILTIN_TYPES = (
-    TypeType, IntType, BoolType, FunctionType, NoneType, StringType,
-    ModuleType, ETemplateType, EntityType, FloatType, PosType, PosOffsetType,
-    RotType, EGroupType, EFilterType, GenericEGroupType, ArrayType, MapType,
-    StructTemplateType, StructType,
-)

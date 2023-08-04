@@ -23,6 +23,7 @@ from functools import partial
 import inspect
 
 import acaciamc.mccmdgen.expression as acacia
+from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.error import Error as AcaciaError, ErrorType
 from acaciamc.constants import Config
 from acaciamc.tools.versionlib import format_version
@@ -108,7 +109,7 @@ def _parser_component(func: Callable[[_BuildingParser], Any]):
             return res
     return _decorated
 
-_TYPED_TYPE = Union[Type["acacia.Type"], "acacia.DataType"]
+_TYPED_TYPE = Union[DataType, Type[DataType]]
 _ARG_TYPE = Union[_TYPED_TYPE, "Converter"]
 
 ### Building Stage Interface
@@ -193,18 +194,17 @@ class AnyValue(Converter):
         return origin
 
 def _type_checker(value: acacia.AcaciaExpr, type_: _TYPED_TYPE):
-    if isinstance(type_, acacia.DataType):
-        data_type = type_
+    if isinstance(type_, DataType):
+        return type_.is_type_of(value)
     else:
-        assert issubclass(type_, acacia.Type)
-        data_type = acacia.DataType.from_type_cls(type_, value.compiler)
-    return data_type.is_type_of(value)
+        assert issubclass(type_, DataType)
+        return type_.matches_cls(type(value.data_type))
 
 def _type_to_str(type_: _TYPED_TYPE):
-    if isinstance(type_, acacia.DataType):
+    if isinstance(type_, DataType):
         return str(type_)
     else:
-        return type_.name
+        return type_.name_no_generic()
 
 class Typed(Converter):
     """Accepts value of specified data type."""
@@ -239,7 +239,7 @@ class LiteralInt(Typed):
     Default value should also be given as Python `int`.
     """
     def __init__(self):
-        super().__init__(acacia.IntType)
+        super().__init__(acacia.IntDataType)
 
     def get_show_name(self) -> str:
         return "int (literal)"
@@ -255,7 +255,7 @@ class LiteralFloat(Multityped):
     `float`. Default value should also be given as Python `float`.
     """
     def __init__(self):
-        super().__init__((acacia.IntType, acacia.FloatType))
+        super().__init__((acacia.IntDataType, acacia.FloatDataType))
 
     def get_show_name(self) -> str:
         return "float (accepts int literal)"
@@ -273,7 +273,7 @@ class LiteralString(Typed):
     Default value should also be given as Python `str`.
     """
     def __init__(self):
-        super().__init__(acacia.StringType)
+        super().__init__(acacia.StringDataType)
 
     def convert(self, origin: acacia.AcaciaExpr) -> str:
         origin = super().convert(origin)
@@ -285,7 +285,7 @@ class LiteralBool(Typed):
     Default value should also be given as Python `bool`.
     """
     def __init__(self):
-        super().__init__(acacia.BoolType)
+        super().__init__(acacia.BoolDataType)
 
     def get_show_name(self) -> str:
         return "bool (literal)"
@@ -308,7 +308,7 @@ class Nullable(Converter):
         return self.converter.get_show_name() + " (or None)"
 
     def convert(self, origin: acacia.AcaciaExpr):
-        if origin.data_type.raw_matches(acacia.NoneType):
+        if origin.data_type.matches_cls(acacia.NoneDataType):
             return None
         try:
             return self.converter.convert(origin)
@@ -361,7 +361,7 @@ class Iterator(Converter):
 class Selector(Multityped):
     """Accepts entity or Engroup and convert it to `MCSelector`."""
     def __init__(self):
-        super().__init__((acacia.EntityType, acacia.EGroupType))
+        super().__init__((acacia.EntityDataType, acacia.EGroupDataType))
 
     def convert(self, origin: acacia.AcaciaExpr) -> "MCSelector":
         # Both `_EntityBase` and `EntityGroup` define `get_selector`.
@@ -409,7 +409,7 @@ class ArrayOf(Typed):
     `list`.
     """
     def __init__(self, converter: Converter):
-        super().__init__(acacia.ArrayType)
+        super().__init__(acacia.ArrayDataType)
         self.converter = converter
 
     def get_show_name(self) -> str:
@@ -433,7 +433,7 @@ class MapOf(Typed):
     converts it to Python `dict`.
     """
     def __init__(self, key: Converter, value: Converter):
-        super().__init__(acacia.MapType)
+        super().__init__(acacia.MapDataType)
         self.key = key
         self.value = value
 
@@ -670,7 +670,7 @@ def chop(building: _BuildingParser):
     """Use a Python-style argument parser for decorated function.
     Example:
     >>> @chop
-    ... @arg("foo", Nullable(Typed(acacia.BoolType)))
+    ... @arg("foo", Nullable(Typed(acacia.BoolDataType)))
     ... @arg("bar", LiteralInt(), default=11)
     ... def f(compiler, foo, bar):
     ...     # implement this binary function here
@@ -694,13 +694,13 @@ class OverloadChopped(type):
     Example:
     >>> class Foo(metaclass=OverloadChopped):
     ...     @overload
-    ...     @arg("a", acacia.BoolType)
+    ...     @arg("a", acacia.BoolDataType)
     ...     @arg("b", LiteralInt())
     ...     def f1(cls, compiler, a, b):
     ...         print("f1: ", a, b)
     ...         return acacia.NoneVar(compiler)
     ...     @overload
-    ...     @arg("a", acacia.BoolType)
+    ...     @arg("a", acacia.BoolDataType)
     ...     def f2(cls, compiler, a):
     ...         print("f2: ", a)
     ...         return cls.f1(compiler, a, b=10)

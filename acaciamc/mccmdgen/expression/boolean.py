@@ -19,7 +19,7 @@ this is done by `new_or_expression`.
 
 __all__ = [
     # Type
-    'BoolType',
+    'BoolType', 'BoolDataType',
     # Expressions
     'BoolLiteral', 'BoolVar', 'NotBoolVar', 'BoolCompare', 'AndGroup',
     # Factory functions
@@ -28,21 +28,32 @@ __all__ = [
     'to_BoolVar'
 ]
 
-from typing import Iterable, List, Tuple, Set
+from typing import Iterable, List, Tuple, Set, TYPE_CHECKING
 import operator as builtin_op
 
 from .base import *
-from .types import Type, DataType
-from .integer import IntType, IntLiteral, to_IntVar
+from .integer import IntDataType, IntLiteral, to_IntVar
+from .types import Type
 from acaciamc.ast import Operator
 from acaciamc.error import *
 from acaciamc.constants import INT_MAX, INT_MIN
+from acaciamc.mccmdgen.datatype import (
+    DefaultDataType, Storable, SupportsEntityField
+)
 
-class BoolType(Type):
-    name = 'bool'
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
+
+class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
+    name = "bool"
+
+    def __init__(self, compiler: "Compiler"):
+        super().__init__()
+        self.compiler = compiler
 
     def new_var(self, tmp=False):
-        objective, selector = self._new_score(tmp)
+        alloc = self.compiler.allocate_tmp if tmp else self.compiler.allocate
+        objective, selector = alloc()
         return BoolVar(objective, selector, self.compiler)
 
     def new_entity_field(self):
@@ -52,10 +63,14 @@ class BoolType(Type):
         return BoolVar(meta["scoreboard"], str(entity),
                       self.compiler, with_quote=False)
 
+class BoolType(Type):
+    def datatype_hook(self):
+        return BoolDataType(self.compiler)
+
 class BoolLiteral(AcaciaExpr):
     """Literal boolean."""
     def __init__(self, value: bool, compiler):
-        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
+        super().__init__(BoolDataType(compiler), compiler)
         self.value = value
 
     def export(self, var: "BoolVar"):
@@ -84,7 +99,7 @@ class BoolVar(VarValue):
     """Boolean stored as a score on scoreboard."""
     def __init__(self, objective: str, selector: str,
                  compiler, with_quote=True):
-        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
+        super().__init__(BoolDataType(compiler), compiler)
         self.objective = objective
         self.selector = selector
         self.with_quote = with_quote
@@ -102,7 +117,7 @@ class BoolVar(VarValue):
 
 class NotBoolVar(AcaciaExpr):
     def __init__(self, objective: str, selector: str, compiler):
-        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
+        super().__init__(BoolDataType(compiler), compiler)
         self.objective = objective
         self.selector = selector
 
@@ -129,14 +144,13 @@ class BoolCompare(AcaciaExpr):
         right: AcaciaExpr, compiler
     ):
         """Use factory method `new_compare` below."""
-        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
+        super().__init__(BoolDataType(compiler), compiler)
         self.left = left
         self.operator = operator
         self.right = right
         # Make sure operands are available
         lt, rt = left.data_type, right.data_type
-        if not (lt.raw_matches(IntType)
-                and rt.raw_matches(IntType)):
+        if not (lt.matches_cls(IntDataType) and rt.matches_cls(IntDataType)):
             raise Error(
                 ErrorType.INVALID_OPERAND,
                 operator={
@@ -269,7 +283,7 @@ def new_compare(left: AcaciaExpr, operator: Operator,
 
 class AndGroup(AcaciaExpr):
     def __init__(self, operands: Iterable[AcaciaExpr], compiler):
-        super().__init__(DataType.from_type_cls(BoolType, compiler), compiler)
+        super().__init__(BoolDataType(compiler), compiler)
         self.main: List[str] = []  # list of subcommands of /execute (See `export`)
         self.dependencies: List[str] = []  # commands that runs before `self.main`
         # `compare_operands` stores `BoolCompare` operands -- they are
@@ -410,7 +424,7 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
         raise ValueError
     # make sure all operands are booleans
     for operand in operands:
-        if not operand.data_type.raw_matches(BoolType):
+        if not operand.data_type.matches_cls(BoolDataType):
             raise Error(
                 ErrorType.INVALID_BOOLOP_OPERAND, operator='and',
                 operand=str(operand.data_type)
@@ -439,8 +453,8 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
 def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Create a boolean value connected with "or"."""
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
-    def _map(operand):
-        if not operand.data_type.raw_matches(BoolType):
+    def _map(operand: AcaciaExpr):
+        if not operand.data_type.matches_cls(BoolDataType):
             raise Error(
                 ErrorType.INVALID_BOOLOP_OPERAND, operator='or',
                 operand=str(operand.data_type)

@@ -2,20 +2,22 @@
 Only a few literal values are supported as keys.
 """
 
-__all__ = ["MapType", "Map"]
+__all__ = ["MapType", "MapDataType", "Map"]
 
 from typing import Dict, Hashable, Iterable
 from itertools import repeat
 
 from .base import *
-from .types import DataType, Type
+from .types import Type
 from .none import NoneLiteral
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
+from acaciamc.mccmdgen.datatype import DefaultDataType
 
-class MapType(Type):
+class MapDataType(DefaultDataType):
     name = "map"
 
+class MapType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
@@ -31,10 +33,13 @@ class MapType(Type):
         def _from_keys(compiler, x: ITERLIST_T, fill: AcaciaExpr):
             return Map(x, repeat(fill), compiler)
 
+    def datatype_hook(self):
+        return MapDataType()
+
 class Map(AcaciaExpr, ImmutableMixin):
     def __init__(self, keys: Iterable[AcaciaExpr],
                  values: Iterable[AcaciaExpr], compiler):
-        super().__init__(DataType.from_type_cls(MapType, compiler), compiler)
+        super().__init__(MapDataType(), compiler)
         self.dict: Dict[Hashable, AcaciaExpr] = {}
         self.py_key2key: Dict[Hashable, AcaciaExpr] = {}
         for key, value in zip(keys, values):
@@ -54,7 +59,7 @@ class Map(AcaciaExpr, ImmutableMixin):
             return self
         @method_of(self, "update")
         @axe.chop
-        @axe.arg("other", MapType)
+        @axe.arg("other", MapDataType)
         @transform_immutable(self)
         def _update(self: Map, compiler, other: Map):
             self.dict.update(other.dict)

@@ -1,27 +1,29 @@
 """Builtin support for positions."""
 
-__all__ = ["PosType", "Position"]
+__all__ = ["PosType", "PosDataType", "Position"]
 
 from typing import List, TYPE_CHECKING
 
 from acaciamc.error import *
 from acaciamc.tools import axe, method_of
 from acaciamc.constants import DEFAULT_ANCHOR, XYZ
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
-from .types import Type, DataType
-from .position_offset import PosOffsetType, PosOffset, CoordinateType
+from .types import Type
+from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
 from .callable import BinaryFunction
-from .rotation import RotType
+from .rotation import RotDataType
 from .string import String
-from .entity import EntityType
+from .entity import EntityDataType
 
 if TYPE_CHECKING:
     from .rotation import Rotation
     from .entity import _EntityBase
 
-class PosType(Type):
+class PosDataType(DefaultDataType):
     name = "Pos"
 
+class PosType(Type):
     def do_init(self):
         self.attribute_table.set(
             "OVERWORLD", String("overworld", self.compiler)
@@ -43,7 +45,7 @@ class PosType(Type):
                 absolute position.
             """
             @axe.overload
-            @axe.arg("target", EntityType)
+            @axe.arg("target", EntityDataType)
             @axe.arg("anchor", axe.LiteralString())
             def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
                 inst = Position(compiler)
@@ -52,7 +54,7 @@ class PosType(Type):
                 return inst
 
             @axe.overload
-            @axe.arg("target", EntityType)
+            @axe.arg("target", EntityDataType)
             def from_entity_no_anchor(cls, compiler, target: "_EntityBase"):
                 return cls.from_entity(compiler, target, DEFAULT_ANCHOR)
 
@@ -70,9 +72,12 @@ class PosType(Type):
                                   .call([offset], {}))
                 return new_inst, cmds
 
+    def datatype_hook(self):
+        return PosDataType()
+
 class Position(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(DataType.from_type_cls(PosType, compiler), compiler)
+        super().__init__(PosDataType(), compiler)
         self.context: List[str] = []  # /execute subcommands
 
         @method_of(self, "dim")
@@ -90,7 +95,7 @@ class Position(AcaciaExpr, ImmutableMixin):
         """
         @method_of(self, "local")
         @axe.chop
-        @axe.arg("rot", RotType)
+        @axe.arg("rot", RotDataType)
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
         @axe.arg("up", axe.LiteralFloat(), default=0.0)
         @axe.arg("front", axe.LiteralFloat(), default=0.0)
@@ -108,7 +113,7 @@ class Position(AcaciaExpr, ImmutableMixin):
             return new_obj, cmds
         @method_of(self, "apply")
         @axe.chop
-        @axe.arg("offset", PosOffsetType)
+        @axe.arg("offset", PosOffsetDataType)
         @transform_immutable(self)
         def _apply(self: Position, compiler, offset: PosOffset):
             """.apply(offset: Offset): Apply offset to current position."""

@@ -38,8 +38,12 @@ result:
 """
 
 from acaciamc.mccmdgen.expression import *
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.ast import Operator
 from acaciamc.tools import axe, resultlib, method_of
+
+class TaskDataType(DefaultDataType):
+    name = "Task"
 
 class TaskType(Type):
     """
@@ -47,16 +51,17 @@ class TaskType(Type):
     A task manager that calls the given function after a period of time.
     The `args` and `kwds` are passed to the function.
     """
-    name = "Task"
-
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
-        @axe.arg("target", FunctionType)
+        @axe.arg("target", FunctionDataType)
         @axe.star_arg("args", axe.AnyValue())
         @axe.kwds("kwds", axe.AnyValue())
         def _new(compiler, target, args, kwds):
             return Task(target, args, kwds, compiler)
+
+    def datatype_hook(self):
+        return TaskDataType()
 
 class Task(AcaciaExpr):
     def __init__(self, target: AcaciaExpr, other_arg, other_kw, compiler):
@@ -64,19 +69,17 @@ class Task(AcaciaExpr):
         target: The function to call
         other_arg & other_kw: Arguments to pass to `target`
         """
-        super().__init__(
-            DataType.from_type_cls(TaskType, compiler), compiler
-        )
+        super().__init__(TaskDataType(), compiler)
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
-        self.timer = compiler.types[IntType].new_var()
+        self.timer = IntDataType(compiler).new_var()
         self._target_args, self._target_keywords = [], {}
         def _timer_reset():
             cmds = IntLiteral(-1, compiler).export(self.timer)
             return resultlib.commands(cmds, compiler)
         @method_of(self, "after")
         @axe.chop
-        @axe.arg("delay", IntType)
+        @axe.arg("delay", IntDataType)
         def _after(compiler, delay: AcaciaExpr):
             """.after(delay: int): Run the target after `delay`"""
             cmds = delay.export(self.timer)
@@ -118,8 +121,8 @@ class Task(AcaciaExpr):
 
 def _create_register_loop(compiler):
     @axe.chop
-    @axe.arg("target", FunctionType)
-    @axe.arg("interval", IntType, default=IntLiteral(1, compiler))
+    @axe.arg("target", FunctionDataType)
+    @axe.arg("interval", IntDataType, default=IntLiteral(1, compiler))
     @axe.star_arg("args", axe.AnyValue())
     @axe.kwds("kwds", axe.AnyValue())
     def _register_loop(compiler, target: AcaciaExpr,
@@ -131,7 +134,7 @@ def _create_register_loop(compiler):
         Call a function repeatly every `interval` ticks with `args` and `kwds`.
         """
         # Allocate an int for timer
-        timer = compiler.types[IntType].new_var()
+        timer = IntDataType(compiler).new_var()
         # Initialize
         init_cmds = IntLiteral(0, compiler).export(timer)
         # Tick loop
@@ -152,9 +155,8 @@ def _create_register_loop(compiler):
     return _register_loop
 
 def acacia_build(compiler):
-    compiler.add_type(TaskType)
     register_loop = _create_register_loop(compiler)
     return {
-        "Task": compiler.types[TaskType],
+        "Task": TaskType(compiler),
         "register_loop": BinaryFunction(register_loop, compiler)
     }
