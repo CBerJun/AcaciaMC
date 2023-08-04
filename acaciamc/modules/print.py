@@ -1,19 +1,23 @@
 """print - String formatting and printing module."""
 
-from typing import List
+from typing import List, TYPE_CHECKING
 from copy import deepcopy
 import json
 
 from acaciamc.mccmdgen.expression import *
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, method_of
+
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
 
 class ArgFString(axe.Multityped):
     """Accepts an fstring as argument. A string is also accepted and
     converted to an fstring.
     """
     def __init__(self):
-        super().__init__((StringType, FStringType))
+        super().__init__((StringDataType, FStringDataType))
 
     def convert(self, origin: AcaciaExpr) -> "FString":
         origin = super().convert(origin)
@@ -65,7 +69,7 @@ class _FStrParser:
 
     def add_expr(self, expr: AcaciaExpr):
         """Format an expression to string."""
-        if expr.data_type.raw_matches(IntType):
+        if expr.data_type.matches_cls(IntDataType):
             if isinstance(expr, IntLiteral):
                 # optimize for literals
                 self.add_text(str(expr.value))
@@ -73,7 +77,7 @@ class _FStrParser:
                 dependencies, var = to_IntVar(expr)
                 self.dependencies.extend(dependencies)
                 self.add_score(var.objective, var.selector)
-        elif expr.data_type.raw_matches(BoolType):
+        elif expr.data_type.matches_cls(BoolDataType):
             if isinstance(expr, BoolLiteral):
                 # optimize for literals
                 self.add_text('1' if expr.value else '0')
@@ -163,6 +167,9 @@ class _FStrParser:
                 self.add_expr(expr)
         return self.dependencies, self.json
 
+class FStringDataType(DefaultDataType):
+    name = 'fstring'
+
 class FStringType(Type):
     """
     format(_pattern: str, *args, **kwargs)
@@ -182,8 +189,6 @@ class FStringType(Type):
      format("Val1: %0; Val2: %{name}; Name: %{1}", val1, val2, name=x)
      format("Find %k{diamond} please!", diamond="item.diamond.name")
     """
-    name = 'fstring'
-
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
@@ -198,14 +203,15 @@ class FStringType(Type):
             # scan pattern
             return FString(dependencies, json, compiler)
 
+    def datatype_hook(self):
+        return FStringDataType()
+
 class FString(AcaciaExpr):
     """A formatted string in JSON format."""
     def __init__(self, dependencies: List[str], json: list, compiler):
         # dependencies: commands to run before json rawtext is used
         # json: JSON rawtext without {"rawtext": ...}
-        super().__init__(
-            DefaultDataType.from_type_cls(FStringType, compiler), compiler
-        )
+        super().__init__(FStringDataType(), compiler)
         self.dependencies = dependencies
         self.json = json
 
@@ -318,10 +324,9 @@ def _title_clear(compiler, target: str):
     """
     return resultlib.commands(['titleraw %s clear' % target], compiler)
 
-def acacia_build(compiler):
-    compiler.add_type(FStringType)
+def acacia_build(compiler: "Compiler"):
     return {
-        'format': compiler.types[FStringType],
+        'format': FStringType(compiler),
         'tell': BinaryFunction(_tell, compiler),
         'title': BinaryFunction(_title, compiler),
         'TITLE': String(_TITLE, compiler),
