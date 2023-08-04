@@ -29,9 +29,9 @@ class DataType(metaclass=ABCMeta):
 
     @abstractmethod
     def matches(self, other: "DataType") -> bool:
-        """Return whether `type_` is compatible to be assigned to
-        variables of this type. (i.e. if `type_` is entity, check
-        whether the template of `type_` is a sub-template of this
+        """Return whether `other` is compatible to be assigned to
+        variables of this type. (i.e. if `other` is entity, check
+        whether the template of `other` is a sub-template of this
         type's template).
         """
         pass
