@@ -6,4 +6,4 @@ def _pow(x: int, y: int) -> int:
     while y > 1:
         x *= x
         y -= 1
-    result x
+    result = x

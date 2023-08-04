@@ -14,7 +14,7 @@ def is_prime(x: int) -> bool:
         if x % mod == 0:
             flag = False
         mod += 1
-    result flag
+    result = flag
 
 i = 2
 while i <= MAX:

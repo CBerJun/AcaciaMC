@@ -41,10 +41,10 @@ Flow control statements:
 def is_prime(x: int) -> bool:
     #* Test if `x` is a prime number *#
     mod = 2
-    result True
+    result = True
     while mod <= x / 2:
         if x % mod == 0:
-            result False
+            result = False
         mod += 1
 ```
 
@@ -90,7 +90,7 @@ Acacia can even do better than you in some aspects like doing math!
 ```
 def sum_between(start: int, to: int, delta=1) -> int:
     #* Return sum of Equidistant sequence from `start` to `to` with `delta` *#
-    result (start + to) * ((to - start) / delta + 1) / 2
+    result = (start + to) * ((to - start) / delta + 1) / 2
 sum_between(-5, 5, delta=2)
 ```
 

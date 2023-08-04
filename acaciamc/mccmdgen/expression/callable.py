@@ -31,7 +31,7 @@ __all__ = [
     'BoundMethod', 'BoundMethodDispatcher'
 ]
 
-from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple
+from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
 
 from acaciamc.error import *
 from acaciamc.mccmdgen import generator
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.generator import MCFunctionFile
     from acaciamc.ast import InlineFuncDef
+    from acaciamc.mccmdgen.datatype import DataType
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
@@ -57,6 +58,7 @@ class AcaciaFunction(AcaciaExpr):
                  returns: "Storable", compiler):
         super().__init__(FunctionDataType(), compiler)
         self.name = name
+        self.result_type = returns
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
         # Create a `VarValue` for every args according to their types
         # and store them as dict at `self.arg_vars`.
@@ -80,23 +82,22 @@ class AcaciaFunction(AcaciaExpr):
         # Call function
         if self.file is not None:
             res.append(self.file.call())
-        # Store result
         return self.result_var, res
 
 class InlineFunction(AcaciaExpr):
     def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
-                 returns: "Storable", compiler):
+                 returns: Optional["DataType"], compiler):
         super().__init__(FunctionDataType(), compiler)
         # We store the InlineFuncDef node directly
         self.node = node
         self.name = node.name
-        self.result_var = returns.new_var()
+        self.result_type = returns
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
-        cmds = self.compiler.current_generator.call_inline_func(
-            self, args, keywords)
-        return self.result_var, cmds
+        return self.compiler.current_generator.call_inline_func(
+            self, args, keywords
+        )
 
 class BinaryFunction(AcaciaExpr):
     """These are the functions that are written in Python,

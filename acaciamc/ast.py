@@ -118,7 +118,7 @@ class While(Statement):  # while statement
 class FuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: AnyTypeSpec, lineno, col
+        body: list, returns: _Optional[AnyTypeSpec], lineno, col
     ):  # function definition
         super().__init__(lineno, col)
         self.name = name
@@ -129,7 +129,7 @@ class FuncDef(Statement):
 class InlineFuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: AnyTypeSpec, lineno, col
+        body: list, returns: _Optional[AnyTypeSpec], lineno, col
     ):  # inline function definition
         super().__init__(lineno, col)
         self.name = name
@@ -177,11 +177,6 @@ class Command(Statement):  # raw command
     def __init__(self, values: _List[_Tuple[StringMode, _Any]], lineno, col):
         super().__init__(lineno, col)
         self.values = values
-
-class Result(Statement):  # set function result
-    def __init__(self, value: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.value = value
 
 class AugmentedAssign(Statement):  # augmented assign
     def __init__(
@@ -257,6 +252,9 @@ class Literal(Expression):  # a literal constant
         self.value = literal
 
 class Self(Expression):  # "self" keyword
+    pass
+
+class Result(Expression):  # "result" keyword
     pass
 
 class Identifier(Expression):  # an identifier

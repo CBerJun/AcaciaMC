@@ -8,4 +8,4 @@
 import print
 
 def test(x: int) -> bool:
-    result x >= 0
+    result = x >= 0

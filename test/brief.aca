@@ -113,15 +113,15 @@ def max(a: int, b = int.MAX) -> int:
                     # int.MAX refers to 2147483647
     #* Return the larger one between a and b *#
     if a >= b:
-        result a
+        result = a
         # Unlike "return" in modern languages like Python,
-        # result statements do not stop functions!
+        # assigning to result do not stop functions!
     else:
-        result b
+        result = b
 
 def is_larger(a: int, b: int) -> bool:
     #* Return whether a is larger than b *#
-    result a > b
+    result = a > b
 
 if not is_larger(x, 4):
     x = 2
@@ -141,14 +141,15 @@ else:
  * Inline functions are:
  *  1. Expanded when called. Every time they get called, their body is
  *  parsed once. Therefore, type of argument can be omitted.
- *  2. Arguments are delivered directly, not assigned. The arguments
- *  are sent in the same way as bindings, while the normal functions
- *  do it using assignments. Therefore, the argument types can be
- *  any type you want.
+ *  2. Arguments and result are delivered directly, not assigned. The
+ *  arguments and result are sent in the same way as bindings, while
+ *  the normal functions do it using assignments. Therefore, the argument
+ *  types and result type can be any type you want. The type hint for
+ *  arguments and result are optional.
  *#
 
 inline def my_print(text="Hello!"):
-    #* @param text: str *#
+    #* Print a message from Acacia. *#
     print.tell("Acacia: " + text)
 my_print()  # Acacia: Hello!
 my_print("Inline functions!")  # Acacia: Inline functions!
@@ -156,6 +157,11 @@ my_print("Inline functions!")  # Acacia: Inline functions!
 inline def set_var(x: int):
     x = 10
 set_var(x)  # `x` is 10 now
+
+inline def prefix_str(s):
+    #* Prefix given string `s` with "I like ". *#
+    result -> "I like " + s
+my_print(prefix_str("CB!"))  # Acacia: I like CB!
 
 #* Exported interfaces *#
 # These interfaces are exported for later use in Minecraft

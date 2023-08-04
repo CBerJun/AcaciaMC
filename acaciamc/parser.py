@@ -113,6 +113,12 @@ class Parser:
         self.eat(TokenType.self)
         return Self(**pos)
 
+    def result(self):
+        """result := RESULT"""
+        pos = self.current_pos
+        self.eat(TokenType.result)
+        return Result(**pos)
+
     def array_or_map(self):
         """
         array := LBRACE (expr COMMA)* expr? RBRACE
@@ -165,7 +171,7 @@ class Parser:
     def expr_l0(self):
         """
         level 0 expression := (LPAREN expr RPAREN) | literal |
-          identifier | raw_score | array | map
+          identifier | raw_score | self | array | map | result
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -185,6 +191,8 @@ class Parser:
             return self.self()
         elif self.current_token.type is TokenType.lbrace:
             return self.array_or_map()
+        elif self.current_token.type is TokenType.result:
+            return self.result()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
 
@@ -532,12 +540,6 @@ class Parser:
         self.eat(TokenType.command)
         return Command(res, **pos)
 
-    def result_stmt(self):
-        """result_stmt := RESULT expr"""
-        pos = self.current_pos
-        self.eat(TokenType.result)
-        return Result(self.expr(), **pos)
-
     def module_meta(self):
         """module_meta := POINT* IDENTIFIER (POINT IDENTIFIER)*"""
         # leading dots
@@ -661,8 +663,7 @@ class Parser:
           assign_stmt | aug_assign_stmt | bind_stmt | expr_stmt
         )
         simple_statement := (
-          pass_stmt | command_stmt | result_stmt | import_stmt |
-          from_import_stmt
+          pass_stmt | command_stmt | import_stmt | from_import_stmt
         )
         embedded_statement := (
           if_stmt | while_stmt | for_stmt | interface_stmt | def_stmt |
@@ -685,7 +686,6 @@ class Parser:
         TOK2STMT_SIMPLE = {
             TokenType.pass_: self.pass_stmt,
             TokenType.command: self.command_stmt,
-            TokenType.result: self.result_stmt,
             TokenType.import_: self.import_stmt,
             TokenType.from_: self.from_import_stmt,
         }
@@ -710,10 +710,10 @@ class Parser:
         }
         def _check_assign_target(node):
             # check if the assign target is valid
-            if not isinstance(node, (Attribute, Identifier, RawScore)):
+            if not isinstance(node, (Attribute, Identifier, RawScore, Result)):
                 self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
 
-        # assignable := attribute | identifier | raw_score
+        # assignable := attribute | identifier | raw_score | result
         if self.current_token.type is TokenType.equal:
             # assign_stmt := assignable EQUAL expr
             self.eat()  # eat equal
@@ -727,9 +727,9 @@ class Parser:
             _check_assign_target(expr)
             node = AugmentedAssign(expr, operator, self.expr(), **pos)
         elif self.current_token.type is TokenType.arrow:
-            # bind_stmt := (attribute | identifier) ARROW expr
+            # bind_stmt := (attribute | identifier | result) ARROW expr
             self.eat()  # eat arrow
-            if not isinstance(expr, (Attribute, Identifier)):
+            if not isinstance(expr, (Attribute, Identifier, Result)):
                 self.error(ErrorType.INVALID_BIND_TARGET)
             right = self.expr()  # get assign value
             node = Binding(expr, right, **pos)

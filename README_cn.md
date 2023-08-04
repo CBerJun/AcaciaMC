@@ -39,10 +39,10 @@ z = foo(x=3)
 def is_prime(x: int) -> bool:
     #* 检测`x`是不是质数 *#
     mod = 2
-    result True
+    result = True
     while mod <= x / 2:
         if x % mod == 0:
-            result False
+            result = False
         mod += 1
 ```
 
@@ -88,7 +88,7 @@ player -> "@p[tag=player]"  # 定义绑定量
 ```
 def sum_between(start: int, to: int, delta=1) -> int:
     #* 返回以`start`为首项，`to`为末项，`delta`为公差的等差数列的和 *#
-    result (start + to) * ((to - start) / delta + 1) / 2
+    result = (start + to) * ((to - start) / delta + 1) / 2
 sum_between(-5, 5, delta=2)
 ```
 

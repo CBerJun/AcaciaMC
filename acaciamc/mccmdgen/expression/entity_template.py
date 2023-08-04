@@ -33,7 +33,7 @@ class _MethodDispatcher:
 
     def register(self, template: "EntityTemplate",
                  implementation: "METHODDEF_T"):
-        res_type = implementation.result_var.data_type
+        res_type = implementation.result_type
         assert isinstance(res_type, Storable)
         if self.result_var is None:
             self.result_var = res_type.new_var()
