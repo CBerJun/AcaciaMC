@@ -3,9 +3,9 @@
 __all__ = ['NoneDataType', 'NoneVar', 'NoneLiteral']
 
 from .base import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 
-class NoneDataType(DefaultDataType):
+class NoneDataType(DefaultDataType, Storable):
     name = 'nonetype'
 
     def __init__(self, compiler):
