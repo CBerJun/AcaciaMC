@@ -176,9 +176,12 @@ class Tokenizer:
         self.current_col = 0
         self.position = 0  # string pointer
         self.buffer_tokens: List[Token] = []
+        self.parens = 0
+        self.braces = 0
         self.prespaces = 0
         self.indent_record: List[int] = [0]
         self.indent_len: int = 1  # always = len(self.indent_record)
+        self.last_token_newline = True  # whether last token is new_line
         self.last_line_continued = False
         self.continued_command: Union[None, CommandToken] = None
         self.continued_comment = False
@@ -216,12 +219,10 @@ class Tokenizer:
             self.buffer_tokens = self.parse_line()
         return self.buffer_tokens.pop(0)
 
-    def is_continued(self) -> bool:
-        return (self.continued_command
-                or self.continued_comment
-                or self.last_line_continued)
+    def is_in_bracket(self) -> bool:
+        return self.parens > 0 or self.braces > 0
 
-    def parse_line(self):
+    def parse_line(self) -> List[Token]:
         """Parse a line."""
         self.current_line = self.src.readline()
         self.line_len = len(self.current_line)
@@ -247,7 +248,10 @@ class Tokenizer:
                 self.forward()
             return token
         # read indent
-        if not self.is_continued():
+        if not (self.continued_command
+                or self.continued_comment
+                or self.last_line_continued
+                or self.is_in_bracket()):
             # Continued lines' indent should be the same as the first
             # line.
             self.prespaces = 0
@@ -318,13 +322,29 @@ class Tokenizer:
                         self.error(ErrorType.INVALID_CHAR,
                                    char=self.current_char)
                     else:
+                        if token_type is TokenType.lparen:
+                            self.parens += 1
+                        elif token_type is TokenType.lbrace:
+                            self.braces += 1
+                        elif token_type is TokenType.rparen:
+                            self.parens -= 1
+                            if self.parens < 0:
+                                self.error(ErrorType.UNMATCHED_PAREN)
+                        elif token_type is TokenType.rbrace:
+                            self.braces -= 1
+                            if self.braces < 0:
+                                self.error(ErrorType.UNMATCHED_BRACE)
                         res.append(_gen_and_forward(token_type, 1))
         # Now self.current_char is either '\n', '\\' or None (EOF)
         has_content = bool(res)
         if self.current_char == '\n':
             if has_content:
-                res.append(_gen_token(TokenType.new_line))
-                if not self.last_line_continued:
+                if not (
+                    self.continued_comment or self.continued_command
+                    or self.is_in_bracket()
+                ):
+                    res.append(_gen_token(TokenType.new_line))
+                if self.last_token_newline:
                     res = self.handle_indent(self.prespaces) + res
             self.last_line_continued = False
         elif self.current_char is None:
@@ -337,6 +357,8 @@ class Tokenizer:
                            self.continued_command.col)
             if self.last_line_continued:
                 self.error(ErrorType.EOF_AFTER_CONTINUATION)
+            if self.is_in_bracket():
+                self.error(ErrorType.UNCLOSED_BRACKET)
             if has_content:
                 res.append(_gen_token(TokenType.new_line))
                 res = self.handle_indent(self.prespaces) + res
@@ -348,9 +370,11 @@ class Tokenizer:
                 if not self.current_char.isspace():
                     self.error(ErrorType.CHAR_AFTER_CONTINUATION)
                 self.forward()
-            if has_content and not self.last_line_continued:
+            if has_content and self.last_token_newline:
                 res = self.handle_indent(self.prespaces) + res
             self.last_line_continued = True
+        if has_content:
+            self.last_token_newline = res[-1].type is TokenType.new_line
         return res
 
     def skip_spaces(self):

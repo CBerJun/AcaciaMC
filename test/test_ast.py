@@ -174,15 +174,15 @@ decimal_test = '''
 '''
 
 multiline_test = '''
-#* mul *# if x:
+ #* mul *# if x:
     #* xx
     g \\
         y
-        *# y \\
-    + z
+        *# (y
+      # xxx
+    + z)
         /*sss ${1}
-sss*/ 5
-'''
+  sss*/ 5'''
 
 array_map_test = '''
 {1, 2, 3}
@@ -194,7 +194,7 @@ array_map_test = '''
 '''
 
 try:
-    test(array_map_test)
+    test(multiline_test)
 except Error as err:
     err.set_file("<testsrc>")
     print("Error:", err)
