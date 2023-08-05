@@ -362,6 +362,9 @@ class Tokenizer:
             if has_content:
                 res.append(_gen_token(TokenType.new_line))
                 res = self.handle_indent(self.prespaces) + res
+            # Create a fake line for cleanup
+            self.current_lineno += 1
+            self.current_col = 0
             res.extend(self.handle_indent(0))  # dump DEDENTs
             res.append(_gen_token(TokenType.end_marker))
         elif self.current_char == '\\':
