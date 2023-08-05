@@ -9,7 +9,7 @@ __all__ = [
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
-    "MapOf",
+    "MapOf", "PlayerSelector",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -456,6 +456,21 @@ class MapOf(Typed):
                 raise
         else:
             return res
+
+class PlayerSelector(Selector):
+    """Accepts an entity or Engroup with player type and converts it
+    to `MCSelector`.
+    """
+    def get_show_name(self) -> str:
+        return super().get_show_name() + " (player type)"
+
+    def convert(self, origin: acacia.AcaciaExpr) -> "MCSelector":
+        selector = super().convert(origin)
+        try:
+            selector.player_type()
+        except ValueError:
+            self.wrong_argument(origin)
+        return selector
 
 ### Parser
 
