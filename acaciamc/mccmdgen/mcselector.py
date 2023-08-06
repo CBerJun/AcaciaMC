@@ -79,6 +79,13 @@ class MCSelector:
             if self.args else ""
         )
 
+    def player_type(self):
+        if self.has_arg("type"):
+            if self.args["type"] not in ("player", "minecraft:player"):
+                raise ValueError
+        else:
+            self.type("player")
+
     def tag(self, *tag: str):
         if not self.has_arg("tag"):
             self.args["tag"] = []
