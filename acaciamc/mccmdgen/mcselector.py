@@ -3,6 +3,7 @@
 __all__ = ["MCSelector", "SELECTORVAR_T"]
 
 from typing import Union, Dict, Any, Optional
+from copy import deepcopy
 
 SELECTORVAR_T = str  # Literal["a", "e", "r", "p", "s", "initiator"]
 
@@ -15,7 +16,7 @@ class MCSelector:
 
     def copy(self) -> "MCSelector":
         res = MCSelector(self.var)
-        res.args = self.args.copy()
+        res.args = deepcopy(self.args)
         return res
 
     def is_var_set(self) -> bool:
