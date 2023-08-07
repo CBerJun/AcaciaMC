@@ -329,7 +329,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             self.entity_type = PLAYER
             return self
         @method_of(self, "has_permission")
-        @versionlib.only(versionlib.newer((1, 19, 80)))
+        @versionlib.only(versionlib.at_least((1, 19, 80)))
         @axe.chop
         @axe.star_arg("permissions", axe.LiteralString())
         @transform_immutable(self)
@@ -340,7 +340,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             self.entity_type = PLAYER
             return self
         @method_of(self, "has_no_permission")
-        @versionlib.only(versionlib.newer((1, 19, 80)))
+        @versionlib.only(versionlib.at_least((1, 19, 80)))
         @axe.chop
         @axe.star_arg("permissions", axe.LiteralString())
         @transform_immutable(self)

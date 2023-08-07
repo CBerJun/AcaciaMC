@@ -4,8 +4,8 @@ __all__ = [
     # Utils
     "only", "format_version",
     # Version requirements
-    "newer", "older", "between",
-    "VersionRequirement", "VersionRanged",
+    "at_least", "at_most", "between", "older",
+    "VersionRequirement",
     # Type checking
     "VERSION_T"
 ]
@@ -58,17 +58,32 @@ class VersionRanged(VersionRequirement):
         assert self.max
         return version <= self.max
 
-def newer(version: VERSION_T) -> VersionRequirement:
-    """Return a version requirement that is later than the given version."""
+class VersionLower(VersionRequirement):
+    def __init__(self, version: VERSION_T) -> None:
+        super().__init__()
+        self.version = version
+
+    def to_str(self) -> str:
+        return "<%s" % format_version(self.version)
+
+    def validate(self, version: VERSION_T) -> bool:
+        return self.version < version
+
+def at_least(version: VERSION_T) -> VersionRequirement:
+    """Requires >= the given version."""
     return VersionRanged(version, None)
 
-def older(version: VERSION_T) -> VersionRequirement:
-    """Return a version requirement that is earlier than the given version."""
+def at_most(version: VERSION_T) -> VersionRequirement:
+    """Requires <= the given version."""
     return VersionRanged(None, version)
 
 def between(min_: VERSION_T, max_: VERSION_T) -> VersionRequirement:
-    """Return a version requirement that is between the given versions."""
+    """Requires between the given versions (inclusive)."""
     return VersionRanged(min_, max_)
+
+def older(version: VERSION_T):
+    """Requires < the given version."""
+    return VersionLower(version)
 
 def only(version: VersionRequirement):
     """Return a decorator that makes the decorated binary function only
