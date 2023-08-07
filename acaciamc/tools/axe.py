@@ -9,7 +9,7 @@ __all__ = [
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
-    "MapOf", "PlayerSelector",
+    "MapOf", "PlayerSelector", "RangedLiteralInt",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -471,6 +471,28 @@ class PlayerSelector(Selector):
         except ValueError:
             self.wrong_argument(origin)
         return selector
+
+class RangedLiteralInt(LiteralInt):
+    """Accepts a literal integer between given range and converts it to
+    Python `int`.
+    """
+    def __init__(self, min_: Optional[int], max_: Optional[int]):
+        super().__init__()
+        if min_ is None:
+            min_ = -float("inf")
+        if max_ is None:
+            max_ = float("inf")
+        self.min = min_
+        self.max = max_
+
+    def get_show_name(self) -> str:
+        return super().get_show_name() + " (%s ~ %s)" % (self.min, self.max)
+
+    def convert(self, origin: acacia.AcaciaExpr) -> int:
+        num = super().convert(origin)
+        if not self.min <= num <= self.max:
+            self.wrong_argument(origin)
+        return num
 
 ### Parser
 
