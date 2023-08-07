@@ -319,15 +319,14 @@ class Music(AcaciaExpr):
             return resultlib.commands(cmds, compiler)
         # Register this to be called every tick
         _res, cmds = register_loop.call(
-            args=(BinaryFunction(_gt_loop, self.compiler),),
+            args=[BinaryFunction(_gt_loop, self.compiler)],
             keywords={}
         )
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
         @method_of(self, "__init__")
-        @axe.chop
-        def _init(compiler):
+        def _init(compiler, args, keywords):
             """.__init__(): Register dependencies"""
             return resultlib.commands(cmds, compiler)
         @method_of(self, "play")
