@@ -117,12 +117,10 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
         @axe.chop
         @axe.arg("type", axe.Nullable(axe.LiteralString()), default=None,
                  rename="type_")
-        @axe.arg("limit", axe.LiteralInt(), default=1)
+        @axe.arg("limit", axe.RangedLiteralInt(1, None), default=1)
         @transform_immutable(self)
         def _random(self: EntityFilter, compiler,
                     type_: Optional[str], limit: int):
-            if limit <= 0:
-                raise axe.ArgumentError("limit", "limit must be positive")
             selector = self.need_set_selector_var("r")
             if self.entity_type is None:
                 if type_ is None:
@@ -156,12 +154,10 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
         @method_of(self, "nearest_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
-        @axe.arg("limit", axe.LiteralInt(), default=1)
+        @axe.arg("limit", axe.RangedLiteralInt(1, None), default=1)
         @transform_immutable(self)
         def _nearest_from(self: EntityFilter, compiler,
                           origin: "Position", limit: int):
-            if limit <= 0:
-                raise axe.ArgumentError("limit", "limit must be positive")
             self.need_set_selector_var("e")
             selector = self.need_set_context(*origin.context)
             selector.limit(limit)
@@ -170,12 +166,10 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
         @method_of(self, "farthest_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
-        @axe.arg("limit", axe.LiteralInt(), default=1)
+        @axe.arg("limit", axe.RangedLiteralInt(1, None), default=1)
         @transform_immutable(self)
         def _farthest_from(self: EntityFilter, compiler,
                            origin: "Position", limit: int):
-            if limit <= 0:
-                raise axe.ArgumentError("limit", "limit must be positive")
             self.need_set_selector_var("e")
             selector = self.need_set_context(*origin.context)
             selector.limit(-limit)

@@ -132,15 +132,13 @@ class Task(AcaciaExpr):
         @method_of(self, "on_circle_loaded")
         @axe.chop
         @axe.arg("origin", PosDataType)
-        @axe.arg("radius", axe.LiteralInt())
+        @axe.arg("radius", axe.LiteralInt(0, None))
         def _on_circle_loaded(compiler, origin: Position, radius: int):
             """
             .on_circle_loaded(origin: Pos, radius: int-literal)
             Run function when the given circle with `origin` as origin
             and `radius` as radius (chunks) is loaded.
             """
-            if radius < 0:
-                raise axe.ArgumentError("radius", "can't be negative")
             return resultlib.commands([export_execute_subcommands(
                 origin.context,
                 "schedule on_area_loaded add circle ~ ~ ~ %d %s" % (

@@ -164,10 +164,8 @@ class Array(AcaciaExpr, ImmutableMixin):
                 return cls._impl(compiler, start, stop, step)
         @method_of(self, "cycle")
         @axe.chop
-        @axe.arg("times", axe.LiteralInt())
+        @axe.arg("times", axe.RangedLiteralInt(0, None))
         def _cycle(compiler, times: int):
-            if times < 0:
-                raise axe.ArgumentError("times", "can't be negative")
             return Array(self.items * times, compiler)
 
     def copy(self) -> "Array":

@@ -50,7 +50,7 @@ class MusicType(Type):
         @axe.arg("execute_condition", axe.LiteralString(),
                  default="as @a at @s")
         @axe.arg("note_offset", axe.LiteralInt(), default=0)
-        @axe.arg("chunk_size", axe.LiteralInt(), default=500)
+        @axe.arg("chunk_size", axe.RangedLiteralInt(1, None), default=500)
         @axe.arg("speed", axe.LiteralFloat(), default=1.0)
         @axe.arg("volume", axe.LiteralFloat(), default=1.0)
         def _new(compiler, path: str, looping: bool, loop_interval: int,
@@ -60,8 +60,6 @@ class MusicType(Type):
                 midi = mido.MidiFile(path)
             except Exception as err:
                 raise Error(ErrorType.IO, message="MIDI parser: %s" % err)
-            if chunk_size <= 0:
-                raise axe.ArgumentError("chunk_size", "must be positive")
             if speed <= 0:
                 raise axe.ArgumentError("speed", "must be positive")
             if volume <= 0:
@@ -425,7 +423,7 @@ class Music(AcaciaExpr):
         self.cur_chunk_size += 1
 
 @axe.chop
-@axe.arg("id", axe.LiteralInt(), rename="id_")
+@axe.arg("id", axe.RangedLiteralInt(1, 127), rename="id_")
 @axe.arg("sound", axe.LiteralString())
 def _set_instrument(compiler, id_: int, sound: str):
     """
@@ -438,12 +436,10 @@ def _set_instrument(compiler, id_: int, sound: str):
         # Set MC sound of ID 127 instrument to `note.hat`
         music.set_instrument(127, "note.hat")
     """
-    if id_ >= 128 or id_ < 0:
-        raise axe.ArgumentError('id', 'must in 0~127')
     Music.ID2INSTRUMENT[id_] = sound
 
 @axe.chop
-@axe.arg("channel", axe.LiteralInt())
+@axe.arg("channel", axe.RangedLiteralInt(0, 15))
 @axe.arg("volume", axe.LiteralFloat())
 def _channel_volume(compiler, channel: int, volume: float):
     """
@@ -451,8 +447,6 @@ def _channel_volume(compiler, channel: int, volume: float):
 
     Modify volume of specified channel.
     """
-    if channel >= 16 or channel < 0:
-        raise axe.ArgumentError('channel', 'must in 0~15')
     if volume < 0:
         raise axe.ArgumentError('volume', "can't be negative")
     Music.CHANNEL_VOLUME[channel] = volume
