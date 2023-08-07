@@ -1,5 +1,5 @@
 """
-`schedule` is an Acacia module for running something after a period of time.
+schedule - Working through game ticks
 
 The `Task` object stands for a task manager.
 e.g.
@@ -13,13 +13,18 @@ e.g.
 result:
     Start
     [1 second (20 ticks) later]
-    Foo called 10
+    Foo called with arg 10
 Note that, when 1 request is already sent using `after` and the function
 is not called yet (within 20 ticks in this example), and another `after`
 request is sent, the first one is overrided.
 `task.has_schedule` returns whether a request already exists.
-`task.timer` (int) shows how many ticks left before the target called and
-is -1 when no request exists.
+`task._timer` (int) shows how many ticks left before the target called
+and is -1 when no request exists.
+
+`Task`s can be registered to be called when a certain area of world is
+loaded (`task.on_area_loaded`, `task.on_circle_loaded`,
+`task.on_tickingarea`). Note these schedules cannot be canceled and
+are not tracked by `task.has_schedule`.
 
 `register_loop` register a function to be called repeatedly.
 e.g.
@@ -41,6 +46,7 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.ast import Operator
 from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.mccmdgen.generator import MCFunctionFile
 
 class TaskDataType(DefaultDataType):
     name = "Task"
@@ -73,7 +79,11 @@ class Task(AcaciaExpr):
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
         self.timer = IntDataType(compiler).new_var()
-        self._target_args, self._target_keywords = [], {}
+        # Allocate a file to call the given function
+        self.target_file = MCFunctionFile()
+        self.compiler.add_file(self.target_file)
+        _res, cmds = target.call(other_arg, other_kw)
+        self.target_file.extend(cmds)
         def _timer_reset():
             cmds = IntLiteral(-1, compiler).export(self.timer)
             return resultlib.commands(cmds, compiler)
@@ -87,7 +97,7 @@ class Task(AcaciaExpr):
         @method_of(self, "cancel")
         @axe.chop
         def _cancel(compiler):
-            """.cancel(): Cancel the schedule"""
+            """.cancel(): Cancel the schedule created by `after`."""
             return _timer_reset()
         @method_of(self, "__init__")
         def _init(compiler, args, keywords):
@@ -95,21 +105,68 @@ class Task(AcaciaExpr):
         @method_of(self, "has_schedule")
         @axe.chop
         def _has_schedule(compiler):
-            """.has_schedule() -> bool: Get whether a schedule exists"""
+            """
+            .has_schedule() -> bool
+            Whether a schedule created by `after` is in progress.
+            """
             # Just return whether timer >= 0
             return BoolCompare(
                 self.timer, Operator.greater_equal, IntLiteral(0, compiler),
                 compiler
             )
+        @method_of(self, "on_area_loaded")
+        @axe.chop
+        @axe.arg("origin", PosDataType)
+        @axe.arg("offset", PosOffsetDataType)
+        def _on_area_loaded(compiler, origin: Position, offset: PosOffset):
+            """
+            .on_area_loaded(origin: Pos, offset: Offset)
+            Run function when the given area is loaded.
+            """
+            return resultlib.commands([export_execute_subcommands(
+                origin.context,
+                "schedule on_area_loaded add ~ ~ ~ %s %s" % (
+                    offset, self.target_file.get_path()
+                )
+            )], compiler)
+        @method_of(self, "on_circle_loaded")
+        @axe.chop
+        @axe.arg("origin", PosDataType)
+        @axe.arg("radius", axe.LiteralInt())
+        def _on_circle_loaded(compiler, origin: Position, radius: int):
+            """
+            .on_circle_loaded(origin: Pos, radius: int-literal)
+            Run function when the given circle with `origin` as origin
+            and `radius` as radius (chunks) is loaded.
+            """
+            if radius < 0:
+                raise axe.ArgumentError("radius", "can't be negative")
+            return resultlib.commands([export_execute_subcommands(
+                origin.context,
+                "schedule on_area_loaded add circle ~ ~ ~ %d %s" % (
+                    radius, self.target_file.get_path()
+                )
+            )], compiler)
+        @method_of(self, "on_tickingarea")
+        @axe.chop
+        @axe.arg("name", axe.LiteralString())
+        def _on_tickingarea(compiler, name: str):
+            """
+            .on_tickingarea(name: str)
+            Run function when the given ticking area is added.
+            """
+            return resultlib.commands([
+                "schedule on_area_loaded add tickingarea %s %s"
+                % (name, self.target_file.get_path())
+            ], compiler)
         self.attribute_table.set("_timer", self.timer)
         # Write tick.mcfunction
         self.compiler.file_tick.write_debug("# schedule.Task")
-        _res, cmds = target.call(other_arg, other_kw)
-        self.compiler.file_tick.extend(
+        self.compiler.file_tick.write(
             export_execute_subcommands(
-                ["if score %s matches 0" % self.timer], main=cmd
+                ["if score %s matches 0" % self.timer],
+                main=self.target_file.call()
             )
-            for cmd in cmds
         )
         # Let the timer -1
         self.compiler.file_tick.extend(

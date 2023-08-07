@@ -27,6 +27,7 @@ def foo():
     x += 1
 task -> schedule.Task(foo)
 task.after(20)
+task.on_tickingarea("Area")
 
 def foo2(n: int):
     x += n
