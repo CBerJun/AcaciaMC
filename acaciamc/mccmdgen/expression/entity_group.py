@@ -56,8 +56,8 @@ class EGroupDataType(Storable):
         return (isinstance(other, EGroupDataType) and
                 other.template.is_subtemplate_of(self.template))
 
-    def new_var(self, template: "EntityTemplate", tmp=False):
-        var = EntityGroup(template, self.compiler)
+    def new_var(self, tmp=False):
+        var = EntityGroup(self.template, self.compiler)
         if tmp:
             self.compiler.add_tmp_entity(var)
         return var
