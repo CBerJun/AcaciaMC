@@ -132,7 +132,7 @@ class Task(AcaciaExpr):
         @method_of(self, "on_circle_loaded")
         @axe.chop
         @axe.arg("origin", PosDataType)
-        @axe.arg("radius", axe.LiteralInt(0, None))
+        @axe.arg("radius", axe.RangedLiteralInt(0, None))
         def _on_circle_loaded(compiler, origin: Position, radius: int):
             """
             .on_circle_loaded(origin: Pos, radius: int-literal)
