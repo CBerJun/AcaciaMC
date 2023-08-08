@@ -239,10 +239,11 @@ is_entity(ent: entity, filter: Enfilter) -> bool
 """
 
 from typing import Dict, Callable, List, Union, Optional, TYPE_CHECKING
+import json
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.tools import axe, resultlib, versionlib, method_of
+from acaciamc.tools import axe, resultlib, method_of
 from acaciamc.constants import Config
 
 if TYPE_CHECKING:
@@ -301,7 +302,7 @@ class Item(AcaciaExpr):
 
     def to_str(self, fmt: str) -> str:
         return fmt.format(id=self.id, data=self.data,
-                          components=self.components)
+                          components=json.dumps(self.components))
 
 class BlockDataType(DefaultDataType):
     name = "Block"
