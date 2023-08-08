@@ -174,6 +174,9 @@ class Array(AcaciaExpr, ImmutableMixin):
     def iterate(self) -> ITERLIST_T:
         return self.items
 
+    def map_hash(self):
+        return tuple(x.map_hash() for x in self.items)
+
     def __add__(self, other):
         if isinstance(other, Array):
             return Array(self.items + other.items, self.compiler)
