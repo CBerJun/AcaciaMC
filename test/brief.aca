@@ -7,7 +7,7 @@
  * No third-party Python package is needed.
  * Compile this (i.e. turn it into MC behavior pack functions) with:
  *   cd path/to/acacia
- *   python main.py -d test/brief.aca
+ *   python acacia.py -d test/brief.aca
  * "-d" is to show the debugging comments in output files.
  *#
 
