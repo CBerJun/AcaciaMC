@@ -467,7 +467,7 @@ def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     return res.not_()
 
 # Utils
-def to_BoolVar(expr: AcaciaExpr) -> Tuple[List[str], BoolVar]:
+def to_BoolVar(expr: AcaciaExpr, tmp=True) -> Tuple[List[str], BoolVar]:
     """Convert any boolean expression to a `BoolVar` and some commands.
     return[0]: the commands to run
     return[1]: the `BoolVar`
@@ -475,5 +475,5 @@ def to_BoolVar(expr: AcaciaExpr) -> Tuple[List[str], BoolVar]:
     if isinstance(expr, BoolVar):
         return [], expr
     else:
-        tmp = expr.data_type.new_var(tmp=True)
+        tmp = expr.data_type.new_var(tmp=tmp)
         return expr.export(tmp), tmp

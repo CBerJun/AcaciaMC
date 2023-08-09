@@ -446,7 +446,7 @@ class IntOpGroup(AcaciaExpr):
         return self._r_sub_div_mod(other, '__mod__')
 
 # Utils
-def to_IntVar(expr: AcaciaExpr) -> Tuple[List[str], IntVar]:
+def to_IntVar(expr: AcaciaExpr, tmp=True) -> Tuple[List[str], IntVar]:
     """Convert any integer expression to a `IntVar` and some commands.
     return[0]: the commands to run
     return[1]: the `IntVar`
@@ -454,5 +454,5 @@ def to_IntVar(expr: AcaciaExpr) -> Tuple[List[str], IntVar]:
     if isinstance(expr, IntVar):
         return [], expr
     else:
-        tmp = expr.data_type.new_var(tmp=True)
+        tmp = expr.data_type.new_var(tmp=tmp)
         return expr.export(tmp), tmp

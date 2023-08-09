@@ -370,7 +370,7 @@ class Generator(ASTVisitor):
             for stmt in run_node:
                 self.visit(stmt)
             return
-        dependencies, condition = to_BoolVar(condition)
+        dependencies, condition = to_BoolVar(condition, tmp=False)
         self.current_file.extend(dependencies)
         # process body
         with self.new_mcfunc_file() as body_file:
@@ -410,7 +410,7 @@ class Generator(ASTVisitor):
             else:
                 self.error_c(ErrorType.ENDLESS_WHILE_LOOP)
         # convert condition to BoolVar
-        dependencies, condition = to_BoolVar(condition)
+        dependencies, condition = to_BoolVar(condition, tmp=False)
         # body
         with self.new_mcfunc_file() as body_file:
             self.write_debug('While definition')
