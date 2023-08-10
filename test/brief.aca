@@ -45,8 +45,8 @@ while x > 0:
     sum += x
     x -= 1
 # Sum up numbers from 1 to `x`
-# IMPORTANT NOTICE: Loops are implemented through recursion, which runs
-# a lot of commands. Minecraft limits the amount of commands that one
+# Note that: Loops are implemented through recursion, which runs a lot
+# of commands. Minecraft limits the amount of commands that one
 # function could trigger to 10000. Be careful when using loops.
 
 ## For-in structure & compile time array
@@ -71,7 +71,11 @@ y_length = 23
 for i in array.geometric(1, ratio=2, times=5).reverse():
     if y_length >= i:
         y_length -= i
-        /execute as CBerJun run tp @s ~ ~${i} ~
+        # Lines starting with "/" runs a raw command. "${i}" is a
+        # substitution. (Acacia provides interface to implement this
+        # without writing a raw command yourself, but so far let's just
+        # use this command.)
+        /execute as CBerJun at @s run tp @s ~ ~${i} ~
 # `slice` method works the same as Python's slice (start, stop, step)
 # and array.range(10) creates {0, 1, 2, ..., 8, 9}.
 for i in array.range(10).slice(2, None, 2):
@@ -84,10 +88,15 @@ for i in array.repeat(x, 10):
 #* Compile-time map *#
 # Map is similar to array since it is compile time only.
 # Its keys can only be several literal types (e.g. int literal or
-# string).
-mp -> {0: "zero", 1: "one", 2: "two", 3: "three"}
-for i in array.range(4):
-    /say ${mp.get(i)}
+# string). Using for-in on maps will iterate through its keys.
+mp -> {
+    0: "zero", 1: "one",
+    2: "two", 3: "three"
+}
+i = 0  # calculate `i`...
+for num in mp:
+    if i == num:
+        /say ${mp.get(num)}
 
 #* Great builtin modules! *#
 #*
@@ -106,6 +115,144 @@ print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
 # Introduction to other builtin modules can be found in test/module.aca
 # Not only these modules written in Python are supported, Acacia code
 # can be imported by other Acacia programs. See test/module.aca
+
+#* Super support to interact with the Minecraft world!!! *#
+## `world` module
+# The builtin `world` module contains interfaces to interact with the
+# Minecraft world. We'll use it later.
+import world
+# Plese see acaciamc/modules/world.py for everything it can do.
+
+## `entity` and entity template
+# `entity` is an Acacia type that represents *exactly one* entity.
+# A Minecraft `entity` can have a lot of meanings -- a dummy to store
+# position, a character that interacts with player or even a piece of
+# custom data. Therefore, Acacia has an "entity template" system. Each
+# entity has its template, just like each variable has its type.
+# Entities of the same template has same meaning.
+# Create an entity template with "entity" keyword:
+entity Test:
+    # Set type of entities of Test template to armor stand.
+    @type: "armor_stand"
+    # Set position to summon entities of Test template to 10, -50, 10.
+    # (We'll explain Pos later.)
+    @position: Pos(10, -50, 10)
+    # Functions inside an entity template are called "methods". They
+    # are the actions that can be done on this kind of entities.
+    # You can "call the method of a specific entity".
+    # When an entity is summoned, system will "call the __init__
+    # method of this entity".
+    def __init__():
+        # `self` inside a method refers to "the specific entity"
+        # mentioned above.
+        # This statement gives `self` invisibility buff for 600 ticks.
+        world.effect_give(self, "invisibility", duration=600)
+# Now we have created a template whose entities are of armor stand type
+# and will become invisible when summoned.
+# Summon an entity of Test template:
+test_entity = Test()
+# You can define a template that "extends" another template:
+entity Subtemplate extends Test:
+    def __init__():
+        # Call __init__ defined in Test:
+        Test@self.__init__()
+        # Then do extra things added by this template:
+        print.tell("It's Subtemplate here!")
+# This creates a template that prints a message in chat when any entity
+# of this template is summoned. Plus, it has all the behaviors of Test
+# template. We say that Test is Subtemplate's base.
+# You can assign entity variables of Subtemplate template to those of
+# Test template, but it doesn't work when reversing them.
+test_entity = Subtemplate()
+# A function can take arguments of entity type and the template can be
+# specified:
+def kill(test: entity(Test)):
+    world.msg_say(test, "I'm killed")  # Shout "I'm killed"
+    world.kill(test)  # Kill the entity
+kill(test_entity)  # Remember Subtemplate is compatible with Test?
+# `Object` is the base of all templates and omitting template in type
+# specifier will default template to `Object`.
+# To advance users: entity templates even support method overloading!
+# Though this might not be that useful in Minecraft...
+
+## Entity group and entity filter
+# Suppose we want to track players in a mini game, all players have
+# their own score and we want to track all of them.
+# First define a template:
+entity Player:
+    # `score` is "attribute" of entities of this template.
+    # All Player entities have their own score separated.
+    score: int
+
+    def show_score():
+        #* Show the player score. *#
+        print.title(
+            # `self.score` gets the value of score attribute from this
+            # entity.
+            print.format("Your score: %0", self.score),
+            self, mode=print.ACTIONBAR
+        )
+# As mentioned above, entity only represents one single entity, While
+# entity group represents a group of entity and there can be zero or
+# hundreds of entities inside this group. Entity groups also have their
+# template, which is the template that entities inside this group use.
+# Create a group of Player:
+player_group = Engroup(Player)
+# You can select some existing entities using entity filter:
+player_group.select(
+    Enfilter().is_type("player").distance_from(Pos(0, 0, 0), max=5)
+)
+# Now `player_group` contains all players whose distance from 0, 0, 0 is
+# no more than 5 blocks. Everything in selector can be found in
+# `Enfilter`.
+# Use for-entity to iterate over all entities inside this group:
+for entity player in player_group:
+    player.score += 1
+# Now all players inside the `player_group` got their score plus 1.
+# This removes players whose score is lower than 10 out of group:
+for entity player in player_group:
+    if player.score < 10:
+        player_group.remove(player)
+# Most of functions in `world` module accepts both single entity and an
+# entity group. This moves entities in `player_group` 2 blocks lower:
+world.move(player_group, y=-2)
+# Type annotation of entity groups are special:
+def diamonds(e: Engroup.t(Player)):
+    pass
+# A bare `Engroup` is equivalent to `Engroup.t(Object)`.
+
+## Position and rotation
+# Position and rotation are pretty simple.
+Pos(10, 10.5, 10)  # absolute position 10, 10.5, 10
+pos -> Pos(test_entity)  # position of test entity
+pos -> pos.offset(y=-5)  # 5 blocks under test entity
+# Move `pos` by 3 blocks in the (xrot=90, yrot=0) direction.
+pos -> pos.local(Rot(90, 0), front=3)
+# Move `pos` towards test entity by 2 blocks
+pos -> pos.local(Rot.face_entity(test_entity), front=2)
+pos -> pos.dim("the_end")  # convert `pos` to position in The End
+# Now let's place a yellow concrete at `pos`:
+world.setblock(pos, world.Block("concrete", {"color": "yellow"}))
+# See it? In command you will have to dabble with /execute context and
+# in Acacia everything about position is in the `Pos` type.
+
+## `Offset`
+# `Pos` is suitable most of the time, but due to the design of command,
+# we can't use Acacia's position everywhere. For example:
+#   world.fill(pos1, pos2, some_block)
+# This gets compiled to /fill command. If pos1 and pos2 are all Pos,
+# their /execute environment might conflict. For example:
+#   world.fill(Pos(entity1), Pos(entity2), some_block)
+# This is hard to accomplish with command.
+# Therefore, the real `world.fill` accepts an `Offset` as pos2, it is
+# an offset related to pos1.
+# This fills 10, 10, 10 to 20, 20, 20 with air:
+world.fill(Pos(10, 10, 10), Offset().abs(20, 20, 20), world.Block("air"))
+# This does the same thing:
+world.fill(Pos(10, 10, 10), Offset().offset(+10, +10, +10), world.Block("air"))
+# Absolute position and relative offset can mix in `Offset`:
+world.fill(Pos(10, 10, 10), Offset().offset(x=+10, z=+10).abs(y=20),
+           world.Block("air"))
 
 #* Functions *#
 # Type of argument or its default value must be specified
@@ -162,6 +309,25 @@ inline def prefix_str(s):
     #* Prefix given string `s` with "I like ". *#
     result -> "I like " + s
 my_print(prefix_str("CB!"))  # Acacia: I like CB!
+
+#* Structs *#
+# Structs are combination of data. It allows you to create custom
+# data types.
+# Create a struct:
+struct Struct:
+    # Custom data type `Struct`
+    i: int
+    b: bool
+# Create a variable of this custom data type:
+test_struct = Struct()
+# Setting the members inside this struct:
+test_struct.i = 10
+test_struct.b = test_struct.i < 5
+# This is useful when a function's result has multiple values:
+def result_struct(i: int) -> Struct:
+    # You can specify initial values of struct members:
+    result = Struct(i=i, b=i<5)
+test_struct = result_struct(10)
 
 #* Exported interfaces *#
 # These interfaces are exported for later use in Minecraft
