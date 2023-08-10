@@ -107,9 +107,12 @@ for num in mp:
 # To indicate that you are using `print` module
 import print
 # Tell all players "Hello world!"
-print.tell("Hello world!", "@a")
-# Show title "Chapter I" on the nearest player's screen, for 10 seconds
-print.title("Chapter I", "@p", stay_time=200)
+print.tell("Hello world!")
+# Show title "Chapter I" on a random player's screen, for 10 seconds
+# (We'll talk about Engroup later.)
+group -> Engroup()
+group.select(Enfilter().random("player", limit=1))
+print.title("Chapter I", group, stay_time=200)
 # Show everyone the value of `x` in the form "Value of X: ..." above actionbar
 print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
 # Introduction to other builtin modules can be found in test/module.aca

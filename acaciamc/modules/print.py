@@ -1,6 +1,6 @@
 """print - String formatting and printing module."""
 
-from typing import List, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 from copy import deepcopy
 import json
 
@@ -11,6 +11,7 @@ from acaciamc.tools import axe, resultlib, method_of
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.mcselector import MCSelector
 
 class ArgFString(axe.Multityped):
     """Accepts an fstring as argument. A string is also accepted and
@@ -248,20 +249,18 @@ class FString(AcaciaExpr):
 
 @axe.chop
 @axe.arg("text", ArgFString())
-@axe.arg("target", axe.LiteralString(), default="@a")
-def _tell(compiler, text: FString, target: str):
-    """tell(text: str | fstring, target: str = "@a")
+@axe.arg("target", axe.PlayerSelector(), default=None)
+def _tell(compiler, text: FString, target: Optional["MCSelector"]):
+    """tell(text: str | fstring, target: PlayerSelector = <All players>)
     Tell the `target` the `text` using /tellraw.
     """
     cmds = []
-    # Convert str to fstring
-    if isinstance(text, String):
-        text, _cmds = compiler.types[FStringType].call(
-            args=[text], keywords={}
-        )
-        cmds.extend(_cmds)
+    if target is None:
+        target_str = "@a"
+    else:
+        target_str = target.to_str()
     cmds.extend(text.dependencies)
-    cmds.append('tellraw %s %s' % (target, text.export_json_str()))
+    cmds.append('tellraw %s %s' % (target_str, text.export_json_str()))
     return resultlib.commands(cmds, compiler)
 
 # Title modes
@@ -276,16 +275,16 @@ _DEF_TITLE_CONFIG = (_FADE_IN, _STAY_TIME, _FADE_OUT)
 
 @axe.chop
 @axe.arg("text", ArgFString())
-@axe.arg("target", axe.LiteralString(), default="@a")
+@axe.arg("target", axe.PlayerSelector(), default=None)
 @axe.arg("mode", axe.LiteralString(), default=_TITLE)
 @axe.arg("fade_in", axe.LiteralInt(), default=_FADE_IN)
 @axe.arg("stay_time", axe.LiteralInt(), default=_STAY_TIME)
 @axe.arg("fade_out", axe.LiteralInt(), default=_FADE_OUT)
-def _title(compiler, text: FString, target: str, mode: str,
+def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
            fade_in: int, stay_time: int, fade_out: int):
     """title(
         text: str | fstring,
-        target: str = "@a",
+        target: PlayerSelector = <All players>,
         mode: str = TITLE,
         fade_in: int-literal = 10,
         stay_time: int-literal = 70,
@@ -298,31 +297,39 @@ def _title(compiler, text: FString, target: str, mode: str,
     # Check valid mode
     if mode not in (_TITLE, _SUBTITLE, _ACTIONBAR):
         raise axe.ArgumentError('mode', 'invalid mode: %s' % mode)
+    if target is None:
+        target_str = "@a"
+    else:
+        target_str = target.to_str()
     # Start
     ## set config
     conf = (fade_in, stay_time, fade_out)
     if conf != _DEF_TITLE_CONFIG:
         # only set config when it's not the default one
-        cmds.append('titleraw %s times %d %d %d' % ((target,) + conf))
+        cmds.append('titleraw %s times %d %d %d' % (target_str, *conf))
     ## titleraw
     cmds.extend(text.dependencies)
     cmds.append('titleraw %s %s %s' % (
-        target, mode, text.export_json_str()
+        target_str, mode, text.export_json_str()
     ))
     ## reset config
     if conf != _DEF_TITLE_CONFIG:
         # only reset when config is not the default one
-        cmds.append('titleraw %s reset' % target)
+        cmds.append('titleraw %s reset' % target_str)
     ## return
     return resultlib.commands(cmds, compiler)
 
 @axe.chop
-@axe.arg("target", axe.LiteralString(), default="@a")
-def _title_clear(compiler, target: str):
-    """title_clear(target: str = "@a")
+@axe.arg("target", axe.PlayerSelector(), default=None)
+def _title_clear(compiler, target: Optional["MCSelector"]):
+    """title_clear(target: PlayerSelector = <All players>)
     Clear `target`'s title text.
     """
-    return resultlib.commands(['titleraw %s clear' % target], compiler)
+    if target is None:
+        target_str = "@a"
+    else:
+        target_str = target.to_str()
+    return resultlib.commands(['titleraw %s clear' % target_str], compiler)
 
 def acacia_build(compiler: "Compiler"):
     return {

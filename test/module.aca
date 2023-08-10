@@ -13,10 +13,11 @@ fs1 -> print.format("ab%1cd%%%{a}%x%{0}", x, y, a=1)
 print.tell(fs1)
 fs2 -> print.format("an%0", x)
 s -> "some string"
-print.tell(print.format("fs1: %0, fs2: %1, s: " + s, fs1, fs2), "@p")
+player -> Engroup().select(Enfilter().distance_from(Pos(10, 10, 10), max=2))
+print.tell(print.format("fs1: %0, fs2: %1, s: " + s, fs1, fs2), player)
 print.title(fs2)
-print.title(s, target="@p", mode=print.ACTIONBAR, stay_time=100)
-print.title_clear("@p")
+print.title(s, target=player, mode=print.ACTIONBAR, stay_time=100)
+print.title_clear(player)
 # Localization keys
 print.tell(print.format("Give me 10 %k0", "item.diamond.name"))
 

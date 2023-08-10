@@ -11,8 +11,7 @@ import schedule
 MAX_ANSWER -> 999  # the last digit should be 9
 answer = 0
 guess = 0
-TAG -> "num_guess"  # the tag used to identify player
-PLAYER -> "@p[tag=" + TAG + "]"
+player -> Engroup()
 
 interface input:
     # Input 1 digit
@@ -30,32 +29,32 @@ interface delete:
 interface commit:
     # Commit user's guess
     if guess == answer:
-        print.title("You win!", PLAYER)
-        print.title( \
-            print.format("The answer is %0", answer), \
-            PLAYER, print.SUBTITLE \
+        print.title("You win!", player)
+        print.title(
+            print.format("The answer is %0", answer),
+            player, print.SUBTITLE
         )
-        /tag ${PLAYER} remove ${TAG}
+        player.clear()
     elif guess > answer:
-        print.title("Too large", PLAYER)
+        print.title("Too large", player)
     else:
-        print.title("Too small", PLAYER)
+        print.title("Too small", player)
 
 interface start:
     # Start the game
     answer = math.randint(1, MAX_ANSWER)
     guess = 0
-    /tag @p add ${TAG}
-    print.title("Guess the Number", PLAYER)
-    print.title( \
-        print.format("Guess a number between 1~%0", MAX_ANSWER), \
-        PLAYER, print.SUBTITLE \
+    player.select(Enfilter().all_players())
+    print.title("Guess the Number", player)
+    print.title(
+        print.format("Guess a number between 1~%0", MAX_ANSWER),
+        player, print.SUBTITLE
     )
 
 def show_guess():
     # Show users the number they input
-    print.title( \
-        print.format("Your guess: %0", guess), \
-        PLAYER, print.ACTIONBAR \
+    print.title(
+        print.format("Your guess: %0", guess),
+        player, print.ACTIONBAR
     )
 schedule.register_loop(show_guess)
