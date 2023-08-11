@@ -1,0 +1,433 @@
+#*
+ * Tetris Game in Minecraft!
+ *
+ * Features:
+ *   7 pieces; a simple rotation system; left, right control
+ *
+ * Compile with:
+ *   cd path/to/acacia
+ *   python acacia.py test/demo/tetris.aca
+ * Create a super flat world, load the generated behavior pack
+ * and type in chat:
+ *   /function acacia/init
+ *   /function acacia/load
+ * (Above 2 only need to be ran once, the following command will start
+ * or restart the game.)
+ *   /function acacia/interface/start
+ * Everything will be set up by Acacia!
+ * Press A to go left, D to go right, W to rotate.
+ *#
+
+import schedule
+import print
+import math
+import world
+
+UPDATE_INTERVAL -> 8  # ticks
+WIDTH -> 10
+HEIGHT -> 20
+ORIGIN -> {0, -50, 0}
+ORIGIN_POS -> Pos(ORIGIN.get(0), ORIGIN.get(1), ORIGIN.get(2))
+BLOCK_EMPTY -> world.Block("concrete", {"color": "black"})
+PLAYER_POS -> Pos(
+    # +0.5 in X and Z because player should be in middle of a block
+    ORIGIN.get(0) + WIDTH / 2 + 0.5,
+    ORIGIN.get(1) + 20,
+    ORIGIN.get(2) + HEIGHT / 2 + 0.5
+)
+
+SHAPE_I -> 0
+SHAPE_L -> 1
+SHAPE_O -> 2
+SHAPE_T -> 3
+SHAPE_S -> 4
+SHAPE_Z -> 5
+SHAPE_J -> 6
+
+ROT_NONE -> 0
+ROT_CLOCKWISE -> 1
+ROT_180 -> 2
+ROT_CCLOCKWISE -> 3
+
+SHAPE_COLORS -> {
+    SHAPE_I: "cyan",
+    SHAPE_L: "orange",
+    SHAPE_O: "yellow",
+    SHAPE_T: "purple",
+    SHAPE_S: "lime",
+    SHAPE_Z: "red",
+    SHAPE_J: "blue"
+}
+SHAPE_SIZES -> {
+    # width, height (when not rotated)
+    SHAPE_I: {4, 1},
+    SHAPE_L: {3, 2},
+    SHAPE_O: {2, 2},
+    SHAPE_T: {3, 2},
+    SHAPE_S: {3, 2},
+    SHAPE_Z: {3, 2},
+    SHAPE_J: {3, 2}
+}
+SHAPE_ROTATE_MOVE -> {
+    # (Shapes not in this array does not move when rotated)
+    {SHAPE_I}: {  # 1x4
+        ROT_NONE: {+2, -1}, ROT_CLOCKWISE: {-2, +2},
+        ROT_180: {+1, -2}, ROT_CCLOCKWISE: {-1, +1}
+    },
+    {SHAPE_L, SHAPE_J, SHAPE_T, SHAPE_S, SHAPE_Z}: {  # 2x3
+        ROT_NONE: {+1, 0}, ROT_CLOCKWISE: {-1, +1},
+        ROT_180: {0, -1}, ROT_CCLOCKWISE: {0, 0}
+    }
+}
+SHAPE_PATTERNS_360 -> {
+    SHAPE_L: {
+        ROT_NONE: {{0, 1}, {1, 1}, {2, 1}, {2, 0}},
+        ROT_CLOCKWISE: {{0, 0}, {0, 1}, {0, 2}, {1, 2}},
+        ROT_180: {{0, 0}, {1, 0}, {2, 0}, {0, 1}},
+        ROT_CCLOCKWISE: {{0, 0}, {1, 0}, {1, 1}, {1, 2}}
+    },
+    SHAPE_T: {
+        ROT_NONE: {{0, 1}, {1, 1}, {2, 1}, {1, 0}},
+        ROT_CLOCKWISE: {{0, 0}, {0, 1}, {0, 2}, {1, 1}},
+        ROT_180: {{0, 0}, {1, 0}, {2, 0}, {1, 1}},
+        ROT_CCLOCKWISE: {{1, 0}, {1, 1}, {1, 2}, {0, 1}},
+    },
+    SHAPE_J: {
+        ROT_NONE: {{0, 0}, {0, 1}, {1, 1}, {2, 1}},
+        ROT_CLOCKWISE: {{0, 0}, {1, 0}, {0, 1}, {0, 2}},
+        ROT_180: {{0, 0}, {1, 0}, {2, 0}, {2, 1}},
+        ROT_CCLOCKWISE: {{1, 0}, {1, 1}, {1, 2}, {0, 2}}
+    }
+}
+SHAPE_PATTERNS_180 -> {
+    SHAPE_S: {
+        {{0, 1}, {1, 1}, {1, 0}, {2, 0}},  # no rotation
+        {{0, 0}, {0, 1}, {1, 1}, {1, 2}},  # 90 degrees
+    },
+    SHAPE_Z: {
+        {{0, 0}, {1, 0}, {1, 1}, {2, 1}},
+        {{1, 0}, {1, 1}, {0, 1}, {0, 2}}
+    },
+    SHAPE_I: {
+        {{0, 0}, {1, 0}, {2, 0}, {3, 0}},
+        {{0, 0}, {0, 1}, {0, 2}, {0, 3}}
+    }
+}
+SHAPE_PATTERNS_90 -> {
+    SHAPE_O: {{0, 0}, {0, 1}, {1, 1}, {1, 0}}
+}
+
+struct Size:
+    height: int
+    width: int
+
+entity PosDummy:
+    #* Dummy entity that just represnts a position. *#
+    @type: "armor_stand"
+    @position: ORIGIN_POS
+
+    def __init__():
+        world.effect_give(
+            self, "invisibility", duration=int.MAX, particle=False
+        )
+
+shape_row = 0
+shape_col = 0
+shape_type = -1
+shape_rotation = ROT_NONE
+running = False
+score = 0
+player_group -> Engroup()
+dummy_group -> Engroup(PosDummy)
+
+def get_dummy() -> entity(PosDummy):
+    #*
+    Get the dummy entity which only exists when game is running.
+    We should have `dummy_group.size() == 1 and running`.
+    *#
+    result = dummy_group.to_single()
+
+def get_shape_size(shape: int, rotation: int) -> Size:
+    #* Get real shape size, with rotation considered. *#
+    for s in SHAPE_SIZES:
+        if shape == s:
+            size_arr -> SHAPE_SIZES.get(s)
+            result = Size()
+            if rotation == ROT_CLOCKWISE or rotation == ROT_CCLOCKWISE:
+                # When rotated, width is height, vice versa
+                result.height = size_arr.get(0)
+                result.width = size_arr.get(1)
+            else:
+                result.width = size_arr.get(0)
+                result.height = size_arr.get(1)
+
+def position_dummy(dummy: entity(PosDummy), row: int, col: int):
+    #* Position dummy to given place. *#
+    world.tp(dummy, ORIGIN_POS)
+    i = row
+    while i > 0:
+        world.move(dummy, z=1)
+        i -= 1
+    i = col
+    while i > 0:
+        world.move(dummy, x=1)
+        i -= 1
+
+inline def move_dummy(dummy: entity(PosDummy), row=0, col=0):
+    #* Move the dummy. *#
+    world.move(dummy, z=row, x=col)
+
+inline def shape_blocks(dummy: entity(PosDummy), shape: int,
+                        rotation: int, action):
+    #*
+    Find all blocks in a shape (relative to `dummy`'s position) and
+    execute function `action` with position of block.
+    *#
+    inline def do_action(arr_of_arr):
+        for arr in arr_of_arr:
+            action(Pos(dummy).offset(x=arr.get(0), z=arr.get(1)))
+    for s in SHAPE_PATTERNS_360:
+        if shape == s:
+            shape_def -> SHAPE_PATTERNS_360.get(s)
+            for r in shape_def:
+                if rotation == r:
+                    do_action(shape_def.get(r))
+    for s in SHAPE_PATTERNS_180:
+        if shape == s:
+            shape_def -> SHAPE_PATTERNS_180.get(s)
+            if rotation == ROT_NONE or rotation == ROT_180:
+                do_action(shape_def.get(0))
+            else:
+                do_action(shape_def.get(1))
+    for s in SHAPE_PATTERNS_90:
+        if shape == s:
+            do_action(SHAPE_PATTERNS_90.get(s))
+
+def draw_shape(dummy: entity(PosDummy), shape: int, rotation: int):
+    #* Render current shape at `dummy`. *#
+    inline def place_block(pos: Pos):
+        for s in SHAPE_COLORS:
+            if shape == s:
+                block -> world.Block(
+                    "concrete", {"color": SHAPE_COLORS.get(s)}
+                )
+                world.setblock(pos, block)
+    shape_blocks(dummy, shape, rotation, action=place_block)
+
+def clear_shape(dummy: entity(PosDummy), shape: int, rotation: int):
+    #* Clear the shape (i.e. place empty block). *#
+    inline def empty_block(pos: Pos):
+        world.setblock(pos, BLOCK_EMPTY)
+    shape_blocks(dummy, shape, rotation, action=empty_block)
+
+def will_collide(dummy: entity(PosDummy), shape: int, rotation: int) -> bool:
+    #*
+    Whether the shape with given rotation will collide with other
+    blocks at dummy.
+    *#
+    res = False
+    inline def check(pos: Pos):
+        res = res or not world.is_block(pos, BLOCK_EMPTY)
+    shape_blocks(dummy, shape, rotation, action=check)
+    result = res
+
+def game_over():
+    running = False
+    world.kill(get_dummy())
+    print.title("Game Over!", player_group)
+    print.title(print.format("Lines: %0", score), player_group,
+                mode=print.SUBTITLE)
+    player_group.clear()
+
+def new_shape():
+    #* Create a new active shape. *#
+    shape_type = math.randint(0, 6)
+    shape_row = 0
+    shape_col = WIDTH / 2
+    shape_rotation = ROT_NONE
+    dummy -> get_dummy()
+    position_dummy(dummy, shape_row, shape_col)
+    if will_collide(dummy, shape_type, shape_rotation):
+        game_over()
+
+def check_completion(shape_height: int):
+    #*
+    Check line completion. This must be called right after the shape
+    landed and this relies on the landed shape information.
+    Note: this function moves the global dummy.
+    *#
+    dummy -> get_dummy()
+    y = 0
+    while y < shape_height:
+        position_dummy(dummy, shape_row + y, 0)
+        x = 0
+        got_empty = False
+        while x < WIDTH:
+            if world.is_block(Pos(dummy), BLOCK_EMPTY):
+                got_empty = True
+            x += 1
+            move_dummy(dummy, col=+1)
+        if not got_empty:
+            # Clear this line!
+            score += 1
+            # Dummy is out of bound on the right by 1 block now,
+            # so move it back by 1 block
+            move_dummy(dummy, col=-1)
+            # 1. move lines above cleared line down by 1 block
+            field_origin -> Offset().abs(
+                ORIGIN.get(0), ORIGIN.get(1), ORIGIN.get(2)
+            )
+            dest -> Offset().abs(
+                ORIGIN.get(0), ORIGIN.get(1), ORIGIN.get(2) + 1
+            )
+            move_dummy(dummy, row=-1)
+            world.clone(origin=Pos(dummy), offset=field_origin,
+                        dest=dest, mode="force")
+            # 2. fill the top line with empty
+            world.fill(
+                origin=ORIGIN_POS, offset=Offset().offset(x=WIDTH-1),
+                block=BLOCK_EMPTY
+            )
+        y += 1
+
+def tick():
+    if running:
+        dummy -> get_dummy()
+        # 1. Decide whether shape has landed
+        # Land on field bottom
+        shape_height = get_shape_size(shape_type, shape_rotation).height
+        landed = shape_height + shape_row >= HEIGHT
+        # Land on another tetromino
+        # We need to clear origin piece first or the new piece will
+        # always collide with the old piece.
+        position_dummy(dummy, shape_row, shape_col)
+        clear_shape(dummy, shape_type, shape_rotation)
+        # Assume that shape moves 1 block more...
+        move_dummy(dummy, row=+1)
+        landed = landed or will_collide(dummy, shape_type, shape_rotation)
+        move_dummy(dummy, row=-1)
+        # 2. If landed, check completion and create new piece
+        if landed:
+            # We clear origin piece above to check collision, now that
+            # the piece has landed, we will need to put it back.
+            draw_shape(dummy, shape_type, shape_rotation)
+            check_completion(shape_height)
+            new_shape()
+        # 3. If not, destroy the original blocks and create new blocks
+        #    one block lower.
+        else:
+            move_dummy(dummy, row=+1)
+            shape_row += 1
+        # 4. Redraw shape
+        draw_shape(dummy, shape_type, shape_rotation)
+
+def start():
+    #* Start the game loop! *#
+    running = True
+    score = 0
+    new_shape()
+
+def rotate():
+    #*
+    Try to rotate the shape.
+    A rotation consists of the change of shape AND the move of shape.
+    See https://tetris.fandom.com/wiki/SRS for details.
+    *#
+    # Rotation IDs are 1, 2, 3, 4; when 5 is reached, modulo by 4 to
+    # get back to 1.
+    new_rotation = shape_rotation + 1
+    new_rotation %= 4
+    # Move the shape
+    new_col = shape_col
+    new_row = shape_row
+    for types in SHAPE_ROTATE_MOVE:
+        is_contained = False
+        for type in types:
+            if type == shape_type:
+                is_contained = True
+        if is_contained:
+            rot_def -> SHAPE_ROTATE_MOVE.get(types)
+            for rotation in rot_def:
+                if rotation == shape_rotation:
+                    arr -> rot_def.get(rotation)
+                    new_col += arr.get(0)
+                    new_row += arr.get(1)
+    # Make sure the shape is not out of game field after rotation
+    # This is a simple alternative to Wall Kicks (see link above).
+    new_size = get_shape_size(shape_type, new_rotation)
+    new_col = math.min(new_col, WIDTH - new_size.width)
+    new_col = math.max(new_col, 0)
+    new_row = math.min(new_row, HEIGHT - new_size.height)
+    new_row = math.max(new_row, 0)
+    # Only update when no collision will happen
+    dummy -> get_dummy()
+    position_dummy(dummy, shape_row, shape_col)
+    clear_shape(dummy, shape_type, shape_rotation)
+    position_dummy(dummy, new_row, new_col)
+    if not will_collide(dummy, shape_type, new_rotation):
+        shape_rotation = new_rotation
+        shape_col = new_col
+        shape_row = new_row
+    position_dummy(dummy, shape_row, shape_col)
+    draw_shape(dummy, shape_type, shape_rotation)
+
+def _update_col(col_offset: int):
+    #* Implementation of `left` and `right`. *#
+    new_col = shape_col + col_offset
+    # Only continue when in the bound
+    if 0 <= new_col < WIDTH:
+        # Only continue when no collision will happen
+        dummy -> get_dummy()
+        position_dummy(dummy, shape_row, shape_col)
+        clear_shape(dummy, shape_type, shape_rotation)
+        position_dummy(dummy, shape_row, new_col)
+        if not will_collide(dummy, shape_type, shape_rotation):
+            shape_col = new_col
+        position_dummy(dummy, shape_row, shape_col)
+        draw_shape(dummy, shape_type, shape_rotation)
+
+def left():
+    #* Try to move left. *#
+    _update_col(col_offset=-1)
+
+def right():
+    #* Try to move right. *#
+    _update_col(col_offset=+1)
+
+def check_input():
+    #* Check player input. *#
+    if running:
+        pos_left -> PLAYER_POS.offset(x=-1.05)
+        pos_right -> PLAYER_POS.offset(x=1.05)
+        pos_front -> PLAYER_POS.offset(z=-1.05)
+        player -> player_group.to_single()
+        if world.is_entity(player, Enfilter().distance_from(pos_left, max=1)):
+            left()
+        if world.is_entity(player, Enfilter().distance_from(pos_right, max=1)):
+            right()
+        if world.is_entity(player, Enfilter().distance_from(pos_front, max=1)):
+            rotate()
+    if not player_group.is_empty():
+        world.tp(player_group, PLAYER_POS)
+        world.rotate(player_group, Rot(-180, 90))
+
+schedule.register_loop(tick, interval=UPDATE_INTERVAL)
+schedule.register_loop(check_input, interval=2)
+
+interface start:
+    #* Program entry: (re)start Tetris! *#
+    dummy -> PosDummy()  # keeps sync with current shape
+    dummy_group.add(dummy)
+    player_group.select(Enfilter().is_type("player").nearest_from(PLAYER_POS))
+    print.title("Tetris Game!!!", target=player_group,
+                fade_in=0, fade_out=0, stay_time=50)
+    world.fill(ORIGIN_POS, Offset().offset(x=WIDTH-1, z=HEIGHT-1), BLOCK_EMPTY)
+    # Place a block so that player won't fall
+    world.setblock(PLAYER_POS.offset(y=-1), world.Block("barrier"))
+    # Delay 60 ticks before starting
+    task -> schedule.Task(start)
+    task.after(60)
+
+interface game_over:
+    #* Stop the game at once. *#
+    game_over()
