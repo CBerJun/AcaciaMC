@@ -423,7 +423,7 @@ class Music(AcaciaExpr):
         self.cur_chunk_size += 1
 
 @axe.chop
-@axe.arg("id", axe.RangedLiteralInt(1, 127), rename="id_")
+@axe.arg("id", axe.RangedLiteralInt(0, 127), rename="id_")
 @axe.arg("sound", axe.LiteralString())
 def _set_instrument(compiler, id_: int, sound: str):
     """
