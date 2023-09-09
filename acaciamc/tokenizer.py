@@ -537,6 +537,7 @@ class Tokenizer:
                 # special escape in strings
                 res += '"'
                 self.forward()
+                self.forward()
                 continue
             res += self._read_escapable_char()
         self.forward()  # skip last '"'
