@@ -380,10 +380,10 @@ class AndGroup(AcaciaExpr):
             # Combine AndGroups
             if operand.inverted:
                 # `a and not (b and c)` needs a tmp var:
-                # tmp = `b and c`, self = `a and not tmp`
+                # tmp = `not (b and c)`, self = `a and tmp`
                 tmp = self.data_type.new_var(tmp=True)
                 self.dependencies.extend(operand.export(tmp))
-                self._add_operand(tmp.not_())
+                self._add_operand(tmp)
             else:
                 self.main.extend(operand.main)
                 self.dependencies.extend(operand.dependencies)
