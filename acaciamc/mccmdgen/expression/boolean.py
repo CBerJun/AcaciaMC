@@ -40,9 +40,11 @@ from acaciamc.constants import INT_MAX, INT_MIN
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
+import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
 class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "bool"
@@ -53,15 +55,14 @@ class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
 
     def new_var(self, tmp=False):
         alloc = self.compiler.allocate_tmp if tmp else self.compiler.allocate
-        objective, selector = alloc()
-        return BoolVar(objective, selector, self.compiler)
+        return BoolVar(alloc(), self.compiler)
 
     def new_entity_field(self):
         return {"scoreboard": self.compiler.add_scoreboard()}
 
     def new_var_as_field(self, entity, **meta) -> "BoolVar":
-        return BoolVar(meta["scoreboard"], str(entity),
-                      self.compiler, with_quote=False)
+        return BoolVar(cmds.ScbSlot(entity.to_str(), meta["scoreboard"]),
+                       self.compiler)
 
 class BoolType(Type):
     def datatype_hook(self):
@@ -74,7 +75,7 @@ class BoolLiteral(AcaciaExpr):
         self.value = value
 
     def export(self, var: "BoolVar"):
-        return ['scoreboard players set %s %s' % (var, self)]
+        return [cmds.ScbSetConst(var.slot, int(self.value))]
 
     def cmdstr(self) -> str:
         return "true" if self.value else "false"
@@ -97,46 +98,39 @@ class BoolLiteral(AcaciaExpr):
 
 class BoolVar(VarValue):
     """Boolean stored as a score on scoreboard."""
-    def __init__(self, objective: str, selector: str,
-                 compiler, with_quote=True):
+    def __init__(self, slot: cmds.ScbSlot, compiler):
         super().__init__(BoolDataType(compiler), compiler)
-        self.objective = objective
-        self.selector = selector
-        self.with_quote = with_quote
+        self.slot = slot
 
     def __str__(self):
-        return (('"%s" "%s"' if self.with_quote else '%s "%s"')
-                % (self.selector, self.objective))
+        return self.slot.to_str()
 
     def export(self, var: "BoolVar"):
-        return ['scoreboard players operation %s = %s' % (var, self)]
+        return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
 
     # Unary operator
     def not_(self):
-        return NotBoolVar(self.objective, self.selector, self.compiler)
+        return NotBoolVar(self.slot, self.compiler)
 
 class NotBoolVar(AcaciaExpr):
-    def __init__(self, objective: str, selector: str, compiler):
+    def __init__(self, slot: cmds.ScbSlot, compiler):
         super().__init__(BoolDataType(compiler), compiler)
-        self.objective = objective
-        self.selector = selector
+        self.slot = slot
 
     def __str__(self):
-        return '"%s" "%s"' % (self.selector, self.objective)
+        return self.slot.to_str()
 
     @export_need_tmp
     def export(self, var: BoolVar):
         return [
-            'scoreboard players set %s 0' % var,
-            export_execute_subcommands(
-                subcmds=['if score %s matches 0' % self],
-                main='scoreboard players set %s 1' % var
-            )
+            cmds.ScbSetConst(var.slot, 0),
+            cmds.Execute([cmds.ExecuteScoreMatch(self.slot, "0")],
+                         cmds.ScbSetConst(var.slot, 1))
         ]
 
     # Unary operator
     def not_(self):
-        return BoolVar(self.objective, self.selector, self.compiler)
+        return BoolVar(self.slot, self.compiler)
 
 class BoolCompare(AcaciaExpr):
     def __init__(
@@ -182,17 +176,15 @@ class BoolCompare(AcaciaExpr):
         # set `res` to dependencies that as_execute returns
         res, subcmds = self.as_execute()
         # set target to 0 (False) first
-        res.append('scoreboard players set %s 0' % var)
+        res.append(cmds.ScbSetConst(var.slot, 0))
         # check condition and change it to 1 (True)
-        res.append(export_execute_subcommands(
-            subcmds, 'scoreboard players set %s 1' % var
-        ))
+        res.append(cmds.Execute(subcmds, cmds.ScbSetConst(var.slot, 1)))
         return res
 
     def copy(self):
         return BoolCompare(self.left, self.operator, self.right, self.compiler)
 
-    def as_execute(self) -> Tuple[List[str], List[str]]:
+    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
         """Convert this compare to some dependency commands
         (return[0]) and subcommands of /execute (return[1]).
         """
@@ -209,9 +201,9 @@ class BoolCompare(AcaciaExpr):
             # then write main (according to operator)
             # != is special: it needs 'unless ...' rather than 'if ...'
             if self.operator is Operator.unequal_to:
-                res_main.append(
-                    'unless score %s matches %d' % (var, literal)
-                )
+                res_main.append(cmds.ExecuteScoreMatch(
+                    var.slot, str(literal), invert=True
+                ))
             else:  # for other 5 operators
                 match_range = {
                     Operator.greater: '%d..' % (literal + 1),
@@ -220,7 +212,7 @@ class BoolCompare(AcaciaExpr):
                     Operator.less_equal: '..%d' % literal,
                     Operator.equal_to: str(literal)
                 }[self.operator]
-                res_main.append('if score %s matches %s' % (var, match_range))
+                res_main.append(cmds.ExecuteScoreMatch(var.slot, match_range))
         else:  # not `if score ... matches` optimization
             # then both operands should be processed
             dependency, var_left = to_IntVar(self.left)
@@ -231,18 +223,20 @@ class BoolCompare(AcaciaExpr):
             # such syntax like 'if score ... != ...' while other 5
             # operators are OK.
             if self.operator is Operator.unequal_to:
-                res_main.append('unless score %s = %s' % (var_left, var_right))
+                res_main.append(cmds.ExecuteScoreComp(
+                    var_left.slot, var_right.slot,
+                    cmds.ScbCompareOp.EQ, invert=True
+                ))
             else:  # for other 5 operators
-                mcop = {
-                    Operator.greater: '>',
-                    Operator.greater_equal: '>=',
-                    Operator.less: '<',
-                    Operator.less_equal: '<=',
-                    # NOTE in Minecraft `equal_to` is "=" instead of "=="
-                    Operator.equal_to: '='
+                compare_op = {
+                    Operator.greater: cmds.ScbCompareOp.GT,
+                    Operator.greater_equal: cmds.ScbCompareOp.GTE,
+                    Operator.less: cmds.ScbCompareOp.LT,
+                    Operator.less_equal: cmds.ScbCompareOp.LTE,
+                    Operator.equal_to: cmds.ScbCompareOp.EQ
                 }[self.operator]
-                res_main.append('if score %s %s %s' % (
-                    var_left, mcop, var_right
+                res_main.append(cmds.ExecuteScoreComp(
+                    var_left.slot, var_right.slot, compare_op
                 ))
         return res_dependencies, res_main
 
@@ -284,8 +278,8 @@ def new_compare(left: AcaciaExpr, operator: Operator,
 class AndGroup(AcaciaExpr):
     def __init__(self, operands: Iterable[AcaciaExpr], compiler):
         super().__init__(BoolDataType(compiler), compiler)
-        self.main: List[str] = []  # list of subcommands of /execute (See `export`)
-        self.dependencies: List[str] = []  # commands that runs before `self.main`
+        self.main: List["_ExecuteSubcmd"] = []
+        self.dependencies: CMDLIST_T = []  # commands before `self.main`
         # `compare_operands` stores `BoolCompare` operands -- they are
         # converted to commands when `export`ed since there may be
         # optimizations.
@@ -299,7 +293,7 @@ class AndGroup(AcaciaExpr):
         # Handle inversion
         TRUE = 0 if self.inverted else 1
         FALSE = int(not TRUE)
-        SET_FALSE = 'scoreboard players set %s %d' % (var, FALSE)
+        SET_FALSE = cmds.ScbSetConst(var.slot, FALSE)
         res_dependencies = []  # dependencies part of result
         res_main = []  # main part of result (/execute subcommands)
         # -- Now convert self.compare_operands into commands --
@@ -360,7 +354,7 @@ class AndGroup(AcaciaExpr):
             # Calculate left (non-Literal one)
             dependency, left_var = to_IntVar(left)
             res_dependencies.extend(dependency)
-            res_main.append('if score %s matches %s' % (left_var, int_range))
+            res_main.append(cmds.ExecuteScoreMatch(left_var.slot, int_range))
         # Finally, handle unoptimizable `BoolCompare`s
         for compare in no_optimize:
             dependency, main = compare.as_execute()
@@ -371,17 +365,15 @@ class AndGroup(AcaciaExpr):
         res_dependencies.extend(self.dependencies)
         return res_dependencies + [
             SET_FALSE,
-            export_execute_subcommands(
-                res_main, 'scoreboard players set %s %d' % (var, TRUE)
-            )
+            cmds.Execute(res_main, cmds.ScbSetConst(var.slot, TRUE))
         ]
 
     def _add_operand(self, operand: AcaciaExpr):
         """Add an operand to this `AndGroup`."""
         if isinstance(operand, BoolVar):
-            self.main.append('if score %s matches 1' % operand)
+            self.main.append(cmds.ExecuteScoreMatch(operand.slot, '1'))
         elif isinstance(operand, NotBoolVar):
-            self.main.append('if score %s matches 0' % operand)
+            self.main.append(cmds.ExecuteScoreMatch(operand.slot, '0'))
         elif isinstance(operand, BoolCompare):
             self.compare_operands.add(operand)
         elif isinstance(operand, AndGroup):
@@ -467,7 +459,7 @@ def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     return res.not_()
 
 # Utils
-def to_BoolVar(expr: AcaciaExpr, tmp=True) -> Tuple[List[str], BoolVar]:
+def to_BoolVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, BoolVar]:
     """Convert any boolean expression to a `BoolVar` and some commands.
     return[0]: the commands to run
     return[1]: the `BoolVar`

@@ -59,6 +59,11 @@ def build_argparser():
         help='add debugging comments to output files'
     )
     argparser.add_argument(
+        "-O", "--no-optimize",
+        action='store_true',
+        help="disable optimization"
+    )
+    argparser.add_argument(
         '--override-old',
         action='store_true',
         help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
@@ -71,6 +76,11 @@ def build_argparser():
         '--verbose',
         action='store_true',
         help='show full traceback message when encountering unexpected errors'
+    )
+    argparser.add_argument(
+        '--max-inline-file-size', metavar="SIZE", type=int,
+        help='optimizer option: maximum size for a function that is called '
+             'with /execute conditions to be inlined (default 20)'
     )
     return argparser
 
@@ -108,6 +118,13 @@ def apply_config(args):
                 raise ValueError
         except ValueError:
             fatal('invalid Minecraft version: %s' % args.mc_version)
+    if args.no_optimize:
+        Config.optimizer = False
+    if args.max_inline_file_size is not None:
+        if args.max_inline_file_size < 0:
+            fatal('max inline file size must >= 0: %s'
+                  % args.max_inline_file_size)
+        Config.max_inline_file_size = args.max_inline_file_size
 
 def run(args):
     if not os.path.exists(args.file):

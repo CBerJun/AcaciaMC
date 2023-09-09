@@ -3,12 +3,17 @@ music - Generate redstone music from MIDI file
 NOTE Python package `mido` is required.
 """
 
+from typing import TYPE_CHECKING
+
 from acaciamc.mccmdgen.expression import *
-from acaciamc.mccmdgen.generator import MCFunctionFile
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.ast import ModuleMeta
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, method_of
+import acaciamc.mccmdgen.cmds as cmds
+
+if TYPE_CHECKING:
+    from acaciamc.mccmdgen.mcselector import MCSelector
 
 class MusicDataType(DefaultDataType):
     name = "Music"
@@ -19,7 +24,7 @@ class MusicType(Type):
         path: str,
         looping: bool-literal = False,
         loop_interval: int-literal = 50,
-        execute_condition: str = "as @a at @s",
+        listener: PlayerSelector = <all players>,
         note_offset: int-literal = 0,
         chunk_size: int-literal = 500,
         speed: float = 1.0,
@@ -29,9 +34,7 @@ class MusicType(Type):
     A music to generate from MIDI file `path`.
     If `looping` is True, the music will be played repeatingly, with
     interval `loop_interval` before replaying.
-    `execute_condition` sets the subcommand of /execute used by
-    /playsound. By setting this you can specify where the music is
-    played and who would hear it.
+    `listener` specifies who would hear the music.
     `note_offset` would make the whole music higher if it is positive,
     or lower if negative.
     Since music runs a LOT of commands every tick, we seperate commands
@@ -47,14 +50,13 @@ class MusicType(Type):
         @axe.arg("path", axe.LiteralString())
         @axe.arg("looping", axe.LiteralBool(), default=False)
         @axe.arg("loop_interval", axe.LiteralInt(), default=50)
-        @axe.arg("execute_condition", axe.LiteralString(),
-                 default="as @a at @s")
+        @axe.arg("listener", axe.PlayerSelector(), default=None)
         @axe.arg("note_offset", axe.LiteralInt(), default=0)
         @axe.arg("chunk_size", axe.RangedLiteralInt(1, None), default=500)
         @axe.arg("speed", axe.LiteralFloat(), default=1.0)
         @axe.arg("volume", axe.LiteralFloat(), default=1.0)
         def _new(compiler, path: str, looping: bool, loop_interval: int,
-                 execute_condition: str, note_offset: int,
+                 listener: "MCSelector", note_offset: int,
                  chunk_size: int, speed: float, volume: float):
             try:
                 midi = mido.MidiFile(path)
@@ -65,8 +67,12 @@ class MusicType(Type):
             if volume <= 0:
                 raise axe.ArgumentError("volume", "must be positive")
             looping_info = loop_interval if looping else -1
+            if listener is None:
+                listener_str = "@a"
+            else:
+                listener_str = listener.to_str()
             return Music(
-                midi, execute_condition, looping_info, note_offset,
+                midi, listener_str, looping_info, note_offset,
                 chunk_size, speed, volume, compiler
             )
 
@@ -230,12 +236,12 @@ class Music(AcaciaExpr):
         i: 1.0 for i in range(16)
     }
 
-    def __init__(self, midi, exec_condition: str, looping: int,
+    def __init__(self, midi, listener_str: str, looping: int,
                  note_offset: int, chunk_size: int, speed: float,
                  volume: float, compiler):
         super().__init__(MusicDataType(), compiler)
         self.midi = midi
-        self.execute_condition = exec_condition
+        self.listener_str = listener_str
         self.note_offset = note_offset
         self.chunk_size = chunk_size
         self.tracks = [t.copy() for t in midi.tracks]
@@ -291,32 +297,36 @@ class Music(AcaciaExpr):
         # Create GT loop using `schedule` module
         @axe.chop
         def _gt_loop(compiler):
-            cmds = []
-            cmds.extend(
-                export_execute_subcommands(
-                    ["if score %s matches %d..%d" % (
-                        self.timer,
-                        self.file_sep_gt[i], self.file_sep_gt[i+1] - 1
-                    )], main=file.call()
+            commands = []
+            commands.extend(
+                cmds.Execute(
+                    [cmds.ExecuteScoreMatch(
+                        self.timer.slot, "%d..%d" % (
+                            self.file_sep_gt[i], self.file_sep_gt[i+1] - 1
+                        )
+                    )],
+                    runs=cmds.InvokeFunction(file)
                 )
                 for i, file in enumerate(self.files)
             )
-            cmds.extend(
-                export_execute_subcommands(
-                    ["if score %s matches ..%d" % (self.timer, GT_LEN)],
-                    main=cmd
+            commands.extend(
+                cmds.Execute(
+                    [cmds.ExecuteScoreMatch(self.timer.slot, "..%d" % GT_LEN)],
+                    runs=cmd
                 )
                 for cmd in self.timer.iadd(IntLiteral(1, self.compiler))
             )
             if looping >= 0:
-                cmds.extend(export_execute_subcommands(
-                    ["if score %s matches %d" % (self.timer, GT_LEN + 1)],
-                    main=cmd
+                commands.extend(cmds.Execute(
+                    [cmds.ExecuteScoreMatch(
+                        self.timer.slot, str(GT_LEN + 1)
+                    )],
+                    runs=cmd
                 ) for cmd in IntLiteral(-looping, compiler)
                              .export(self.timer))
-            return resultlib.commands(cmds, compiler)
+            return resultlib.commands(commands, compiler)
         # Register this to be called every tick
-        _res, cmds = register_loop.call(
+        _res, reg_cmds = register_loop.call(
             args=[BinaryFunction(_gt_loop, self.compiler)],
             keywords={}
         )
@@ -326,7 +336,7 @@ class Music(AcaciaExpr):
         @method_of(self, "__init__")
         def _init(compiler, args, keywords):
             """.__init__(): Register dependencies"""
-            return resultlib.commands(cmds, compiler)
+            return resultlib.commands(reg_cmds, compiler)
         @method_of(self, "play")
         @axe.chop
         @axe.arg("timer", IntDataType, default=IntLiteral(0, self.compiler))
@@ -384,7 +394,7 @@ class Music(AcaciaExpr):
                 self.new_file()
 
     def new_file(self):
-        self.cur_file = MCFunctionFile()
+        self.cur_file = cmds.MCFunctionFile()
         self.files.append(self.cur_file)
         self.cur_file.write_debug("# Music loop")
         self.file_sep_gt.append(self.gt_int)
@@ -413,13 +423,14 @@ class Music(AcaciaExpr):
         volume = self.get_volume(message.channel, message.velocity)
         pitch = self.get_pitch(message.note)
         sound = self.get_instrument(message.channel)
-        gt = self.gt_int
-        self.cur_file.write(
-            "execute if score %s matches %d %s run " %
-            (self.timer, gt, self.execute_condition) +
-            "playsound %s @s ~~~ %.2f %.3f" %
-            (sound, volume, pitch)
-        )
+        self.cur_file.write(cmds.Execute(
+            [cmds.ExecuteScoreMatch(self.timer.slot, str(self.gt_int)),
+             cmds.ExecuteEnv("as", self.listener_str),
+             cmds.ExecuteEnv("at", "@s")],
+            runs=cmds.Cmd(
+                "playsound %s @s ~ ~ ~ %.2f %.3f" % (sound, volume, pitch)
+            )
+        ))
         self.cur_chunk_size += 1
 
 @axe.chop

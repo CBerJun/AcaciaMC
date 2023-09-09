@@ -12,6 +12,7 @@ from typing import List, TYPE_CHECKING
 from acaciamc.tools import axe, method_of
 from acaciamc.constants import DEFAULT_ANCHOR
 from acaciamc.mccmdgen.datatype import DefaultDataType
+import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
 from .callable import BinaryFunction
@@ -19,6 +20,7 @@ from .entity import EntityDataType
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
+    from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
 class RotDataType(DefaultDataType):
     name = "Rot"
@@ -35,7 +37,9 @@ class RotType(Type):
             @axe.arg("target", EntityDataType)
             def from_entity(cls, compiler, entity: "_EntityBase"):
                 inst = Rotation(compiler)
-                inst.context.append("rotated as %s" % entity)
+                inst.context.append(cmds.ExecuteEnv(
+                    "rotated", "as " + entity.to_str()
+                ))
                 return inst
 
             @axe.overload
@@ -43,7 +47,9 @@ class RotType(Type):
             @axe.arg("horizontal", axe.LiteralFloat())
             def absolute(cls, compiler, vertical: float, horizontal: float):
                 inst = Rotation(compiler)
-                inst.context.append("rotated %s %s" % (vertical, horizontal))
+                inst.context.append(cmds.ExecuteEnv(
+                    "rotated", "%s %s" % (vertical, horizontal)
+                ))
                 return inst
         @method_of(self, "face_entity")
         @axe.chop
@@ -51,7 +57,9 @@ class RotType(Type):
         @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
         def _face_entity(compiler, target: "_EntityBase", anchor: str):
             inst = Rotation(compiler)
-            inst.context.append("facing entity %s %s" % (target, anchor))
+            inst.context.append(cmds.ExecuteEnv(
+                "facing", "entity %s %s" % (target, anchor)
+            ))
             return inst
 
     def datatype_hook(self):
@@ -60,7 +68,7 @@ class RotType(Type):
 class Rotation(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
         super().__init__(RotDataType(), compiler)
-        self.context: List[str] = []
+        self.context: List["_ExecuteSubcmd"] = []
 
         _abs = self._create_setter("")
         _offset = self._create_setter("~")
@@ -90,6 +98,6 @@ class Rotation(AcaciaExpr, ImmutableMixin):
                     vh.append("~")
                 else:
                     vh.append(type_prefix + str(arg))
-            self.context.append("rotated " + " ".join(vh))
+            self.context.append(cmds.ExecuteEnv("rotated", " ".join(vh)))
             return self
         return _setter

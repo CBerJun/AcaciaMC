@@ -1,76 +1,22 @@
 """Minecraft Command Generator of Acacia."""
 
-__all__ = ['MCFunctionFile', 'Generator']
+__all__ = ['Generator']
 
 from typing import Union, TYPE_CHECKING, Optional, List, Tuple, Callable, Dict
 import contextlib
 import operator as builtin_op
 
 from acaciamc.ast import *
-from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.symbol import ScopedSymbolTable
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
+import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import DataType
-
-class MCFunctionFile:
-    """Represents a .mcfunction file."""
-    def __init__(self, path: Union[str, None] = None):
-        # `path`: the path of function relative to
-        # `Config.function_folder`. (e.g. `lib/acalib3`, `main`)
-        self.commands = []
-        self.set_path(path)
-
-    def has_content(self):
-        """Return if there are any commands in this file."""
-        for line in self.commands:
-            line = line.strip()
-            if (not line.startswith('#')) and bool(line):
-                return True
-        return False
-
-    # --- About Path ---
-
-    def get_path(self):
-        if self._path is None:
-            raise ValueError('"path" attribute is not set yet')
-        return self._path
-
-    def set_path(self, path: str):
-        self._path = path
-
-    def is_path_set(self) -> bool:
-        return self._path is not None
-
-    # --- Export Methods ---
-
-    def to_str(self) -> str:
-        # make commands to str
-        return '\n'.join(self.commands)
-
-    def call(self) -> str:
-        # return the command that runs this file
-        return 'function %s/%s' % (Config.function_folder, self.get_path())
-
-    # --- Write Methods ---
-
-    def write(self, *commands: str):
-        self.commands.extend(commands)
-
-    def write_debug(self, *comments: str):
-        # check enabled
-        if not Config.debug_comments:
-            return
-        self.write(*comments)
-
-    def extend(self, commands):
-        # extend commands
-        self.commands.extend(commands)
 
 FUNC_NONE = "none"
 FUNC_INLINE = "inline"
@@ -78,7 +24,7 @@ FUNC_NORMAL = "normal"
 
 class Generator(ASTVisitor):
     """Generates MC function from an AST for a single file."""
-    def __init__(self, node: AST, main_file: MCFunctionFile,
+    def __init__(self, node: AST, main_file: cmds.MCFunctionFile,
                  compiler: "Compiler"):
         super().__init__()
         self.node = node
@@ -177,7 +123,7 @@ class Generator(ASTVisitor):
             raise TypeError
 
     def write_debug(self, comment: str,
-                    target: Optional[MCFunctionFile] = None):
+                    target: Optional[cmds.MCFunctionFile] = None):
         """Write debug comment to a file."""
         if target is None:
             target = self.current_file
@@ -193,7 +139,7 @@ class Generator(ASTVisitor):
             )
 
     @contextlib.contextmanager
-    def set_mcfunc_file(self, file: MCFunctionFile):
+    def set_mcfunc_file(self, file: cmds.MCFunctionFile):
         old = self.current_file
         self.current_file = file
         yield
@@ -202,11 +148,11 @@ class Generator(ASTVisitor):
     @contextlib.contextmanager
     def new_mcfunc_file(self, path: Optional[str] = None):
         """Create a new mcfunction file and set it to current file."""
-        f = MCFunctionFile(path)
+        f = cmds.MCFunctionFile()
         with self.set_mcfunc_file(f):
             yield f
             if f.has_content():
-                self.compiler.add_file(f)
+                self.compiler.add_file(f, path)
 
     @contextlib.contextmanager
     def new_scope(self):
@@ -260,7 +206,7 @@ class Generator(ASTVisitor):
         if isinstance(node, Statement):
             # free used vars
             for score in self.current_tmp_scores:
-                self.compiler.free_tmp(*score)
+                self.compiler.free_tmp(score)
             for entity in self.current_tmp_entities:
                 self.current_file.extend(entity.clear())
             self.current_tmp_scores = old_tmp_scores
@@ -356,7 +302,8 @@ class Generator(ASTVisitor):
                 cmd += section[1]
             else:
                 raise ValueError
-        self.current_file.write(cmd)
+        command = cmds.Cmd(cmd, suppress_special_cmd=True)
+        self.current_file.write(command)
 
     def visit_If(self, node: If):
         # condition
@@ -370,7 +317,8 @@ class Generator(ASTVisitor):
             for stmt in run_node:
                 self.visit(stmt)
             return
-        dependencies, condition = to_BoolVar(condition, tmp=False)
+        condition_var: BoolVar = condition.data_type.new_var()
+        dependencies: CMDLIST_T = condition.export(condition_var)
         self.current_file.extend(dependencies)
         # process body
         with self.new_mcfunc_file() as body_file:
@@ -379,9 +327,9 @@ class Generator(ASTVisitor):
                 self.visit(stmt)
         if body_file.has_content():
             # only add command when some commands ARE generated
-            self.current_file.write(export_execute_subcommands(
-                subcmds = ['if score %s matches 1' % condition],
-                main = body_file.call()
+            self.current_file.write(cmds.Execute(
+                [cmds.ExecuteScoreMatch(condition_var.slot, "1")],
+                runs=cmds.InvokeFunction(body_file)
             ))
         # process else_bosy (almost same as above)
         with self.new_mcfunc_file() as else_body_file:
@@ -389,9 +337,9 @@ class Generator(ASTVisitor):
             for stmt in node.else_body:
                 self.visit(stmt)
         if else_body_file.has_content():
-            self.current_file.write(export_execute_subcommands(
-                subcmds = ['if score %s matches 0' % condition],
-                main = else_body_file.call()
+            self.current_file.write(cmds.Execute(
+                [cmds.ExecuteScoreMatch(condition_var.slot, "0")],
+                runs=cmds.InvokeFunction(else_body_file)
             ))
 
     def visit_While(self, node: While):
@@ -419,11 +367,11 @@ class Generator(ASTVisitor):
                 self.visit(stmt)
         # trigering the function
         if body_file.has_content():  # continue when body is not empty
-            def _write_condition(file: MCFunctionFile):
+            def _write_condition(file: cmds.MCFunctionFile):
                 file.extend(dependencies)
-                file.write(export_execute_subcommands(
-                    ['if score %s matches 1' % condition],
-                    body_file.call()
+                file.write(cmds.Execute(
+                    [cmds.ExecuteScoreMatch(condition.slot, "1")],
+                    runs=cmds.InvokeFunction(body_file)
                 ))
             # Keep recursion if condition is True
             body_file.write_debug('## Part 2. Recursion')
@@ -673,7 +621,7 @@ class Generator(ASTVisitor):
         if isinstance(content, FuncDef):
             func = self._func_expr(content)
             # Give this function a file
-            file = MCFunctionFile()
+            file = cmds.MCFunctionFile()
             func.file = file
             self.compiler.add_file(file)
         elif isinstance(content, InlineFuncDef):
@@ -710,8 +658,9 @@ class Generator(ASTVisitor):
             )
             for stmt in node.body:
                 self.visit(stmt)
-        self.current_file.write(export_execute_subcommands(
-            ["as %s" % egroup.get_selector().to_str()], main=body_file.call()
+        self.current_file.write(cmds.Execute(
+            [cmds.ExecuteEnv("as", egroup.get_selector().to_str())],
+            runs=cmds.InvokeFunction(body_file)
         ))
 
     def visit_StructField(self, node: StructField):
@@ -804,8 +753,8 @@ class Generator(ASTVisitor):
             self.error_c(ErrorType.INVALID_RAWSCORE_SELECTOR,
                          got=str(selector.data_type))
         return IntVar(
-            objective.value, selector.value,
-            compiler=self.compiler, with_quote=False
+            cmds.ScbSlot(selector.value, objective.value),
+            compiler=self.compiler
         )
 
     def visit_Result(self, node: Result, check_undef=True):
@@ -915,7 +864,7 @@ class Generator(ASTVisitor):
             for arg, value in arg2value.items():
                 self.current_scope.set(arg, value)
             # Visit body
-            file = MCFunctionFile()
+            file = cmds.MCFunctionFile()
             with self.set_mcfunc_file(file), \
                  self.reset_inline_result(), \
                  self.set_func_state(FUNC_INLINE):

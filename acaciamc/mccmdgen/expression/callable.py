@@ -34,14 +34,13 @@ __all__ = [
 from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
 
 from acaciamc.error import *
-from acaciamc.mccmdgen import generator
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
+import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .none import NoneVar
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
-    from acaciamc.mccmdgen.generator import MCFunctionFile
     from acaciamc.ast import InlineFuncDef
     from acaciamc.mccmdgen.datatype import DataType
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
@@ -70,18 +69,18 @@ class AcaciaFunction(AcaciaExpr):
         self.result_var = returns.new_var()
         # `file`: the target file of function. When it is None,
         # the function is empty. It should be assigned by `Generator`.
-        self.file: Union["MCFunctionFile", None] = None
+        self.file: Union[cmds.MCFunctionFile, None] = None
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         res = []
         # Parse args
-        args = self.arg_handler.match(args, keywords)
+        arguments = self.arg_handler.match(args, keywords)
         # Assign argument values to `arg_vars`
-        for arg, value in args.items():
+        for arg, value in arguments.items():
             res.extend(value.export(self.arg_vars[arg]))
         # Call function
         if self.file is not None:
-            res.append(self.file.call())
+            res.append(cmds.InvokeFunction(self.file))
         return self.result_var, res
 
 class InlineFunction(AcaciaExpr):
@@ -178,28 +177,30 @@ class BoundMethodDispatcher(AcaciaExpr):
         self.object = object_
         self.possible_implementations: \
             List[Tuple["EntityTemplate", BoundMethod]] = []
-        self.files: List[Tuple["ARGS_T", "KEYWORDS_T", "MCFunctionFile"]] = []
+        self.files: \
+            List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
         self.result_var = result_var
 
     def _give_implementation(
             self, args: "ARGS_T", keywords: "KEYWORDS_T",
-            file: "MCFunctionFile",
+            file: cmds.MCFunctionFile,
             template: "EntityTemplate", bound_method: BoundMethod
         ):
         try:
-            result, cmds = bound_method.call(args, keywords)
+            result, commands = bound_method.call(args, keywords)
         except Error:
             if template is self.object.template:
                 raise  # required function
             return
-        cmds.extend(result.export(self.result_var))
+        commands.extend(result.export(self.result_var))
         file.write_debug("# To implementation in %s" % template.name)
         file.extend(
-            export_execute_subcommands(
-                ["if entity @s[tag=%s]" % template.runtime_tag],
-                main=cmd
+            cmds.Execute(
+                [cmds.ExecuteCond(
+                    "entity", "@s[tag=%s]" % template.runtime_tag
+                )], runs=cmd
             )
-            for cmd in cmds
+            for cmd in commands
         )
 
     def add_implementation(self, template: "EntityTemplate",
@@ -213,7 +214,7 @@ class BoundMethodDispatcher(AcaciaExpr):
                                           file, template, bound_method)
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
-        file = generator.MCFunctionFile()
+        file = cmds.MCFunctionFile()
         self.files.append((args, keywords, file))
         self.compiler.add_file(file)
         file.write_debug("## Method dispatcher for %s.%s()"
@@ -221,6 +222,7 @@ class BoundMethodDispatcher(AcaciaExpr):
         for template, bound_method in self.possible_implementations:
             self._give_implementation(args, keywords,
                                       file, template, bound_method)
-        return self.result_var, [export_execute_subcommands(
-            ["as %s" % self.object], main=file.call()
+        return self.result_var, [cmds.Execute(
+            [cmds.ExecuteEnv("as", self.object.to_str())],
+            runs=cmds.InvokeFunction(file)
         )]

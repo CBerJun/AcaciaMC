@@ -2,12 +2,12 @@
 
 from typing import List, Optional, TYPE_CHECKING
 from copy import deepcopy
-import json
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, method_of
+import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -60,9 +60,9 @@ class _FStrParser:
         else:  # fallback
             self.json.append({"text": text})
 
-    def add_score(self, objective: str, selector: str):
+    def add_score(self, slot: cmds.ScbSlot):
         self.json.append({
-            "score": {"objective": objective, "name": selector}
+            "score": {"objective": slot.objective, "name": slot.target}
         })
 
     def add_localization(self, key: str):
@@ -77,7 +77,7 @@ class _FStrParser:
             else:
                 dependencies, var = to_IntVar(expr)
                 self.dependencies.extend(dependencies)
-                self.add_score(var.objective, var.selector)
+                self.add_score(var.slot)
         elif expr.data_type.matches_cls(BoolDataType):
             if isinstance(expr, BoolLiteral):
                 # optimize for literals
@@ -85,7 +85,7 @@ class _FStrParser:
             else:
                 dependencies, var = to_BoolVar(expr)
                 self.dependencies.extend(dependencies)
-                self.add_score(var.objective, var.selector)
+                self.add_score(var.slot)
         elif isinstance(expr, String):
             self.add_text(expr.value)
         elif isinstance(expr, FString):
@@ -216,9 +216,6 @@ class FString(AcaciaExpr):
         self.dependencies = dependencies
         self.json = json
 
-    def export_json_str(self) -> str:
-        return json.dumps({"rawtext": self.json})
-
     def add_text(self, text: str):
         # add text to fstring
         if bool(self.json) and self.json[-1].get('text'):
@@ -254,14 +251,14 @@ def _tell(compiler, text: FString, target: Optional["MCSelector"]):
     """tell(text: str | fstring, target: PlayerSelector = <All players>)
     Tell the `target` the `text` using /tellraw.
     """
-    cmds = []
+    commands = []
     if target is None:
         target_str = "@a"
     else:
         target_str = target.to_str()
-    cmds.extend(text.dependencies)
-    cmds.append('tellraw %s %s' % (target_str, text.export_json_str()))
-    return resultlib.commands(cmds, compiler)
+    commands.extend(text.dependencies)
+    commands.append(cmds.RawtextOutput("tellraw %s" % target_str, text.json))
+    return resultlib.commands(commands, compiler)
 
 # Title modes
 _TITLE = 'title'
@@ -293,7 +290,7 @@ def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
     Use /titleraw for showing `text`.
     `fade_in`, `stay_time` and `fade_out` are in ticks.
     """
-    cmds = []
+    commands = []
     # Check valid mode
     if mode not in (_TITLE, _SUBTITLE, _ACTIONBAR):
         raise axe.ArgumentError('mode', 'invalid mode: %s' % mode)
@@ -306,18 +303,18 @@ def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
     conf = (fade_in, stay_time, fade_out)
     if conf != _DEF_TITLE_CONFIG:
         # only set config when it's not the default one
-        cmds.append('titleraw %s times %d %d %d' % (target_str, *conf))
+        commands.append(cmds.TitlerawTimes(target_str, *conf))
     ## titleraw
-    cmds.extend(text.dependencies)
-    cmds.append('titleraw %s %s %s' % (
-        target_str, mode, text.export_json_str()
-    ))
+    commands.extend(text.dependencies)
+    commands.append(
+        cmds.RawtextOutput('titleraw %s %s' % (target_str, mode), text.json)
+    )
     ## reset config
     if conf != _DEF_TITLE_CONFIG:
         # only reset when config is not the default one
-        cmds.append('titleraw %s reset' % target_str)
+        commands.append(cmds.TitlerawResetTimes(target_str))
     ## return
-    return resultlib.commands(cmds, compiler)
+    return resultlib.commands(commands, compiler)
 
 @axe.chop
 @axe.arg("target", axe.PlayerSelector(), default=None)
@@ -329,7 +326,7 @@ def _title_clear(compiler, target: Optional["MCSelector"]):
         target_str = "@a"
     else:
         target_str = target.to_str()
-    return resultlib.commands(['titleraw %s clear' % target_str], compiler)
+    return resultlib.commands([cmds.TitlerawClear(target_str)], compiler)
 
 def acacia_build(compiler: "Compiler"):
     return {

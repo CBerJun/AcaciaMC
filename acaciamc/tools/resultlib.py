@@ -12,9 +12,9 @@ if TYPE_CHECKING:
 class Result(NamedTuple):
     """Return value of a binary function implementation."""
     value: acacia.AcaciaExpr
-    commands: List[str]
+    commands: acacia.CMDLIST_T
 
-def commands(cmds: List[str], compiler: "Compiler") -> Result:
+def commands(cmds: acacia.CMDLIST_T, compiler: "Compiler") -> Result:
     return Result(acacia.NoneVar(compiler), cmds)
 
 def literal(value: Union[bool, int, str, float, None],

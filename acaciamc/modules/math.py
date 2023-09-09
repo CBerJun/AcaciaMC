@@ -1,9 +1,11 @@
 """math - Math related utilities."""
 from typing import List
+from itertools import repeat
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.ast import ModuleMeta
 from acaciamc.tools import axe
+import acaciamc.mccmdgen.cmds as cmds
 
 @axe.chop
 @axe.arg("min", axe.LiteralInt(), rename="min_")
@@ -13,7 +15,7 @@ def _randint(compiler, min_: int, max_: int):
     Get a random integer between `min` and `max` (inclusive).
     """
     res = IntOpGroup(init=None, compiler=compiler)
-    res.write('scoreboard players random {this} %d %d' % (min_, max_))
+    res.write(lambda this, libs: cmds.ScbRandom(this, min_, max_))
     return res
 
 @axe.chop
@@ -33,11 +35,10 @@ def _pow(compiler, base, exp):
         return IntLiteral(base.value ** exp.value, compiler)
     # Write
     res = IntOpGroup(init=base, compiler=compiler)
-    cmds = tuple(
-        'scoreboard players operation {this} *= {this}'
-        for _ in range(exp.value)
-    )
-    res.write(*cmds)
+    res.write(*repeat(
+        lambda this, libs: cmds.ScbOperation(cmds.ScbOp.MUL_EQ, this, this),
+        exp.value
+    ))
     return res
 
 @axe.chop
@@ -51,10 +52,13 @@ def _min(compiler, operands: List[AcaciaExpr]):
     # Get first arg
     res = IntOpGroup(init=operands[0], compiler=compiler)
     # Handle args left
+    def _handle(operand):
+        deps, var = to_IntVar(operand)
+        res.write_str(*deps)
+        res.write(lambda this, libs:
+                  cmds.ScbOperation(cmds.ScbOp.MIN, this, var.slot))
     for operand in operands[1:]:
-        dep, var = to_IntVar(operand)
-        res.write(*dep)
-        res.write('scoreboard players operation {this} < %s' % var)
+        _handle(operand)
     return res
 
 @axe.chop
@@ -68,10 +72,13 @@ def _max(compiler, operands: List[AcaciaExpr]):
     # Get first arg
     res = IntOpGroup(init=operands[0], compiler=compiler)
     # Handle args left
+    def _handle(operand):
+        deps, var = to_IntVar(operand)
+        res.write_str(*deps)
+        res.write(lambda this, libs:
+                  cmds.ScbOperation(cmds.ScbOp.MAX, this, var.slot))
     for operand in operands[1:]:
-        dep, var = to_IntVar(operand)
-        res.write(*dep)
-        res.write('scoreboard players operation {this} > %s' % var)
+        _handle(operand)
     return res
 
 def acacia_build(compiler):

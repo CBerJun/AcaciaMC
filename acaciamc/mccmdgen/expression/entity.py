@@ -8,6 +8,7 @@ from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
+import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 
 if TYPE_CHECKING:
@@ -47,6 +48,9 @@ class _EntityBase(AcaciaExpr):
 
     def __str__(self) -> str:
         return self.get_selector().to_str()
+
+    def to_str(self) -> str:
+        return str(self)
 
     def get_selector(self) -> MCSelector:
         # Caller owns the selector
@@ -88,7 +92,7 @@ class TaggedEntity(_EntityBase, VarValue):
 
     @classmethod
     def from_template(cls, template: "EntityTemplate", compiler: "Compiler"
-                      ) -> Tuple["TaggedEntity", List[str]]:
+                      ) -> Tuple["TaggedEntity", CMDLIST_T]:
         """Create an entity from the template.
         Return a 2-tuple.
         Element 0: the `TaggedEntity`
@@ -118,9 +122,9 @@ class TaggedEntity(_EntityBase, VarValue):
         else:
             SUMMON = "summon {type} {pos} {event} {name}"
         return inst, [
-            export_execute_subcommands(e_pos[0], SUMMON.format(
-                type=e_type, name=name,pos=e_pos[1], event=e_event
-            )),
+            cmds.Execute(e_pos[0], cmds.Cmd(SUMMON.format(
+                type=e_type, name=name, pos=e_pos[1], event=e_event
+            ))),
             "tag @e[name=%s] add %s" % (name, inst.template.runtime_tag),
             "tag @e[name=%s] add %s" % (name, inst.tag)
         ]

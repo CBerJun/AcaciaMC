@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, List, Optional
 from acaciamc.tools import axe, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
+import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
 from .entity_template import ETemplateDataType
@@ -162,15 +163,19 @@ class EntityGroup(VarValue):
         @axe.chop
         def _is_empty(compiler: "Compiler"):
             res = AndGroup(operands=(), compiler=compiler)
-            res.main.append("unless entity %s" % SELF)
+            res.main.append(cmds.ExecuteCond("entity", SELF, invert=True))
             return res
         @method_of(self, "size")
         @axe.chop
         def _size(compiler: "Compiler"):
             res = IntOpGroup(init=None, compiler=compiler)
-            res.write("scoreboard players set {this} 0",
-                      ("execute as %s run "
-                       "scoreboard players add {this} 1") % SELF)
+            res.write(
+                lambda this, libs: cmds.ScbSetConst(this, 0),
+                lambda this, libs: cmds.Execute(
+                    [cmds.ExecuteEnv("as", SELF)],
+                    runs=cmds.ScbSetConst(this, 1)
+                )
+            )
             return res
         @method_of(self, "to_single")
         @axe.chop
@@ -184,10 +189,10 @@ class EntityGroup(VarValue):
             res = AndGroup(operands=(), compiler=compiler)
             selector = ent.get_selector()
             selector.tag(self.tag)
-            res.main.append("if entity %s" % selector.to_str())
+            res.main.append(cmds.ExecuteCond("entity", selector.to_str()))
             return res
 
-    def export(self, var: "EntityGroup") -> List[str]:
+    def export(self, var: "EntityGroup") -> CMDLIST_T:
         cmds = var.clear()
         cmds.append("tag @e[tag=%s] add %s" % (self.tag, var.tag))
         return cmds
@@ -197,7 +202,7 @@ class EntityGroup(VarValue):
         res.tag(self.tag)
         return res
 
-    def clear(self) -> List[str]:
+    def clear(self) -> CMDLIST_T:
         return ["tag @e[tag={0}] remove {0}".format(self.tag)]
 
     def iadd(self, other):

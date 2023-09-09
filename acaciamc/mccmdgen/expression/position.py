@@ -8,6 +8,7 @@ from acaciamc.error import *
 from acaciamc.tools import axe, method_of
 from acaciamc.constants import DEFAULT_ANCHOR, XYZ
 from acaciamc.mccmdgen.datatype import DefaultDataType
+import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
@@ -19,6 +20,7 @@ from .entity import EntityDataType
 if TYPE_CHECKING:
     from .rotation import Rotation
     from .entity import _EntityBase
+    from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
 class PosDataType(DefaultDataType):
     name = "Pos"
@@ -49,8 +51,8 @@ class PosType(Type):
             @axe.arg("anchor", axe.LiteralString())
             def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
                 inst = Position(compiler)
-                inst.context.append("at %s" % target)
-                inst.context.append("anchored %s" % anchor)
+                inst.context.append(cmds.ExecuteEnv("at", target.to_str()))
+                inst.context.append(cmds.ExecuteEnv("anchored", anchor))
                 return inst
 
             @axe.overload
@@ -78,7 +80,7 @@ class PosType(Type):
 class Position(AcaciaExpr, ImmutableMixin):
     def __init__(self, compiler):
         super().__init__(PosDataType(), compiler)
-        self.context: List[str] = []  # /execute subcommands
+        self.context: List["_ExecuteSubcmd"] = []
 
         @method_of(self, "dim")
         @axe.chop
@@ -86,7 +88,7 @@ class Position(AcaciaExpr, ImmutableMixin):
         @transform_immutable(self)
         def _dim(self: Position, compiler, id_: str):
             """.dim(id: str): change dimension of position."""
-            self.context.append("in %s" % id_)
+            self.context.append(cmds.ExecuteEnv("in", id_))
             return self
         _abs = self._create_offset_alias("abs")
         _offset = self._create_offset_alias("offset")
@@ -117,7 +119,7 @@ class Position(AcaciaExpr, ImmutableMixin):
         @transform_immutable(self)
         def _apply(self: Position, compiler, offset: PosOffset):
             """.apply(offset: Offset): Apply offset to current position."""
-            self.context.append("positioned %s" % offset)
+            self.context.append(cmds.ExecuteEnv("positioned", str(offset)))
             return self
         @method_of(self, "align")
         @axe.chop
@@ -133,7 +135,7 @@ class Position(AcaciaExpr, ImmutableMixin):
             axis_set = set(axis)
             if len(axis) != len(axis_set) or not axis_set.issubset(XYZ):
                 raise Error(ErrorType.INVALID_POS_ALIGN, align=axis)
-            self.context.append("align %s" % axis)
+            self.context.append(cmds.ExecuteEnv("align", axis))
             return self
         @method_of(self, "context")
         @axe.chop

@@ -9,12 +9,14 @@ from acaciamc.error import *
 from acaciamc.tools import axe, versionlib, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
 from acaciamc.mccmdgen.datatype import DefaultDataType
+import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
 from .position import PosDataType
 
 if TYPE_CHECKING:
     from .position import Position
+    from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
 RE_INT = re.compile(r"^[+-]?\s*\d+$")
 PLAYER = "player"  # ID of player entity
@@ -71,7 +73,7 @@ class EFilterType(Type):
         return EFilterDataType()
 
 class _EFilterData:
-    def __init__(self, tag: Union[str, None], subcmds: List[str],
+    def __init__(self, tag: Union[str, None], subcmds: List["_ExecuteSubcmd"],
                  selector: MCSelector):
         # tag: temporary tag name (is None for last tuple).
         # subcmds: is list of /execute subcommands.
@@ -371,15 +373,16 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             if last_tag is not None:
                 selector = selector.copy()
                 selector.tag(last_tag)
-            res.append(export_execute_subcommands(
-                subcmds, "tag %s add %s" % (selector.to_str(), tag)
+            res.append(cmds.Execute(
+                subcmds,
+                runs=cmds.Cmd("tag %s add %s" % (selector.to_str(), tag))
             ))
             last_tag = tag
         _, final_subcmds, final_selector = self.data[-1]
         if last_tag is not None:
             final_selector = final_selector.copy()
             final_selector.tag(last_tag)
-        res.append(export_execute_subcommands(
+        res.append(cmds.Execute(
             final_subcmds, command.format(selected=final_selector.to_str())
         ))
         res.extend(self.cleanup)
@@ -392,7 +395,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
         res.var = var
         return res
 
-    def need_set_context(self, *context: str) -> MCSelector:
+    def need_set_context(self, *context: "_ExecuteSubcmd") -> MCSelector:
         if self.context_occupied:
             self._new_data()
         self.data[-1].subcmds.extend(context)

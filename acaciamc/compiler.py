@@ -4,7 +4,7 @@ It assembles files and classes together and write output.
 
 __all__ = ['Compiler']
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 import os
 from contextlib import contextmanager
 
@@ -13,9 +13,45 @@ from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.tokenizer import Tokenizer
 from acaciamc.parser import Parser
-from acaciamc.mccmdgen.generator import Generator, MCFunctionFile
+from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.symbol import SymbolTable
+from acaciamc.mccmdgen.optimizer import Optimizer
+import acaciamc.mccmdgen.cmds as cmds
+
+class OutputManager(cmds.FunctionsManager):
+    def __init__(self):
+        super().__init__("%s/init" % Config.function_folder)
+        self._lib_count = 0
+
+    def new_file(self, file: cmds.MCFunctionFile, path: str):
+        file.set_path("%s/%s" % (Config.function_folder, path))
+        self.files.append(file)
+
+    def add_lib(self, file: cmds.MCFunctionFile):
+        self._lib_count += 1
+        self.new_file(file, "lib/acalib%d" % self._lib_count)
+
+class OutputOptimized(OutputManager, Optimizer):
+    def is_volatile(self, slot: cmds.ScbSlot) -> bool:
+        if super().is_volatile(slot):
+            return True
+        # Scores on user custom scoreboards are volatile
+        return slot.objective != Config.scoreboard
+
+    def entry_files(self):
+        entries = tuple(
+            (Config.function_folder + "/%s" % path)
+            for path in ("interface/", "load", "tick")
+            # "init" is automatically added
+        )
+        for file in self.files:
+            if file.get_path().startswith(entries):
+                yield file
+
+    @property
+    def max_inline_file_size(self) -> int:
+        return Config.max_inline_file_size
 
 class Compiler:
     """Start compiling the project
@@ -35,13 +71,15 @@ class Compiler:
             self.main_dir  # find in program entry (main file)
         ]  # modules will be found in these directories
         self.OPEN_ARGS = open_args
-        self.file_init = MCFunctionFile('init')  # initialize Acacia
-        self.file_main = MCFunctionFile('load')  # load program
-        self.file_tick = MCFunctionFile('tick')  # runs every tick
-        self.libs = []  # list of MCFunctionFiles, store the libraries
+        if Config.optimizer:
+            self.output_mgr = OutputOptimized()
+        else:
+            self.output_mgr = OutputManager()
+        self.file_main = cmds.MCFunctionFile()  # load program
+        self.file_tick = cmds.MCFunctionFile()  # runs every tick
+        self.output_mgr.new_file(self.file_main, "load")
+        self.output_mgr.new_file(self.file_tick, "tick")
         self.current_generator = None  # the Generator that is running
-        self._int_consts = {}  # see method `add_int_const`
-        self._lib_count = 0  # always equal to len(self.libs)
         # vars to record the resources that are applied
         self._score_max = 0  # max id of score allocated
         self._scoreboard_max = 0  # max id of scoreboard allocated
@@ -88,43 +126,20 @@ class Compiler:
         with self._load_generator(main_path) as generator:
             generator.parse()
 
-        # --- WRITE INIT ---
-        self.file_init.write_debug(
-            '## Usage: Initialize Acacia, only need to be ran ONCE',
-            '## Execute this before running anything from Acacia!!!'
-        )
-        self.file_init.write_debug('# Register scoreboard')
-        self.file_init.write(
-            'scoreboard objectives add "%s" dummy' % Config.scoreboard
-        )
-        if self._int_consts:
-            # only comment when there are constants used
-            self.file_init.write_debug('# Load constants')
-            for num, var in self._int_consts.items():
-                self.file_init.write(
-                    'scoreboard players set %s %d' % (var, num))
-        if self._scoreboard_max >= 1:
-            self.file_init.write_debug('# Additional scoreboards')
-            for i in range(1, self._scoreboard_max + 1):
-                self.file_init.write(
-                    'scoreboard objectives add "%s%d" dummy' %
-                    (Config.scoreboard, i)
-                )
-
     def output(self, path: str):
         """Output result to `path`
         e.g. when `path` is "a/b", main file is generated at
         "a/b/<Config.function_folder>/load.mcfunction".
         """
-        f_path = os.path.join(path, Config.function_folder)
-        # --- WRITE FILES ---
-        self._write_mcfunction(self.file_init, f_path)
-        self._write_mcfunction(self.file_main, f_path)
-        for file in self.libs:
-            self._write_mcfunction(file, f_path)
-        # --- tick.json AND tick.mcfunction ---
+        self.output_mgr.generate_init_file()
+        if isinstance(self.output_mgr, OutputOptimized):
+            self.output_mgr.optimize()
+        # Mcfunctions
+        for file in self.output_mgr.files:
+            if file.has_content():
+                self._write_mcfunction(file, path)
+        # tick.json
         if self.file_tick.has_content():
-            self._write_mcfunction(self.file_tick, f_path)
             self._write_file(
                 '{"values": ["%s/tick"]}' % Config.function_folder,
                 os.path.join(path, 'tick.json')
@@ -135,24 +150,22 @@ class Compiler:
         error.set_file(self._current_file)
         raise error
 
-    def add_file(self, file: MCFunctionFile):
-        """Add a file to "libs" folder."""
-        if not file.is_path_set():
-            # if path of file is not given by Generator, we consider it
-            # as a lib, and give it a id automatically
-            self._lib_count += 1
-            file.set_path('lib/acalib%d' % self._lib_count)
-        self.libs.append(file)
+    def add_file(self, file: cmds.MCFunctionFile, path: Optional[str] = None):
+        """Add a file to project. If file's path is not set, then it
+        will go to "lib" folder.
+        """
+        if path is None:
+            self.output_mgr.add_lib(file)
+        else:
+            self.output_mgr.new_file(file, path)
 
     # -- About allocation --
 
-    def allocate(self) -> Tuple[str, str]:
-        """Apply for a new score.
-        Returns (objective, selector)."""
-        self._score_max += 1
-        return (Config.scoreboard, 'acacia%d' % self._score_max)
+    def allocate(self) -> cmds.ScbSlot:
+        """Apply for a new score."""
+        return self.output_mgr.allocate()
 
-    def allocate_tmp(self) -> tuple:
+    def allocate_tmp(self) -> cmds.ScbSlot:
         """Apply for a temporary score
         NOTE Only do this when you are really using a TEMPORARY var
         because the var returned might have been used by others
@@ -168,11 +181,11 @@ class Compiler:
         self.current_generator.current_tmp_scores.append(res)
         return res
 
-    def free_tmp(self, objective: str, selector: str):
+    def free_tmp(self, slot: cmds.ScbSlot):
         """Free the tmp var allocated by method `allocate_tmp`.
         NOTE This is called automatically.
         """
-        self._free_tmp_score.append((objective, selector))
+        self._free_tmp_score.append(slot)
 
     def add_int_const(self, value: int) -> IntVar:
         """Sometimes a constant is needed when calculating in MC
@@ -180,21 +193,11 @@ class Compiler:
              `scoreboard operation ... *= const2 ...`
         This method can create one.
         """
-        # Consts applied are in `self._int_consts`
-        # where keys are ints, values are the vars applied.
-        # Check if the int is already registered
-        var = self._int_consts.get(value)
-        if var is not None:
-            return var
-        # Apply one and register
-        var = IntDataType(self).new_var()
-        self._int_consts[value] = var
-        return var
+        return IntVar(slot=self.output_mgr.int_const(value), compiler=self)
 
     def add_scoreboard(self) -> str:
         """Apply for a new scoreboard"""
-        self._scoreboard_max += 1
-        return Config.scoreboard + str(self._scoreboard_max)
+        return self.output_mgr.add_scoreboard()
 
     def allocate_entity_name(self) -> str:
         """Return a new entity name."""
@@ -335,15 +338,14 @@ class Compiler:
 
     def _write_file(self, content: str, path: str):
         """write `content` to `path`."""
-        os.makedirs(os.path.realpath(os.path.join(path, os.pardir)),
-                    exist_ok=True)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
             with open(path, 'w', **self.OPEN_ARGS) as f:
                 f.write(content)
         except Exception as err:
             self.raise_error(Error(ErrorType.IO, message=str(err)))
 
-    def _write_mcfunction(self, file: MCFunctionFile, path: str):
+    def _write_mcfunction(self, file: cmds.MCFunctionFile, path: str):
         """Write content of `file` to somewhere in output `path`
         e.g. when `path` is "a/b", `file.path` is "a", file is at
         "a/b/a.mcfunction".

@@ -4,10 +4,10 @@ __all__ = [
     # Base classes
     'AcaciaExpr', 'VarValue',
     # Utils
-    'export_execute_subcommands', 'ArgumentHandler',
-    'export_need_tmp', 'ImmutableMixin', 'transform_immutable',
+    'ArgumentHandler', 'export_need_tmp',
+    'ImmutableMixin', 'transform_immutable',
     # Type checking
-    'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T'
+    'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T', 'CMDLIST_T',
 ]
 
 from typing import List, TYPE_CHECKING, Union, Dict, Tuple, Callable, Hashable
@@ -19,21 +19,9 @@ from acaciamc.error import *
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.cmds import Command
 
 ### --- UTILS --- ###
-
-def export_execute_subcommands(subcmds: List[str], main: str) -> str:
-    """Convert a list of /execute subcommands into a command.
-    e.g. cmds = ['if xxx', 'as xxx'], main = 'say ...'
-         returns: 'execute if xxx as xxx run say ...'
-    """
-    if main.strip().startswith("#"):
-        # A comment
-        return main
-    if not subcmds:
-        # optimization: if no subcommand given
-        return main
-    return " ".join(("execute", *subcmds, "run", main))
 
 def export_need_tmp(func):
     """Decorator for `AcaciaExpr.export`.
@@ -60,7 +48,8 @@ def export_need_tmp(func):
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
-CALLRET_T = Tuple["AcaciaExpr", List[str]]  # Result
+CMDLIST_T = List[Union[str, "Command"]]
+CALLRET_T = Tuple["AcaciaExpr", CMDLIST_T]  # Result
 ITERLIST_T = List["AcaciaExpr"]
 
 class AcaciaExpr:
@@ -126,7 +115,7 @@ class AcaciaExpr:
         """
         raise Error(ErrorType.UNCALLABLE, expr_type=str(self.data_type))
 
-    def export(self, var: "VarValue") -> List[str]:
+    def export(self, var: "VarValue") -> CMDLIST_T:
         """Return the commands that assigns value of `self` to `var`.
         Since we need a `VarValue` here, only "storable" types need
         to implement this.

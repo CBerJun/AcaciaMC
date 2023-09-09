@@ -30,7 +30,7 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING, Callable, Union
 import operator as builtin_op
 
 from .base import *
@@ -42,15 +42,18 @@ from acaciamc.tools import axe, resultlib, method_of
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
+import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
-def _to_mcop(operator: str):
-    # convert "+" to "add", "-" to "remove"
-    if operator == '+': return 'add'
-    elif operator == '-': return 'remove'
-    raise ValueError
+STR2SCBOP = {
+    "+": cmds.ScbOp.ADD_EQ,
+    "-": cmds.ScbOp.SUB_EQ,
+    "*": cmds.ScbOp.MUL_EQ,
+    "/": cmds.ScbOp.DIV_EQ,
+    "%": cmds.ScbOp.MOD_EQ,
+}
 
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
@@ -60,15 +63,14 @@ class IntDataType(DefaultDataType, Storable, SupportsEntityField):
 
     def new_var(self, tmp=False) -> "IntVar":
         alloc = self.compiler.allocate_tmp if tmp else self.compiler.allocate
-        objective, selector = alloc()
-        return IntVar(objective, selector, self.compiler)
+        return IntVar(alloc(), self.compiler)
 
     def new_entity_field(self):
         return {"scoreboard": self.compiler.add_scoreboard()}
 
     def new_var_as_field(self, entity, **meta) -> "IntVar":
-        return IntVar(meta["scoreboard"], str(entity),
-                      self.compiler, with_quote=False)
+        return IntVar(cmds.ScbSlot(entity.to_str(), meta["scoreboard"]),
+                      self.compiler)
 
 class IntType(Type):
     def do_init(self):
@@ -99,11 +101,7 @@ class IntType(Type):
                 # Since 0 is used to store False, 1 is for True, just
                 # "cast" it to `IntVar`.
                 dependencies, bool_var = boolean.to_BoolVar(b)
-                return IntVar(
-                    objective=bool_var.objective, selector=bool_var.selector,
-                    with_quote=bool_var.with_quote,
-                    compiler=self.compiler
-                ), dependencies
+                return IntVar(bool_var.slot, self.compiler), dependencies
 
     def datatype_hook(self):
         return IntDataType(self.compiler)
@@ -128,13 +126,10 @@ class IntLiteral(AcaciaExpr):
         return self.value
 
     def export(self, var: "IntVar"):
-        return ['scoreboard players set %s %s' % (var, self)]
+        return [cmds.ScbSetConst(var.slot, self.value)]
 
     def copy(self):
         return IntLiteral(self.value, self.compiler)
-
-    def __str__(self):
-        return str(self.value)
 
     ## UNARY OPERATORS
 
@@ -172,19 +167,12 @@ class IntLiteral(AcaciaExpr):
 
 class IntVar(VarValue):
     """An integer variable."""
-    def __init__(self, objective: str, selector: str,
-                 compiler, with_quote=True):
+    def __init__(self, slot: cmds.ScbSlot, compiler):
         super().__init__(IntDataType(compiler), compiler)
-        self.objective = objective
-        self.selector = selector
-        self.with_quote = with_quote
+        self.slot = slot
 
     def export(self, var: "IntVar"):
-        return ['scoreboard players operation %s = %s' % (var, self)]
-
-    def __str__(self):
-        msg = '"%s" "%s"' if self.with_quote else '%s "%s"'
-        return msg % (self.selector, self.objective)
+        return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
 
     ## UNARY OPERATORS
 
@@ -239,12 +227,11 @@ class IntVar(VarValue):
     def _iadd_sub(self, other, operator: str) -> list:
         """Implementation of iadd and isub."""
         if isinstance(other, IntLiteral):
-            return ['scoreboard players %s %s %s' % (
-                _to_mcop(operator), self, other
-            )]
+            cls = cmds.ScbAddConst if operator == '+' else cmds.ScbRemoveConst
+            return [cls(self.slot, other.value)]
         elif isinstance(other, IntVar):
-            return ['scoreboard players operation %s %s= %s' % (
-                self, operator, other
+            return [cmds.ScbOperation(
+                STR2SCBOP[operator], self.slot, other.slot
             )]
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator)
@@ -254,12 +241,12 @@ class IntVar(VarValue):
         """Implementation of imul, idiv, imod."""
         if isinstance(other, IntLiteral):
             const = self.compiler.add_int_const(other.value)
-            return ['scoreboard players operation %s %s= %s' % (
-                self, operator, const
+            return [cmds.ScbOperation(
+                STR2SCBOP[operator], self.slot, const.slot
             )]
         elif isinstance(other, IntVar):
-            return ['scoreboard players operation %s %s= %s' % (
-                self, operator, other
+            return [cmds.ScbOperation(
+                STR2SCBOP[operator], self.slot, other.slot
             )]
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator)
@@ -292,6 +279,9 @@ class IntVar(VarValue):
     def imod(self, other):
         return self._imul_div_mod(other, '%')
 
+PARTIALCMD_T = Callable[[cmds.ScbSlot, Tuple[cmds.ScbSlot]],
+                        Union[cmds.Command, str]]
+
 class IntOpGroup(AcaciaExpr):
     """An `IntOpGroup` stores how an integer is changed by storing
     unformatted commands where the target positions of scores are
@@ -309,14 +299,15 @@ class IntOpGroup(AcaciaExpr):
     """
     def __init__(self, init, compiler):
         super().__init__(IntDataType(compiler), compiler)
-        self.main: List[str] = []
+        self.main: List[PARTIALCMD_T] = []
         self.libs: List[IntOpGroup]= []
         self._current_lib_index = 0  # always equals to `len(self.libs)`
         # Initial value
         if isinstance(init, IntLiteral):
-            self.write('scoreboard players set {this} %s' % init)
+            self.write(lambda this, libs: cmds.ScbSetConst(this, init.value))
         elif isinstance(init, IntVar):
-            self.write('scoreboard players operation {this} = %s' % init)
+            self.write(lambda this, libs:
+                       cmds.ScbOperation(cmds.ScbOp.ASSIGN, this, init.slot))
         elif init is not None:
             raise ValueError
 
@@ -324,15 +315,14 @@ class IntOpGroup(AcaciaExpr):
     def export(self, var: IntVar):
         res = []
         # subvars: Allocate a tmp int for every `IntOpGroup` in
-        # `self.libs` and export them to this var; finally format
-        # `self.main` using them ({x} means value of self.libs[x]).
+        # `self.libs` and export them to this var.
         subvars: List[IntVar] = []
         for subexpr in self.libs:
             subvar = self.data_type.new_var(tmp=True)
             subvars.append(subvar)
             res.extend(subexpr.export(subvar))
-        res.extend(cmd.format(*subvars, this=var)
-                   for cmd in self.main)
+        subslots = tuple(subvar.slot for subvar in subvars)
+        res.extend(func(var.slot, subslots) for func in self.main)
         return res
 
     def _add_lib(self, lib: "IntOpGroup") -> int:
@@ -341,9 +331,16 @@ class IntOpGroup(AcaciaExpr):
         self._current_lib_index += 1
         return self._current_lib_index - 1
 
-    def write(self, *commands: str):
+    def write(self, *commands: PARTIALCMD_T):
         """Write commands."""
         self.main.extend(commands)
+
+    def write_str(self, *commands: str):
+        """Write commands that are unralated to this value."""
+        def _handle(cmd: str):
+            self.write(lambda this, libs: cmd)
+        for cmd in commands:
+            _handle(cmd)
 
     def copy(self):
         res = IntOpGroup(init=None, compiler=self.compiler)
@@ -370,17 +367,15 @@ class IntOpGroup(AcaciaExpr):
         """
         res = self.copy()
         if isinstance(other, IntLiteral):
-            res.write('scoreboard players %s {this} %s' % (
-                _to_mcop(operator), other
-            ))
+            cls = cmds.ScbAddConst if operator == '+' else cmds.ScbRemoveConst
+            res.write(lambda this, libs: cls(this, other.value))
         elif isinstance(other, IntVar):
-            res.write('scoreboard players operation {this} %s= %s' % (
-                operator, other
-            ))
+            res.write(lambda this, libs:
+                      cmds.ScbOperation(STR2SCBOP[operator], this, other.slot))
         elif isinstance(other, IntOpGroup):
-            res.write('scoreboard players operation {this} %s= {%d}' % (
-                operator, res._add_lib(other)
-            ))
+            idx = res._add_lib(other)
+            res.write(lambda this, libs:
+                      cmds.ScbOperation(STR2SCBOP[operator], this, libs[idx]))
         else:
             return NotImplemented
         return res
@@ -390,19 +385,18 @@ class IntOpGroup(AcaciaExpr):
         operator is '*' or '/' or '%'.
         """
         res = self.copy()
+        op = STR2SCBOP[operator]
         if isinstance(other, IntLiteral):
             const = self.compiler.add_int_const(other.value)
-            res.write('scoreboard players operation {this} %s= %s' % (
-                operator, const
-            ))
+            res.write(lambda this, libs:
+                      cmds.ScbOperation(op, this, const.slot))
         elif isinstance(other, IntVar):
-            res.write('scoreboard players operation {this} %s= %s' % (
-                operator, other
-            ))
+            res.write(lambda this, libs:
+                      cmds.ScbOperation(op, this, other.slot))
         elif isinstance(other, IntOpGroup):
-            res.write('scoreboard players operation {this} %s= {%d}' % (
-                operator, res._add_lib(other)
-            ))
+            idx = res._add_lib(other)
+            res.write(lambda this, libs:
+                      cmds.ScbOperation(op, this, libs[idx]))
         else:
             return NotImplemented
         return res
@@ -446,7 +440,7 @@ class IntOpGroup(AcaciaExpr):
         return self._r_sub_div_mod(other, '__mod__')
 
 # Utils
-def to_IntVar(expr: AcaciaExpr, tmp=True) -> Tuple[List[str], IntVar]:
+def to_IntVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, IntVar]:
     """Convert any integer expression to a `IntVar` and some commands.
     return[0]: the commands to run
     return[1]: the `IntVar`

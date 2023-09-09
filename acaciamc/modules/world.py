@@ -245,6 +245,7 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.tools import axe, resultlib, method_of
 from acaciamc.constants import Config
+import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -365,10 +366,9 @@ def clone(compiler: "Compiler", origin: Position, offset: PosOffset,
     if mode is None:
         mode = "normal"
     mask = "masked" if no_air else "replace"
-    cmd = export_execute_subcommands(
-        origin.context, "clone ~ ~ ~ %s %s %s %s" % (
-            offset, dest, mask, mode
-        )
+    cmd = cmds.Execute(
+        origin.context,
+        runs="clone ~ ~ ~ %s %s %s %s" % (offset, dest, mask, mode)
     )
     return resultlib.commands([cmd], compiler)
 
@@ -385,8 +385,8 @@ def clone_only(compiler, origin: Position, offset: PosOffset, dest: PosOffset,
                mode: Optional[str], block: Block):
     if mode is None:
         mode = "normal"
-    cmd = export_execute_subcommands(
-        origin.context, "clone ~ ~ ~ %s %s filtered %s %s" % (
+    cmd = cmds.Execute(
+        origin.context, runs="clone ~ ~ ~ %s %s filtered %s %s" % (
             offset, dest, mode, block.to_str()
         )
     )
@@ -406,8 +406,8 @@ def fill(compiler, origin: Position, offset: PosOffset, block: Block,
         replacement = "keep"
     elif replacement == "all":
         replacement = "replace"
-    cmd = export_execute_subcommands(
-        origin.context, "fill ~ ~ ~ %s %s %s" % (
+    cmd = cmds.Execute(
+        origin.context, runs="fill ~ ~ ~ %s %s %s" % (
             offset, block.to_str(), replacement
         )
     )
@@ -421,8 +421,8 @@ def fill(compiler, origin: Position, offset: PosOffset, block: Block,
 @axe.arg("replaces", BlockDataType)
 def fill_replace(compiler, origin: Position, offset: PosOffset, block: Block,
          replaces: Block):
-    cmd = export_execute_subcommands(
-        origin.context, "fill ~ ~ ~ %s %s replace %s" % (
+    cmd = cmds.Execute(
+        origin.context, runs="fill ~ ~ ~ %s %s replace %s" % (
             offset, block.to_str(), replaces.to_str()
         )
     )
@@ -440,8 +440,8 @@ def setblock(compiler, pos: Position, block: Block, replacement: str):
         replacement = "keep"
     elif replacement == "all":
         replacement = "replace"
-    cmd = export_execute_subcommands(
-        pos.context, "setblock ~ ~ ~ %s %s" % (
+    cmd = cmds.Execute(
+        pos.context, runs="setblock ~ ~ ~ %s %s" % (
             block.to_str(), replacement
         )
     )
@@ -519,8 +519,9 @@ def kill(compiler, target: "MCSelector"):
 @axe.arg("sender", EntityDataType)
 @axe.arg("message", axe.LiteralString())
 def msg_me(compiler, sender: "_EntityBase", message: str):
-    cmd = export_execute_subcommands(
-        ["as %s" % sender], "me %s" % message
+    cmd = cmds.Execute(
+        [cmds.ExecuteEnv("as", sender.to_str())],
+        runs="me %s" % message
     )
     return resultlib.commands([cmd], compiler)
 
@@ -533,8 +534,9 @@ def msg_me(compiler, sender: "_EntityBase", message: str):
 @axe.arg("keep_old", axe.LiteralBool(), default=False)
 def replaceitem_block(compiler, pos: Position, slot: int, item: Item,
                       amount: int, keep_old: bool):
-    cmd = export_execute_subcommands(
-        pos.context, "replaceitem block ~ ~ ~ slot.container %d %s %s" % (
+    cmd = cmds.Execute(
+        pos.context,
+        "replaceitem block ~ ~ ~ slot.container %d %s %s" % (
             slot, "keep" if keep_old else "destroy",
             item.to_str("{id} %s {data} {components}" % amount)
         )
@@ -636,8 +638,9 @@ def summon_ride(compiler, rider: "MCSelector", type_: str,
 @axe.arg("sender", EntityDataType)
 @axe.arg("message", axe.LiteralString())
 def msg_say(compiler, sender: "_EntityBase", message: str):
-    cmd = export_execute_subcommands(
-        ["as %s" % sender], "say %s" % message
+    cmd = cmds.Execute(
+        [cmds.ExecuteEnv("as", sender.to_str())],
+        "say %s" % message
     )
     return resultlib.commands([cmd], compiler)
 
@@ -655,7 +658,7 @@ def spread(compiler, target: "MCSelector", center: Position,
         raise axe.ArgumentError("interval", "must be >= 0.0")
     if interval + 1 > range_:
         raise axe.ArgumentError("interval", "must be <= range - 1")
-    cmd = export_execute_subcommands(
+    cmd = cmds.Execute(
         center.context, "spreadplayers ~ ~ %s %s %s" % (
             interval, range_, target.to_str()
         )
@@ -674,15 +677,16 @@ if Config.mc_version >= (1, 19, 70):
                event: Optional[str], name: Optional[str]):
         if rot is None:
             rot = Rotation(compiler)
-            rot.context.append("rotated 0 0")
+            rot.context.append(cmds.ExecuteEnv("rotated", "0 0"))
         if event is None:
             event = "*"
         if name is None:
             suffix = ""
         else:
             suffix = " %s" % name
-        cmd = export_execute_subcommands(
-            pos.context + rot.context, "summon %s ~ ~ ~ ~ ~ %s%s" % (
+        cmd = cmds.Execute(
+            pos.context + rot.context,
+            runs="summon %s ~ ~ ~ ~ ~ %s%s" % (
                 type_, event, suffix
             )
         )
@@ -702,8 +706,8 @@ else:
             suffix = ""
         else:
             suffix = " %s" % name
-        cmd = export_execute_subcommands(
-            pos.context, "summon %s ~ ~ ~ %s%s" % (type_, event, suffix)
+        cmd = cmds.Execute(
+            pos.context, runs="summon %s ~ ~ ~ %s%s" % (type_, event, suffix)
         )
         return resultlib.commands([cmd], compiler)
 
@@ -730,8 +734,9 @@ def tag_add(compiler, target: "MCSelector", tag: str):
 @axe.arg("message", axe.LiteralString())
 def msg_tell(compiler, sender: "_EntityBase", receiver: "MCSelector",
              message: str):
-    cmd = export_execute_subcommands(
-        ["as %s" % sender], "tell %s %s" % (receiver.to_str(), message)
+    cmd = cmds.Execute(
+        [cmds.ExecuteEnv("as", sender.to_str())],
+        "tell %s %s" % (receiver.to_str(), message)
     )
     return resultlib.commands([cmd], compiler)
 
@@ -752,7 +757,7 @@ def tp(compiler, target: "MCSelector", dest: Union["_EntityBase", Position],
     main = "tp %s %s ~ ~ %s" % (
         target.to_str(), dest_str, _fmt_bool(check_for_blocks)
     )
-    cmd = export_execute_subcommands(context, main)
+    cmd = cmds.Execute(context, cmds.Cmd(main))
     return resultlib.commands([cmd], compiler)
 
 @_register("rotate")
@@ -761,10 +766,10 @@ def tp(compiler, target: "MCSelector", dest: Union["_EntityBase", Position],
 @axe.arg("rot", RotDataType)
 def rotate(compiler, target: "MCSelector", rot: Rotation):
     ctx = []
-    ctx.append("as %s" % target.to_str())
-    ctx.append("at @s")
+    ctx.append(cmds.ExecuteEnv("as", target.to_str()))
+    ctx.append(cmds.ExecuteEnv("at", "@s"))
     ctx.extend(rot.context)
-    cmd = export_execute_subcommands(ctx, "tp @s ~ ~ ~ ~ ~")
+    cmd = cmds.Execute(ctx, "tp @s ~ ~ ~ ~ ~")
     return resultlib.commands([cmd], compiler)
 
 @_register("move")
@@ -776,8 +781,12 @@ def rotate(compiler, target: "MCSelector", rot: Rotation):
 @axe.arg("check_for_blocks", axe.LiteralBool(), default=False)
 def move(compiler, target: "MCSelector", x: float, y: float, z: float,
          check_for_blocks: bool):
-    cmd = "execute as %s at @s run tp @s ~%.3f ~%.3f ~%.3f %s" % (
-        target.to_str(), x, y, z, _fmt_bool(check_for_blocks)
+    cmd = cmds.Execute(
+        [cmds.ExecuteEnv("as", target.to_str()),
+         cmds.ExecuteEnv("at", "@s")],
+        "tp @s ~%.3f ~%.3f ~%.3f %s" % (
+            x, y, z, _fmt_bool(check_for_blocks)
+        )
     )
     return resultlib.commands([cmd], compiler)
 
@@ -790,8 +799,12 @@ def move(compiler, target: "MCSelector", x: float, y: float, z: float,
 @axe.arg("check_for_blocks", axe.LiteralBool(), default=False)
 def move_local(compiler, target: "MCSelector", left: float, up: float,
                front: float, check_for_blocks: bool):
-    cmd = "execute as %s at @s run tp @s ^%.3f ^%.3f ^%.3f %s" % (
-        target.to_str(), left, up, front, _fmt_bool(check_for_blocks)
+    cmd = cmds.Execute(
+        [cmds.ExecuteEnv("as", target.to_str()),
+         cmds.ExecuteEnv("at", "@s")],
+        "tp @s ^%.3f ^%.3f ^%.3f %s" % (
+            left, up, front, _fmt_bool(check_for_blocks)
+        )
     )
     return resultlib.commands([cmd], compiler)
 
@@ -816,7 +829,7 @@ def move_local(compiler, target: "MCSelector", left: float, up: float,
 def is_block(compiler, pos: Position, block: Block):
     res = AndGroup((), compiler)
     res.main.extend(pos.context)
-    res.main.append("if block ~ ~ ~ %s" % block.to_str())
+    res.main.append(cmds.ExecuteCond("block", "~ ~ ~ %s" % block.to_str()))
     return res
 
 @_register("is_same_area")
@@ -829,9 +842,9 @@ def is_same_area(compiler, pos: Position, offset: PosOffset,
                  other: PosOffset, ignore_air: bool):
     res = AndGroup((), compiler)
     res.main.extend(pos.context)
-    res.main.append("if blocks ~ ~ ~ %s %s %s" % (
+    res.main.append(cmds.ExecuteCond("blocks", "~ ~ ~ %s %s %s" % (
         offset, other, "masked" if ignore_air else "all"
-    ))
+    )))
     return res
 
 @_register("is_entity")
@@ -843,9 +856,9 @@ def is_entity(compiler: "Compiler", ent: "_EntityBase", filter: EntityFilter):
     tmp = compiler.allocate_entity_tag()
     selector = ent.get_selector()
     selector.tag(tmp)
-    cmds = filter.dump("tag {selected} add %s" % tmp)
-    res.dependencies.extend(cmds)
-    res.main.append("if entity %s" % selector.to_str())
+    commands = filter.dump("tag {selected} add %s" % tmp)
+    res.dependencies.extend(commands)
+    res.main.append(cmds.ExecuteCond("entity", selector.to_str()))
     return res, ["tag @e[tag={0}] remove {0}".format(tmp)]
 
 def acacia_build(compiler: "Compiler"):

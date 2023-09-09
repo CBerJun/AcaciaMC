@@ -42,11 +42,16 @@ result:
     ...
 """
 
+from typing import TYPE_CHECKING
+
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.ast import Operator
 from acaciamc.tools import axe, resultlib, method_of
-from acaciamc.mccmdgen.generator import MCFunctionFile
+import acaciamc.mccmdgen.cmds as cmds
+
+if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
 
 class TaskDataType(DefaultDataType):
     name = "Task"
@@ -80,20 +85,20 @@ class Task(AcaciaExpr):
         # runs; it is -1 when no request exists.
         self.timer = IntDataType(compiler).new_var()
         # Allocate a file to call the given function
-        self.target_file = MCFunctionFile()
+        self.target_file = cmds.MCFunctionFile()
         self.compiler.add_file(self.target_file)
-        _res, cmds = target.call(other_arg, other_kw)
-        self.target_file.extend(cmds)
+        _res, call_cmds = target.call(other_arg, other_kw)
+        self.target_file.extend(call_cmds)
         def _timer_reset():
-            cmds = IntLiteral(-1, compiler).export(self.timer)
-            return resultlib.commands(cmds, compiler)
+            commands = IntLiteral(-1, compiler).export(self.timer)
+            return resultlib.commands(commands, compiler)
         @method_of(self, "after")
         @axe.chop
         @axe.arg("delay", IntDataType)
         def _after(compiler, delay: AcaciaExpr):
             """.after(delay: int): Run the target after `delay`"""
-            cmds = delay.export(self.timer)
-            return resultlib.commands(cmds, compiler)
+            commands = delay.export(self.timer)
+            return resultlib.commands(commands, compiler)
         @method_of(self, "cancel")
         @axe.chop
         def _cancel(compiler):
@@ -123,11 +128,11 @@ class Task(AcaciaExpr):
             .on_area_loaded(origin: Pos, offset: Offset)
             Run function when the given area is loaded.
             """
-            return resultlib.commands([export_execute_subcommands(
+            return resultlib.commands([cmds.Execute(
                 origin.context,
-                "schedule on_area_loaded add ~ ~ ~ %s %s" % (
-                    offset, self.target_file.get_path()
-                )
+                runs=cmds.ScheduleFunction(
+                    self.target_file, "on_area_loaded add ~ ~ ~ %s" % offset
+                ),
             )], compiler)
         @method_of(self, "on_circle_loaded")
         @axe.chop
@@ -139,10 +144,11 @@ class Task(AcaciaExpr):
             Run function when the given circle with `origin` as origin
             and `radius` as radius (chunks) is loaded.
             """
-            return resultlib.commands([export_execute_subcommands(
+            return resultlib.commands([cmds.Execute(
                 origin.context,
-                "schedule on_area_loaded add circle ~ ~ ~ %d %s" % (
-                    radius, self.target_file.get_path()
+                runs=cmds.ScheduleFunction(
+                    self.target_file,
+                    "on_area_loaded add circle ~ ~ ~ %d" % radius
                 )
             )], compiler)
         @method_of(self, "on_tickingarea")
@@ -154,22 +160,25 @@ class Task(AcaciaExpr):
             Run function when the given ticking area is added.
             """
             return resultlib.commands([
-                "schedule on_area_loaded add tickingarea %s %s"
-                % (name, self.target_file.get_path())
+                cmds.ScheduleFunction(
+                    self.target_file,
+                    "on_area_loaded add tickingarea %s" % name
+                ),
             ], compiler)
         self.attribute_table.set("_timer", self.timer)
         # Write tick.mcfunction
         self.compiler.file_tick.write_debug("# schedule.Task")
         self.compiler.file_tick.write(
-            export_execute_subcommands(
-                ["if score %s matches 0" % self.timer],
-                main=self.target_file.call()
+            cmds.Execute(
+                [cmds.ExecuteScoreMatch(self.timer.slot, "0")],
+                runs=cmds.InvokeFunction(self.target_file)
             )
         )
         # Let the timer -1
         self.compiler.file_tick.extend(
-            export_execute_subcommands(
-                ["if score %s matches 0.." % self.timer], main=cmd
+            cmds.Execute(
+                [cmds.ExecuteScoreMatch(self.timer.slot, "0..")],
+                runs=cmd
             )
             for cmd in self.timer.isub(IntLiteral(1, self.compiler))
         )
@@ -180,8 +189,8 @@ def _create_register_loop(compiler):
     @axe.arg("interval", IntDataType, default=IntLiteral(1, compiler))
     @axe.star_arg("args", axe.AnyValue())
     @axe.kwds("kwds", axe.AnyValue())
-    def _register_loop(compiler, target: AcaciaExpr,
-                    interval: AcaciaExpr, args, kwds):
+    def _register_loop(compiler: "Compiler", target: AcaciaExpr,
+                       interval: AcaciaExpr, args, kwds):
         """
         schedule.register_loop(
             target: function, interval: int-literal = 1, *args, **kwds
@@ -195,13 +204,13 @@ def _create_register_loop(compiler):
         # Tick loop
         compiler.file_tick.write_debug("# schedule.register_loop")
         ## Call on times up AND reset timer
-        _res, cmds = target.call(args, kwds)
-        cmds.extend(interval.export(timer))
+        _res, tick_commands = target.call(args, kwds)
+        tick_commands.extend(interval.export(timer))
         compiler.file_tick.extend(
-            export_execute_subcommands(
-                ["if score %s matches ..0" % timer], main=cmd
+            cmds.Execute(
+                [cmds.ExecuteScoreMatch(timer.slot, "..0")], runs=cmd
             )
-            for cmd in cmds
+            for cmd in tick_commands
         )
         ## Let the timer -1
         compiler.file_tick.extend(timer.isub(IntLiteral(1, compiler)))
