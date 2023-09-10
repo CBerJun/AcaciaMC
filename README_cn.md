@@ -11,50 +11,48 @@ Acacia 代码最终会被编译为多个 `.mcfunction` 文件，也就是说 Aca
 还是很疑惑吗? 举个例子吧，这段 Acacia 代码可以在 Minecraft 中计算等差数列和:
 ```python
 import print
-def sum_between(start: int, to: int, delta=1) -> int:
+def arithmetic(start: int, to: int, delta=1) -> int:
     #* 返回以`start`为首项，`to`为末项，`delta`为公差的等差数列的和 *#
     result = (start + to) * ((to - start) / delta + 1) / 2
-res = sum_between(-5, 5, delta=2)
-print.tell(print.format("从-5到5，公差为2的等差数列和为%0", res))
+res = arithmetic(-30, 14, delta=2)
+print.tell(print.format("从-30到14，公差为2的等差数列和为%0", res))
 ```
-它会被编译器 (就是这个仓库里的程序) 转换为命令:
+Acacia 可以把上面这段代码转换为命令:
 ```mcfunction
-scoreboard players set "acacia1" "acacia" -5
-scoreboard players set "acacia2" "acacia" 5
-scoreboard players set "acacia3" "acacia" 2
-function acacia/lib/acalib1
-scoreboard players operation "acacia9" "acacia" = "acacia4" "acacia"
-tellraw @a {"rawtext": [{"text": "从-5到5，公差为2的等差数列和为"}, {"score": {"objective": "acacia", "name": "acacia9"}}]}
+# 这些是自动生成的! 很酷吧?
+scoreboard players set acacia1 acacia -30
+scoreboard players set acacia2 acacia 14
+scoreboard players set acacia3 acacia 2
+scoreboard players operation acacia8 acacia = acacia2 acacia
+scoreboard players operation acacia8 acacia -= acacia1 acacia
+scoreboard players operation acacia8 acacia /= acacia3 acacia
+scoreboard players add acacia8 acacia 1
+scoreboard players operation acacia7 acacia = acacia8 acacia
+scoreboard players operation acacia6 acacia = acacia1 acacia
+scoreboard players operation acacia6 acacia += acacia2 acacia
+scoreboard players operation acacia6 acacia *= acacia7 acacia
+scoreboard players operation acacia6 acacia /= acacia5 acacia
+scoreboard players operation acacia4 acacia = acacia6 acacia
+scoreboard players operation acacia9 acacia = acacia4 acacia
+tellraw @a {"rawtext": [{"text": "从-30到14，公差为2的等差数列和为"}, {"score": {"objective": "acacia", "name": "acacia9"}}]}
 ```
 ```mcfunction
-# 第一次运行时设置常量
-scoreboard players set "acacia5" "acacia" 2
+# 初始化: 创建计分板并建立常量
+scoreboard objectives add acacia dummy
+scoreboard players set acacia5 acacia 2
 ```
-```mcfunction
-## 这是 acacia/lib/acalib1.mcfunction
-# "acacia1"，"acacia2" 和 "acacia3" 对应 start to 和 delta
-# "acacia4" 是 result
-scoreboard players operation "acacia8" "acacia" = "acacia2" "acacia"
-scoreboard players operation "acacia8" "acacia" -= "acacia1" "acacia"
-scoreboard players operation "acacia8" "acacia" /= "acacia3" "acacia"
-scoreboard players add "acacia8" "acacia" 1
-scoreboard players operation "acacia7" "acacia" = "acacia8" "acacia"
-scoreboard players operation "acacia6" "acacia" = "acacia1" "acacia"
-scoreboard players operation "acacia6" "acacia" += "acacia2" "acacia"
-scoreboard players operation "acacia6" "acacia" *= "acacia7" "acacia"
-scoreboard players operation "acacia6" "acacia" /= "acacia5" "acacia"
-scoreboard players operation "acacia4" "acacia" = "acacia6" "acacia"
-```
-运行它，就会在 Minecraft 聊天栏输出:
-> 从-5到5，公差为2的等差数列和为0
+运行这些生成的命令，就会在 Minecraft 聊天栏输出:
+> 从-30到14，公差为2的等差数列和为-184
 
-Acacia 是使用 Python 编写的，所以编译器需要 Python（需要 3.6 或以上版本）来运行。
+**总结一下，使用 Acacia 可以制作 Minecraft 的项目————但不是利用命令，而是利用 Acacia 代码，它阅读和维护起来都更加简单。**
+
+Acacia 是使用 Python 编写的，所以编译器 (就是把代码转换为命令的程序) 需要 Python（需要 3.6 或以上版本）来运行。
 
 ## Acacia 能干什么?
 一些实例:
 - **一条命令都不用写**，就可以做一个在 Minecraft 中运行的俄罗斯方块!
   在[这里](test/demo/tetris.aca)查看它的源码。
-  源码只有14KB! 而生成出来的命令却多达300多KB。
+  源码只有14KB! 而生成出来的命令却多达约280KB，约50个文件。
 - 通过内置模块 `music` 可以从乐谱自动生成红石音乐。
 
 具体功能:
@@ -64,7 +62,7 @@ Acacia 是使用 Python 编写的，所以编译器需要 Python（需要 3.6 �
 - 不用捣鼓计分板了; 取而代之的是编程中常见的变量系统。
 - 不用穷举一堆重复命令了; Acacia 很擅长生成重复命令。
 - 可以定义分支、循环结构。
-- 常量内容丰富，包括数字、字符串、数组、映射表、甚至坐标等，使作品更加灵活。
+- 编译时常量内容丰富，包括数字、字符串、数组、映射表、甚至坐标等，使作品更加灵活。
 
 查看[这个文件](test/brief.aca)来了解更多关于 Acacia 语法的信息。
 
@@ -116,8 +114,9 @@ m -> music.Music("music_score.mid", speed=1.2)
 m.play()
 ```
 
-常量的使用与重复性命令自动生成:
+利用常量和`for`来避免重复性代码:
 ```python
+# 根据变量的值放置不同颜色的混凝土方块
 COLORS -> {
     0: "cyan", 1: "orange", 2: "yellow",
     3: "purple", 4: "lime", 5: "red", 6: "blue"
