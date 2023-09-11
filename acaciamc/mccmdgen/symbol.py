@@ -46,11 +46,9 @@ class ScopedSymbolTable(SymbolTable):
         self.builtins = builtins
 
     def __iter__(self):
-        def _iterator():
-            yield from super()
-            if self.outer:
-                yield from self.outer
-        return _iterator()
+        yield from super().__iter__()
+        if self.outer:
+            yield from self.outer
 
     def lookup(self, name: str, use_builtins=True):
         res = super().lookup(name)
