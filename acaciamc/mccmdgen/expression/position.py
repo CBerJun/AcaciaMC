@@ -137,12 +137,6 @@ class Position(AcaciaExpr, ImmutableMixin):
                 raise Error(ErrorType.INVALID_POS_ALIGN, align=axis)
             self.context.append(cmds.ExecuteEnv("align", axis))
             return self
-        @method_of(self, "context")
-        @axe.chop
-        def _context(compiler):
-            """.context(): print current context (debug only)."""
-            print(self.context)
-            return self
         self.attribute_table.set("abs", BinaryFunction(_abs, self.compiler))
         self.attribute_table.set(
             "offset", BinaryFunction(_offset, self.compiler))
