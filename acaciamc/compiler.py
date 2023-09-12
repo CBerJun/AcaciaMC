@@ -108,6 +108,7 @@ class Compiler:
             ('Enfilter', EFilterType),
             ('array', ArrayType),
             ('map', MapType),
+            ('AbsPos', AbsPosType),
         ):
             self.builtins.set(name, cls(self))
         # builtin names

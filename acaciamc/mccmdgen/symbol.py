@@ -19,6 +19,10 @@ class SymbolTable:
         If name does not exists, create it."""
         self._table[name] = value
 
+    def delete(self, name: str):
+        """Delete `name`."""
+        del self._table[name]
+
     def update(self, d: Dict[str, Any]):
         """Update symbol table with `d`."""
         self._table.update(d)
