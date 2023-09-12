@@ -119,12 +119,19 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
     def max_inline_file_size(self) -> int:
         pass
 
+    def dont_inline_execute_call(self, file: cmds.MCFunctionFile) -> bool:
+        """When True is returned, `execute ... run function` in `file`
+        will not be inlined by `opt_function_inliner`.
+        """
+        return False
+
     def opt_function_inliner(self):
         """Expand mcfunctions that only have 1 reference."""
         # Locating optimizable
         todo: Dict[cmds.MCFunctionFile, Tuple[cmds.MCFunctionFile, int]] = {}
         called: Set[cmds.MCFunctionFile] = set()
         for file in self.files:
+            no_execute = self.dont_inline_execute_call(file)
             for i, command in enumerate(file.commands):
                 callee = command.func_ref()
                 if callee is None:
@@ -132,16 +139,21 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                 runs = command
                 can_opt = True
                 while isinstance(runs, cmds.Execute):
-                    for subcmd in runs.subcmds:
-                        if not isinstance(
-                            subcmd, (cmds.ExecuteScoreComp,
-                                     cmds.ExecuteScoreMatch)
-                        ):
+                    if can_opt:
+                        # Attempt to find some reason why it cannot be
+                        # optimized...
+                        if no_execute:
                             can_opt = False
-                            break
-                            # Environment other than if/unless score may
-                            # change during execution of commands, so we
-                            # can't inline it.
+                        # Environment other than if/unless score may
+                        # change during execution of commands, so we
+                        # can't inline it.
+                        for subcmd in runs.subcmds:
+                            if not isinstance(
+                                subcmd, (cmds.ExecuteScoreComp,
+                                        cmds.ExecuteScoreMatch)
+                            ):
+                                can_opt = False
+                                break
                     runs = runs.runs
                 if callee in called:
                     # More than 1 references

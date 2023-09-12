@@ -53,6 +53,11 @@ class OutputOptimized(OutputManager, Optimizer):
     def max_inline_file_size(self) -> int:
         return Config.max_inline_file_size
 
+    def dont_inline_execute_call(self, file: cmds.MCFunctionFile) -> bool:
+        # Expanding /execute function calls in tick.mcfunction can
+        # decrease performance badly.
+        return file.get_path() == Config.function_folder + "/tick"
+
 class Compiler:
     """Start compiling the project
     A Compiler manage the resources in the compile task and
