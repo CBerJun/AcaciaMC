@@ -197,14 +197,18 @@ def _create_register_loop(compiler):
         )
         Call a function repeatly every `interval` ticks with `args` and `kwds`.
         """
+        _res, tick_commands = target.call(args, kwds)
+        compiler.file_tick.write_debug("# schedule.register_loop")
+        # Optimization: if the interval is 1, no need for timer
+        if isinstance(interval, IntLiteral) and interval.value == 1:
+            compiler.file_tick.extend(tick_commands)
+            return None
         # Allocate an int for timer
         timer = IntDataType(compiler).new_var()
         # Initialize
         init_cmds = IntLiteral(0, compiler).export(timer)
         # Tick loop
-        compiler.file_tick.write_debug("# schedule.register_loop")
         ## Call on times up AND reset timer
-        _res, tick_commands = target.call(args, kwds)
         tick_commands.extend(interval.export(timer))
         compiler.file_tick.extend(
             cmds.Execute(
