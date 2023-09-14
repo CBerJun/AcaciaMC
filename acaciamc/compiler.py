@@ -137,9 +137,9 @@ class Compiler:
         e.g. when `path` is "a/b", main file is generated at
         "a/b/<Config.function_folder>/load.mcfunction".
         """
-        self.output_mgr.generate_init_file()
         if isinstance(self.output_mgr, OutputOptimized):
             self.output_mgr.optimize()
+        self.output_mgr.generate_init_file()  # do this after optimize
         # Mcfunctions
         for file in self.output_mgr.files:
             if file.has_content():
