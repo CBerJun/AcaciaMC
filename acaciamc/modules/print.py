@@ -6,7 +6,7 @@ from copy import deepcopy
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import *
-from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.tools import axe, resultlib
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -64,9 +64,6 @@ class _FStrParser:
         self.json.append({
             "score": {"objective": slot.objective, "name": slot.target}
         })
-
-    def add_localization(self, key: str):
-        self.json.append({"translate": key})
 
     def add_expr(self, expr: AcaciaExpr):
         """Format an expression to string."""
@@ -126,18 +123,8 @@ class _FStrParser:
                 # '%%' escape -> '%' OR '%' at the end of string
                 self.add_text('%')
                 continue
-            # 1. After '%' can be a character indicating the mode
-            if second == 'k':  # Valid mode
-                mode = second
-                third = self.next_char()
-                if third is None:
-                    self.add_text(char + mode)
-                    continue
-            else:  # No mode specified
-                mode = ''
-                third = second
-            # 2. Parse which expression is being used here
-            if third == '{':
+            # 1. Parse which expression is being used here
+            if second == '{':
                 # read until }
                 expr_str = ''
                 expr_char = self.next_char()
@@ -148,68 +135,23 @@ class _FStrParser:
                     expr_char = self.next_char()
                 # expr is integer or an identifier
                 expr = self.expr_from_id(expr_str)
-            elif third.isdecimal():
+            elif second.isdecimal():
                 # %1 is the alias to %{1}
-                expr = self.expr_from_id(third)
+                expr = self.expr_from_id(second)
             else:
                 # can't be understood, just use raw text
-                self.add_text(char + mode + third)
+                self.add_text(char + second)
                 continue
             # 3. Handle the `expr` we got
-            if mode == 'k':  # localization
-                # An original `str` (not fstring) is required for
-                # localization key
-                if not isinstance(expr, String):
-                    raise _FStrError(
-                        'Type "%s" is not supported as localization key'
-                        % expr.data_type)
-                self.add_localization(expr.value)
-            else:  # default mode
-                self.add_expr(expr)
+            self.add_expr(expr)
         return self.dependencies, self.json
 
 class FStringDataType(DefaultDataType):
     name = 'fstring'
 
-class FStringType(Type):
-    """
-    format(_pattern: str, *args, **kwargs)
-
-    Formatted string type.
-    So far, `args` and `kwargs` may be int, bool, str and fstring
-    NOTE Booleans are formatted as "0" and "1".
-    in _pattern:
-     "%%" -> character "%"
-     "%{" integer "}" -> args[integer]
-     "%" one-digit-number -> alias to `"%{" one-digit-number "}"`
-     "%{" id "}" -> kwargs[id] (id is an valid Acacia identifier)
-    Additionally, you can add following character after the first "%":
-     "k": Use localization key
-     (omitted): Default mode, format the expression as string
-    Examples:
-     format("Val1: %0; Val2: %{name}; Name: %{1}", val1, val2, name=x)
-     format("Find %k{diamond} please!", diamond="item.diamond.name")
-    """
-    def do_init(self):
-        @method_of(self, "__new__")
-        @axe.chop
-        @axe.arg("_pattern", axe.LiteralString(), rename="pattern")
-        @axe.star_arg("args", axe.AnyValue())
-        @axe.kwds("kwds", axe.AnyValue())
-        def _new(compiler, pattern: str, args, kwds):
-            try:
-                dependencies, json = _FStrParser(pattern, args, kwds).parse()
-            except _FStrError as err:
-                raise Error(ErrorType.ANY, message=str(err))
-            # scan pattern
-            return FString(dependencies, json, compiler)
-
-    def datatype_hook(self):
-        return FStringDataType()
-
 class FString(AcaciaExpr):
     """A formatted string in JSON format."""
-    def __init__(self, dependencies: List[str], json: list, compiler):
+    def __init__(self, dependencies: List[str], json: List[dict], compiler):
         # dependencies: commands to run before json rawtext is used
         # json: JSON rawtext without {"rawtext": ...}
         super().__init__(FStringDataType(), compiler)
@@ -242,7 +184,46 @@ class FString(AcaciaExpr):
     def __radd__(self, other):
         return self.__add__(other)
 
-# output functions
+### Functions ###
+
+## For creating strings
+
+@axe.chop
+@axe.arg("_pattern", axe.LiteralString(), rename="pattern")
+@axe.star_arg("args", axe.AnyValue())
+@axe.kwds("kwds", axe.AnyValue())
+def _format(compiler, pattern: str, args, kwds):
+    """
+    format(_pattern: str, *args, **kwargs)
+
+    Formatted string type.
+    So far, `args` and `kwargs` may be int, bool, str and fstring
+    NOTE Booleans are formatted as "0" and "1".
+    in _pattern:
+     "%%" -> character "%"
+     "%{" integer "}" -> args[integer]
+     "%" one-digit-number -> alias to `"%{" one-digit-number "}"`
+     "%{" id "}" -> kwargs[id] (id is an valid Acacia identifier)
+    Examples:
+     format("Val1: %0; Val2: %{value}; Name: %{1}", val1, x, value=val2)
+    """
+    try:
+        dependencies, json = _FStrParser(pattern, args, kwds).parse()
+    except _FStrError as err:
+        raise Error(ErrorType.ANY, message=str(err))
+    # scan pattern
+    return FString(dependencies, json, compiler)
+
+@axe.chop
+@axe.arg("key", axe.LiteralString())
+def _translate(compiler, key: str):
+    """
+    Return an fstring that uses the given localization key.
+    Example: format("Give me %0!", translate("item.diamond.name"))
+    """
+    return FString([], [{"translate": key}], compiler)
+
+## For printing
 
 @axe.chop
 @axe.arg("text", ArgFString())
@@ -330,7 +311,8 @@ def _title_clear(compiler, target: Optional["MCSelector"]):
 
 def acacia_build(compiler: "Compiler"):
     return {
-        'format': FStringType(compiler),
+        'format': BinaryFunction(_format, compiler),
+        'translate': BinaryFunction(_translate, compiler),
         'tell': BinaryFunction(_tell, compiler),
         'title': BinaryFunction(_title, compiler),
         'TITLE': String(_TITLE, compiler),

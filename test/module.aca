@@ -19,7 +19,10 @@ print.title(fs2)
 print.title(s, target=player, mode=print.ACTIONBAR, stay_time=100)
 print.title_clear(player)
 # Localization keys
-print.tell(print.format("Give me 10 %k0", "item.diamond.name"))
+print.tell(print.format(
+    "Give me a %0!",
+    print.translate("item.diamond.name")
+))
 
 #* schedule: Working through several ticks *#
 import schedule
