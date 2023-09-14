@@ -2,6 +2,7 @@
 
 from abc import ABCMeta, abstractmethod
 from enum import Enum
+from copy import deepcopy
 from typing import List, NamedTuple, Optional, Union, Iterable, Callable, Dict
 import json
 
@@ -525,14 +526,16 @@ class RawtextOutput(Command):
         )
 
     def scb_replace(self, origin: ScbSlot, target: ScbSlot):
-        components = self.components.copy()
-        for d in self.score_components:
-            dp = d.copy()
-            if (origin.objective == d["objective"]
-                and origin.target == d["name"]):
-                dp["name"] = target.target
-                dp["objective"] = target.objective
-            components.append(dp)
+        components = deepcopy(self.components)
+        for component in components:
+            if "score" in component:
+                d = component["score"]
+                if "name" not in d or "objective" not in d:
+                    raise ValueError
+                if (origin.objective == d["objective"]
+                    and origin.target == d["name"]):
+                    d["name"] = target.target
+                    d["objective"] = target.objective
         return RawtextOutput(self.prefix, components)
 
 class TitlerawTimes(Command):
