@@ -507,6 +507,12 @@ class RawtextOutput(Command):
             self.add_component(component)
 
     def add_component(self, component: dict):
+        if "text" in component:
+            if self.components and "text" in self.components[-1]:
+                self.components[-1]["text"] += component["text"]
+            elif component["text"]:
+                self.components.append(component)
+            return
         self.components.append(component)
         if "score" in component:
             d = component["score"]
