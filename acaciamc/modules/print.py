@@ -1,12 +1,13 @@
 """print - String formatting and printing module."""
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 from copy import deepcopy
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
+from acaciamc.constants import Config
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -23,8 +24,7 @@ class ArgFString(axe.Multityped):
     def convert(self, origin: AcaciaExpr) -> "FString":
         origin = super().convert(origin)
         if isinstance(origin, String):
-            fstr = FString([], [], origin.compiler)
-            fstr.add_text(origin.value)
+            fstr = FString([], [{"text": origin.value}], origin.compiler)
         else:
             assert isinstance(origin, FString)
             fstr = origin
@@ -55,7 +55,9 @@ class _FStrParser:
     def add_text(self, text: str):
         # if the last component in json is text, too,
         # we add these text to it
-        if bool(self.json) and self.json[-1].get('text'):
+        if (bool(self.json)
+                and "text" in self.json[-1]
+                and not isinstance(self.json[-1], _FontComponent)):
             self.json[-1]['text'] += text
         else:  # fallback
             self.json.append({"text": text})
@@ -158,13 +160,6 @@ class FString(AcaciaExpr):
         self.dependencies = dependencies
         self.json = json
 
-    def add_text(self, text: str):
-        # add text to fstring
-        if bool(self.json) and self.json[-1].get('text'):
-            self.json[-1]['text'] += text
-        else:  # fallback
-            self.json.append({"text": text})
-
     def copy(self):
         return FString(self.dependencies.copy(),
                        deepcopy(self.json), self.compiler)
@@ -173,7 +168,7 @@ class FString(AcaciaExpr):
         # connect strings
         res = self.copy()
         if isinstance(other, String):
-            res.add_text(other.value)
+            res.json.append({"text": other.value})
         elif isinstance(other, FString):
             # connect json
             res.json.extend(other.json)
@@ -222,6 +217,117 @@ def _translate(compiler, key: str):
     Example: format("Give me %0!", translate("item.diamond.name"))
     """
     return FString([], [{"translate": key}], compiler)
+
+class _FontComponent(dict):
+    def __init__(self, text: str, label: str):
+        super().__init__()
+        self["text"] = text
+        self.label = label
+
+COLOR_DEFAULT = "default"
+COLORS = {
+    "black": "0",
+    "dark_blue": "1",
+    "dark_green": "2",
+    "dark_aqua": "3",
+    "dark_red": "4",
+    "dark_purple": "5",
+    "gold": "6",
+    "gray": "7",
+    "dark_gray": "8",
+    "blue": "9",
+    "green": "a",
+    "aqua": "b",
+    "red": "c",
+    "light_purple": "d",
+    "yellow": "e",
+    "white": "f",
+    "minecoin_gold": "g",
+}
+# 1.19.80+ colors
+COLORS_NEW = {
+    "material_quartz": "h",
+    "material_iron": "i",
+    "material_netherite": "j",
+    "material_redstone": "m",
+    "material_copper": "n",
+    "material_gold": "p",
+    "material_emerald": "q",
+    "material_diamond": "s",
+    "material_lapis": "t",
+    "material_amethyst": "u",
+}
+
+@axe.chop
+@axe.arg("text", ArgFString())
+@axe.arg("color", axe.LiteralStringEnum(*COLORS, *COLORS_NEW, COLOR_DEFAULT),
+         default=COLOR_DEFAULT)
+@axe.arg("bold", axe.LiteralBool(), default=False)
+@axe.arg("italic", axe.LiteralBool(), default=False)
+@axe.arg("obfuscated", axe.LiteralBool(), default=False)
+def _with_font(compiler, text: FString, color: str,
+               bold: bool, italic: bool, obfuscated: bool):
+    """
+    with_font(
+        text: str | fstring,
+        color: str = "default",
+        bold: bool-literal = False,
+        italic: bool-literal = False,
+        obfuscated: bool-literal = False
+    ) -> fstring
+    Return an fstring that has the given color and font when displayed.
+    When uses of this function are embedded, for example:
+        with_font(
+            format("Hello %0!", with_font("world", "red", bold=True)),
+            color="green"
+        )
+    The inner `with_font` has higher priority, so the result is:
+        "Hello " (green) + "world" (red, bold) + "!" (green)
+    When this function is used, it is not recommended to use formatting
+    code (\u00A7, section sign) manually.
+    """
+    if color in COLORS_NEW and Config.mc_version < (1, 19, 80):
+        raise axe.ArgumentError(
+            "color", "%r is only available in MC 1.19.80+" % color
+        )
+    res = text.copy()
+    fmt_code = ""
+    if color != COLOR_DEFAULT:
+        if color in COLORS_NEW:
+            color_str = COLORS_NEW[color]
+        else:
+            color_str = COLORS[color]
+        fmt_code += "\xA7" + color_str
+    if bold:
+        fmt_code += "\xA7l"
+    if italic:
+        fmt_code += "\xA7o"
+    if obfuscated:
+        fmt_code += "\xA7k"
+    scopes: List[Tuple[int, int]] = []  # [start, end)
+    start_i = 0
+    start_levels = 0
+    json_len = len(res.json)
+    for i, component in enumerate(res.json):
+        if isinstance(component, _FontComponent):
+            if component.label == "start":
+                start_levels += 1
+                if start_levels == 1 and i > start_i:
+                    scopes.append((start_i, i))
+                    start_i = -1
+            if component.label == "end":
+                start_levels -= 1
+                if start_levels == 0 and i != json_len - 1:
+                    start_i = i + 1
+    if start_levels:
+        raise ValueError("Unclosed font scope")
+    if start_i != -1:
+        scopes.append((start_i, json_len))
+    scopes.reverse()
+    for start_i, end_i in scopes:
+        res.json.insert(end_i, _FontComponent("\xA7r", "end"))
+        res.json.insert(start_i, _FontComponent(fmt_code, "start"))
+    return res
 
 ## For printing
 
@@ -313,6 +419,7 @@ def acacia_build(compiler: "Compiler"):
     return {
         'format': BinaryFunction(_format, compiler),
         'translate': BinaryFunction(_translate, compiler),
+        'with_font': BinaryFunction(_with_font, compiler),
         'tell': BinaryFunction(_tell, compiler),
         'title': BinaryFunction(_title, compiler),
         'TITLE': String(_TITLE, compiler),
