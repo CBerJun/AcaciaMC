@@ -5,6 +5,8 @@ __all__ = ["MCSelector", "SELECTORVAR_T"]
 from typing import Union, Dict, Any, Optional
 from copy import deepcopy
 
+from acaciamc.mccmdgen.cmds import mc_str
+
 SELECTORVAR_T = str  # Literal["a", "e", "r", "p", "s", "initiator"]
 
 class MCSelector:
@@ -89,12 +91,12 @@ class MCSelector:
     def tag(self, *tag: str):
         if not self.has_arg("tag"):
             self.args["tag"] = []
-        self.args["tag"].extend(tag)
+        self.args["tag"].extend(map(mc_str, tag))
 
     def tag_n(self, *tag: str):
         if not self.has_arg("tag"):
             self.args["tag!"] = []
-        self.args["tag!"].extend(tag)
+        self.args["tag!"].extend(map(mc_str, tag))
 
     def type(self, type_: str):
         self.args["type"] = type_
@@ -137,12 +139,12 @@ class MCSelector:
         self.args["ry"] = max_
 
     def name(self, name: str):
-        self.args["name"] = name
+        self.args["name"] = mc_str(name)
 
     def name_n(self, *names: str):
         if not self.has_arg("name!"):
             self.args["name!"] = []
-        self.args["name!"].extend(names)
+        self.args["name!"].extend(map(mc_str, names))
 
     def has_item(self, item: str, quantity: str, data: Optional[int],
                  slot_type: Optional[str], slot_num: Optional[int]):
@@ -160,7 +162,7 @@ class MCSelector:
     def scores(self, objective: str, range_: str):
         if not self.has_arg("scores"):
             self.args["scores"] = []
-        self.args["scores"].append((objective, range_))
+        self.args["scores"].append((mc_str(objective), range_))
 
     def level(self, min_: Optional[int], max_: Optional[int]):
         if min_ is not None:

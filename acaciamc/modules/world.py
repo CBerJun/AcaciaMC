@@ -607,7 +607,7 @@ def summon_rider(compiler, ride: "MCSelector", type_: str,
     if name is None:
         suffix = ""
     else:
-        suffix = " %s" % name
+        suffix = " %s" % cmds.mc_str(name)
     cmd = "ride %s summon_rider %s %s%s" % (
         ride.to_str(), type_, "*" if event is None else event, suffix
     )
@@ -627,7 +627,7 @@ def summon_ride(compiler, rider: "MCSelector", type_: str,
     if name is None:
         suffix = ""
     else:
-        suffix = " %s" % name
+        suffix = " %s" % cmds.mc_str(name)
     cmd = "ride %s summon_ride %s %s %s %s" % (
         rider.to_str(), type_, mode, "*" if event is None else event, suffix
     )
@@ -683,7 +683,7 @@ if Config.mc_version >= (1, 19, 70):
         if name is None:
             suffix = ""
         else:
-            suffix = " %s" % name
+            suffix = " %s" % cmds.mc_str(name)
         cmd = cmds.Execute(
             pos.context + rot.context,
             runs="summon %s ~ ~ ~ ~ ~ %s%s" % (
@@ -705,7 +705,7 @@ else:
         if name is None:
             suffix = ""
         else:
-            suffix = " %s" % name
+            suffix = " %s" % cmds.mc_str(name)
         cmd = cmds.Execute(
             pos.context, runs="summon %s ~ ~ ~ %s%s" % (type_, event, suffix)
         )
@@ -716,7 +716,7 @@ else:
 @axe.arg("target", axe.Selector())
 @axe.arg("tag", axe.LiteralString())
 def tag_add(compiler, target: "MCSelector", tag: str):
-    cmd = "tag %s add %s" % (target.to_str(), tag)
+    cmd = "tag %s add %s" % (target.to_str(), cmds.mc_str(tag))
     return resultlib.commands([cmd], compiler)
 
 @_register("tag_remove")
@@ -724,7 +724,7 @@ def tag_add(compiler, target: "MCSelector", tag: str):
 @axe.arg("target", axe.Selector())
 @axe.arg("tag", axe.LiteralString())
 def tag_add(compiler, target: "MCSelector", tag: str):
-    cmd = "tag %s remove %s" % (target.to_str(), tag)
+    cmd = "tag %s remove %s" % (target.to_str(), cmds.mc_str(tag))
     return resultlib.commands([cmd], compiler)
 
 @_register("msg_tell")
