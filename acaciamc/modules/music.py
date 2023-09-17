@@ -310,14 +310,14 @@ class Music(AcaciaExpr):
                 for i, file in enumerate(self.files)
             )
             commands.extend(
-                cmds.Execute(
+                cmds.execute(
                     [cmds.ExecuteScoreMatch(self.timer.slot, "..%d" % GT_LEN)],
                     runs=cmd
                 )
                 for cmd in self.timer.iadd(IntLiteral(1, self.compiler))
             )
             if looping >= 0:
-                commands.extend(cmds.Execute(
+                commands.extend(cmds.execute(
                     [cmds.ExecuteScoreMatch(
                         self.timer.slot, str(GT_LEN + 1)
                     )],

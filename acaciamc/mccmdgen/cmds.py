@@ -498,6 +498,17 @@ class Execute(Command):
             runs = self.runs
         return Execute(subcmds, runs)
 
+def execute(subcmds: List[_ExecuteSubcmd], runs: Union[Command, str]):
+    """`Execute` factory. This prevents /execute being added when
+    `runs` is a comment.
+    """
+    if isinstance(runs, Comment):
+        return runs
+    if isinstance(runs, str):
+        if runs.lstrip().startswith("#"):
+            return Comment(runs)
+    return Execute(subcmds, runs)
+
 class RawtextOutput(Command):
     def __init__(self, prefix: str, components: List[dict]):
         self.prefix = prefix

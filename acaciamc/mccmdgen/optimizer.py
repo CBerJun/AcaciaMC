@@ -225,18 +225,12 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                         subcmds, cmds.ScbSetConst(tmp, 1)
                     ))
                     for command in callee.commands:
-                        if isinstance(command, cmds.Comment):
-                            inserts.append(command)
-                        else:
-                            inserts.append(cmds.Execute(
-                                [cmds.ExecuteScoreMatch(tmp, "1")], command
-                            ))
+                        inserts.append(cmds.execute(
+                            [cmds.ExecuteScoreMatch(tmp, "1")], command
+                        ))
                 elif subcmds:
                     for command in callee.commands:
-                        if isinstance(command, cmds.Comment):
-                            inserts.append(command)
-                        else:
-                            inserts.append(cmds.Execute(subcmds, command))
+                        inserts.append(cmds.execute(subcmds, command))
                 else:
                     inserts.extend(callee.commands)
                 if Config.debug_comments:

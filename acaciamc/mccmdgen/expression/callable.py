@@ -195,7 +195,7 @@ class BoundMethodDispatcher(AcaciaExpr):
         commands.extend(result.export(self.result_var))
         file.write_debug("# To implementation in %s" % template.name)
         file.extend(
-            cmds.Execute(
+            cmds.execute(
                 [cmds.ExecuteCond(
                     "entity", "@s[tag=%s]" % template.runtime_tag
                 )], runs=cmd

@@ -176,7 +176,7 @@ class Task(AcaciaExpr):
         )
         # Let the timer -1
         self.compiler.file_tick.extend(
-            cmds.Execute(
+            cmds.execute(
                 [cmds.ExecuteScoreMatch(self.timer.slot, "0..")],
                 runs=cmd
             )
@@ -211,7 +211,7 @@ def _create_register_loop(compiler):
         ## Call on times up AND reset timer
         tick_commands.extend(interval.export(timer))
         compiler.file_tick.extend(
-            cmds.Execute(
+            cmds.execute(
                 [cmds.ExecuteScoreMatch(timer.slot, "..0")], runs=cmd
             )
             for cmd in tick_commands
