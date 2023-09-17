@@ -26,14 +26,13 @@ import world
 UPDATE_INTERVAL -> 8  # ticks
 WIDTH -> 10
 HEIGHT -> 20
-ORIGIN -> {0, -50, 0}
-ORIGIN_POS -> Pos(ORIGIN.get(0), ORIGIN.get(1), ORIGIN.get(2))
+ORIGIN_POS -> AbsPos(0, -50, 0)
 BLOCK_EMPTY -> world.Block("concrete", {"color": "black"})
-PLAYER_POS -> Pos(
+PLAYER_POS -> ORIGIN_POS.offset(
     # +0.5 in X and Z because player should be in middle of a block
-    ORIGIN.get(0) + WIDTH / 2 + 0.5,
-    ORIGIN.get(1) + 20,
-    ORIGIN.get(2) + HEIGHT / 2 + 0.5
+    x = WIDTH / 2 + 0.5,
+    y = +20,
+    z = HEIGHT / 2 + 0.5
 )
 
 SHAPE_I -> 0
@@ -131,6 +130,22 @@ entity PosDummy:
             self, "invisibility", duration=int.MAX, particle=False
         )
 
+    inline def move(row: int = 0, col: int = 0):
+        #* Move the dummy. *#
+        world.move(self, z=row, x=col)
+
+    def go_to(row: int, col: int):
+        #* Teleport dummy to given place. *#
+        world.tp(self, ORIGIN_POS)
+        i = row
+        while i > 0:
+            self.move(row=+1)
+            i -= 1
+        i = col
+        while i > 0:
+            self.move(col=+1)
+            i -= 1
+
 shape_row = 0
 shape_col = 0
 shape_type = -1
@@ -161,27 +176,13 @@ def get_shape_size(shape: int, rotation: int) -> Size:
                 result.width = size_arr.get(0)
                 result.height = size_arr.get(1)
 
-def position_dummy(dummy: entity(PosDummy), row: int, col: int):
-    #* Position dummy to given place. *#
-    world.tp(dummy, ORIGIN_POS)
-    i = row
-    while i > 0:
-        world.move(dummy, z=1)
-        i -= 1
-    i = col
-    while i > 0:
-        world.move(dummy, x=1)
-        i -= 1
-
-inline def move_dummy(dummy: entity(PosDummy), row=0, col=0):
-    #* Move the dummy. *#
-    world.move(dummy, z=row, x=col)
-
-inline def shape_blocks(dummy: entity(PosDummy), shape: int,
-                        rotation: int, action):
+inline def traverse_shape(
+    dummy: entity(PosDummy), shape: int,
+    rotation: int, action
+):
     #*
     Find all blocks in a shape (relative to `dummy`'s position) and
-    execute function `action` with position of block.
+    execute function `action` with each position of block as argument.
     *#
     inline def do_action(arr_of_arr):
         for arr in arr_of_arr:
@@ -212,13 +213,13 @@ def draw_shape(dummy: entity(PosDummy), shape: int, rotation: int):
                     "concrete", {"color": SHAPE_COLORS.get(s)}
                 )
                 world.setblock(pos, block)
-    shape_blocks(dummy, shape, rotation, action=place_block)
+    traverse_shape(dummy, shape, rotation, action=place_block)
 
 def clear_shape(dummy: entity(PosDummy), shape: int, rotation: int):
     #* Clear the shape (i.e. place empty block). *#
     inline def empty_block(pos: Pos):
         world.setblock(pos, BLOCK_EMPTY)
-    shape_blocks(dummy, shape, rotation, action=empty_block)
+    traverse_shape(dummy, shape, rotation, action=empty_block)
 
 def will_collide(dummy: entity(PosDummy), shape: int, rotation: int) -> bool:
     #*
@@ -228,7 +229,7 @@ def will_collide(dummy: entity(PosDummy), shape: int, rotation: int) -> bool:
     res = False
     inline def check(pos: Pos):
         res = res or not world.is_block(pos, BLOCK_EMPTY)
-    shape_blocks(dummy, shape, rotation, action=check)
+    traverse_shape(dummy, shape, rotation, action=check)
     result = res
 
 def game_over():
@@ -246,7 +247,7 @@ def new_shape():
     shape_col = WIDTH / 2
     shape_rotation = ROT_NONE
     dummy -> get_dummy()
-    position_dummy(dummy, shape_row, shape_col)
+    dummy.go_to(shape_row, shape_col)
     if will_collide(dummy, shape_type, shape_rotation):
         game_over()
 
@@ -259,30 +260,24 @@ def check_completion(shape_height: int):
     dummy -> get_dummy()
     y = 0
     while y < shape_height:
-        position_dummy(dummy, shape_row + y, 0)
+        dummy.go_to(shape_row + y, 0)
         x = 0
         got_empty = False
         while x < WIDTH:
             if world.is_block(Pos(dummy), BLOCK_EMPTY):
                 got_empty = True
             x += 1
-            move_dummy(dummy, col=+1)
+            dummy.move(col=+1)
         if not got_empty:
             # Clear this line!
             score += 1
             # Dummy is out of bound on the right by 1 block now,
             # so move it back by 1 block
-            move_dummy(dummy, col=-1)
+            dummy.move(col=-1)
             # 1. move lines above cleared line down by 1 block
-            field_origin -> Offset().abs(
-                ORIGIN.get(0), ORIGIN.get(1), ORIGIN.get(2)
-            )
-            dest -> Offset().abs(
-                ORIGIN.get(0), ORIGIN.get(1), ORIGIN.get(2) + 1
-            )
-            move_dummy(dummy, row=-1)
-            world.clone(origin=Pos(dummy), offset=field_origin,
-                        dest=dest, mode="force")
+            dummy.move(row=-1)
+            world.clone(origin=Pos(dummy), offset=ORIGIN_POS,
+                        dest=ORIGIN_POS.offset(z=+1), mode="force")
             # 2. fill the top line with empty
             world.fill(
                 origin=ORIGIN_POS, offset=Offset().offset(x=WIDTH-1),
@@ -300,12 +295,12 @@ def tick():
         # Land on another tetromino
         # We need to clear origin piece first or the new piece will
         # always collide with the old piece.
-        position_dummy(dummy, shape_row, shape_col)
+        dummy.go_to(shape_row, shape_col)
         clear_shape(dummy, shape_type, shape_rotation)
         # Assume that shape moves 1 block more...
-        move_dummy(dummy, row=+1)
+        dummy.move(row=+1)
         landed = landed or will_collide(dummy, shape_type, shape_rotation)
-        move_dummy(dummy, row=-1)
+        dummy.move(row=-1)
         # 2. If landed, check completion and create new piece
         if landed:
             # We clear origin piece above to check collision, now that
@@ -316,7 +311,7 @@ def tick():
         # 3. If not, destroy the original blocks and create new blocks
         #    one block lower.
         else:
-            move_dummy(dummy, row=+1)
+            dummy.move(row=+1)
             shape_row += 1
         # 4. Redraw shape
         draw_shape(dummy, shape_type, shape_rotation)
@@ -361,14 +356,14 @@ def rotate():
     new_row = math.max(new_row, 0)
     # Only update when no collision will happen
     dummy -> get_dummy()
-    position_dummy(dummy, shape_row, shape_col)
+    dummy.go_to(shape_row, shape_col)
     clear_shape(dummy, shape_type, shape_rotation)
-    position_dummy(dummy, new_row, new_col)
+    dummy.go_to(new_row, new_col)
     if not will_collide(dummy, shape_type, new_rotation):
         shape_rotation = new_rotation
         shape_col = new_col
         shape_row = new_row
-    position_dummy(dummy, shape_row, shape_col)
+    dummy.go_to(shape_row, shape_col)
     draw_shape(dummy, shape_type, shape_rotation)
 
 def _update_col(col_offset: int):
@@ -378,12 +373,12 @@ def _update_col(col_offset: int):
     if 0 <= new_col < WIDTH:
         # Only continue when no collision will happen
         dummy -> get_dummy()
-        position_dummy(dummy, shape_row, shape_col)
+        dummy.go_to(shape_row, shape_col)
         clear_shape(dummy, shape_type, shape_rotation)
-        position_dummy(dummy, shape_row, new_col)
+        dummy.go_to(shape_row, new_col)
         if not will_collide(dummy, shape_type, shape_rotation):
             shape_col = new_col
-        position_dummy(dummy, shape_row, shape_col)
+        dummy.go_to(shape_row, shape_col)
         draw_shape(dummy, shape_type, shape_rotation)
 
 def left():
