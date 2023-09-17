@@ -7,6 +7,14 @@ import enum
 import io
 
 from acaciamc.error import *
+from acaciamc.constants import COLORS, COLORS_NEW, Config
+
+FONTS = {
+    "reset": "r",
+    "bold": "l",
+    "italic": "o",
+    "obfuscated": "k",
+}
 
 class TokenType(enum.Enum):
     """
@@ -497,6 +505,37 @@ class Tokenizer:
         if second == '\\':  # backslash itself
             self.forward()  # skip second backslash
             return second
+        elif second == '#':  # font
+            self.forward()  # skip '#'
+            third = self.current_char
+            start_ln, start_col = self.current_lineno, self.current_col
+            if third == '(':
+                res = ''
+                spec = ''
+                self.forward()  # skip '('
+                while self.current_char != ')':
+                    if self.current_char is None or self.current_char == '\n':
+                        self.error(ErrorType.UNCLOSED_FONT,
+                                   lineno=start_ln, col=start_col)
+                    spec += self.current_char
+                    self.forward()
+                self.forward()  # skip ')'
+                for word in spec.split(","):
+                    word = word.strip()
+                    res += '\xA7'
+                    if word in COLORS:
+                        res += COLORS[word]
+                    elif (word in COLORS_NEW
+                          and Config.mc_version >= (1, 19, 80)):
+                        res += COLORS_NEW[word]
+                    elif word in FONTS:
+                        res += FONTS[word]
+                    else:
+                        self.error(ErrorType.INVALID_FONT, font=word,
+                                   lineno=start_ln, col=start_col)
+            else:
+                res = '\xA7'
+            return res
         ## NOTE '\n' should be passed directly to MC
         ## because MC use '\n' escape too
         elif second in 'xuU':  # unicode number
