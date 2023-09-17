@@ -2,14 +2,15 @@
 
 __all__ = ["ETemplateDataType", "EntityTemplate"]
 
-from typing import List, Tuple, Dict, TYPE_CHECKING, Union, Any
+from typing import List, Tuple, Dict, Union, Any, Optional, TYPE_CHECKING
+from abc import ABCMeta, abstractmethod
 import itertools
 
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
 from .entity import TaggedEntity
-from .callable import BoundMethodDispatcher, BoundMethod
+from .callable import BoundMethodDispatcher, BoundMethod, InlineFunction
 from .string import String
 from .none import NoneDataType
 from .position import Position
@@ -23,7 +24,41 @@ if TYPE_CHECKING:
 class ETemplateDataType(DefaultDataType):
     name = 'entity_template'
 
-class _MethodDispatcher:
+class _MethodDispatcher(metaclass=ABCMeta):
+    @abstractmethod
+    def register(self, template: "EntityTemplate",
+                 implementation: "METHODDEF_T"):
+        pass
+
+    @abstractmethod
+    def register_inherit(self, template: "EntityTemplate",
+                         parent: "EntityTemplate"):
+        pass
+
+    @abstractmethod
+    def bind_to(self, entity: "_EntityBase") -> AcaciaExpr:
+        pass
+
+    @abstractmethod
+    def bind_to_cast(self, entity: "_EntityBase") -> AcaciaExpr:
+        pass
+
+def _check_overload_impl(
+        method_name: str,
+        implementation: "METHODDEF_T") -> Union[None, Error]:
+    """Check if implementation can be used in an overload."""
+    err = None
+    if isinstance(implementation, InlineFunction):
+        res_type = implementation.result_type
+        if res_type is None:
+            err = Error(ErrorType.OVERRIDE_RESULT_UNKNOWN,
+                        name=method_name)
+        elif not isinstance(res_type, Storable):
+            err = Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
+                        name=method_name, type_=str(res_type))
+    return err
+
+class _OverloadMethodDispatcher(_MethodDispatcher):
     def __init__(self, method_name: str, compiler: "Compiler"):
         self.compiler = compiler
         self.method_name = method_name
@@ -33,6 +68,9 @@ class _MethodDispatcher:
 
     def register(self, template: "EntityTemplate",
                  implementation: "METHODDEF_T"):
+        err = _check_overload_impl(self.method_name, implementation)
+        if err is not None:
+            raise err
         res_type = implementation.result_type
         assert isinstance(res_type, Storable)
         if self.result_var is None:
@@ -71,6 +109,61 @@ class _MethodDispatcher:
         implementation = candidates[min(candidates)]
         return BoundMethod(entity, self.method_name,
                            implementation, self.compiler)
+
+class _SimpleMethodDispatcher(_MethodDispatcher):
+    """Dispatcher for methods with no overload."""
+    def __init__(self, method_name: str, no_overload_err: Error,
+                 compiler: "Compiler"):
+        self.method_name = method_name
+        self.compiler = compiler
+        self.no_overload_error = no_overload_err
+        self.implementation: Optional["METHODDEF_T"] = None
+        self.templates: List["EntityTemplate"] = []
+
+    def register(self, template: "EntityTemplate",
+                 implementation: "METHODDEF_T"):
+        if self.implementation is not None:
+            raise self.no_overload_error
+        self.templates.append(template)
+        self.implementation = implementation
+
+    def register_inherit(self, template: "EntityTemplate",
+                         parent: "EntityTemplate"):
+        assert parent in self.templates
+        self.templates.append(template)
+
+    def bind_to(self, entity: "_EntityBase"):
+        return BoundMethod(
+            entity, self.method_name,
+            self.implementation, self.compiler
+        )
+
+    def bind_to_cast(self, entity: "_EntityBase"):
+        assert any(
+            template in entity.cast_template.mro_
+            for template in self.templates
+        )
+        return self.bind_to(entity)
+
+def method_dispatcher(
+        method_name: str, compiler: "Compiler",
+        first_implementation: "METHODDEF_T") -> _MethodDispatcher:
+    """Create an appropriate method dispatcher.
+    NOTE first_implementation is just for deciding which dispatcher to
+    use, this won't register them.
+    """
+    err = None
+    if isinstance(first_implementation, InlineFunction):
+        err = _check_overload_impl(method_name, first_implementation)
+    if err is None:
+        # This inline function specifies a storable result type,
+        # and it can be overloaded.
+        # OR
+        # This function is not inlined so it can be overloaded.
+        res = _OverloadMethodDispatcher(method_name, compiler)
+    else:
+        res = _SimpleMethodDispatcher(method_name, err, compiler)
+    return res
 
 class EntityTemplate(AcaciaExpr):
     def __init__(self, name: str,
@@ -175,7 +268,9 @@ class EntityTemplate(AcaciaExpr):
                     disp = parent.method_dispatchers[method]
                     break
             else:  # 2. First definition of `method` (new method)
-                disp = _MethodDispatcher(method, self.compiler)
+                disp = method_dispatcher(
+                    method, self.compiler, implementation
+                )
             self.method_dispatchers[method] = disp
             disp.register(self, implementation)
         for parent in self.mro_:

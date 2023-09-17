@@ -87,6 +87,11 @@ class ErrorType(enum.Enum):
     MRO = 'Invalid base templates (failed to create MRO)'
     OVERRIDE_RESULT_MISMATCH = 'Override method "{name}" should have same ' \
         'result type "{expect}" as its parent, not "{got}"'
+    OVERRIDE_RESULT_UNKNOWN = 'Override inline method "{name}" must have ' \
+        'its result specified; explicitly specify None if it doesn\'t ' \
+        'produce a meaningful result'
+    OVERRIDE_RESULT_UNSTORABLE = 'Override inline method "{name}" can ' \
+        'not use "{type_}" as result type'
     POS_OFFSET_ALREADY_SET = '"{axis}" set already'
     INVALID_POS_ALIGN = 'Invalid position alignment "{align}"'
     ARRAY_INDEX_OUT_OF_BOUNDS = 'Array with length {length} got out of ' \
