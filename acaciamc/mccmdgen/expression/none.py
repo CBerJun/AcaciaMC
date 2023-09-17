@@ -30,3 +30,7 @@ class NoneLiteral(AcaciaExpr):
 
     def export(self, var: "NoneVar"):
         return []
+
+    def datatype_hook(self):
+        """None as a type specifier represents nonetype."""
+        return NoneDataType(self.compiler)
