@@ -71,13 +71,15 @@ class EGroupType(Type):
         def _new(compiler: "Compiler", template: Optional["EntityTemplate"]):
             if template is None:
                 template = compiler.base_template
-            return EntityGroup(template, compiler)
+            res = EntityGroup(template, compiler)
+            # Remove all existsing entities on initialization
+            return res, res.clear()
         @method_of(self, "all_entities")
         @axe.chop
         def _all_entities(compiler: "Compiler"):
             res = EntityGroup(compiler.base_template, compiler)
-            cmds = ["tag @e add %s" % res.tag]
-            return res, cmds
+            commands = ["tag @e add %s" % res.tag]
+            return res, commands
         @method_of(self, "t")
         @axe.chop
         @axe.arg("template", ETemplateDataType)
