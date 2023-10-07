@@ -19,7 +19,7 @@ from .entity_filter import EFilterDataType
 from .entity import EntityDataType, EntityReference
 from .boolean import AndGroup
 from .integer import IntOpGroup
-from .callable import BinaryFunction
+from .functions import BinaryFunction
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler

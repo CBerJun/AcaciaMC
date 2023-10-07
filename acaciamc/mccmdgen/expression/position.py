@@ -12,7 +12,7 @@ import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
-from .callable import BinaryFunction
+from .functions import BinaryFunction
 from .rotation import RotDataType
 from .string import String
 from .entity import EntityDataType

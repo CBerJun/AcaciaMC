@@ -15,7 +15,7 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
-from .callable import BinaryFunction
+from .functions import BinaryFunction
 from .entity import EntityDataType
 
 if TYPE_CHECKING:

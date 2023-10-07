@@ -16,7 +16,7 @@ from acaciamc.constants import XYZ
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
 from .types import Type
-from .callable import BinaryFunction
+from .functions import BinaryFunction
 
 class CoordinateType(Enum):
     ABSOLUTE = ""

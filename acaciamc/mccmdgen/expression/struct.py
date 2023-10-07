@@ -5,7 +5,7 @@ __all__ = ["StructDataType", "Struct"]
 from typing import TYPE_CHECKING, List, Dict, Tuple, Optional
 
 from .base import *
-from .callable import BinaryFunction
+from .functions import BinaryFunction
 from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib

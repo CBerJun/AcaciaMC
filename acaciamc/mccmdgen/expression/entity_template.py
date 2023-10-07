@@ -10,7 +10,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
 from .entity import EntityReference
-from .callable import BoundMethodDispatcher, BoundMethod, InlineFunction
+from .functions import BoundMethodDispatcher, BoundMethod, InlineFunction
 from .string import String
 from .none import NoneDataType
 from .position import Position
@@ -18,7 +18,7 @@ from .position import Position
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import DataType
-    from .callable import METHODDEF_T
+    from .functions import METHODDEF_T
     from .entity import _EntityBase
 
 class ETemplateDataType(DefaultDataType):
