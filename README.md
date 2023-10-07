@@ -86,10 +86,13 @@ b := (10 + a) * a - 5
 Function definitions:
 ```python
 def foo(x: int, y = True) -> int:
-    pass  # code here...
-# These are all OK:
-foo(1)
+    # Here is function body code
+    result := x
+    if y:
+        result += 10
 z: int
+# These are all valid:
+foo(1)
 z = foo(2, False)
 z = foo(x=3)
 ```
@@ -124,6 +127,8 @@ m.play()
 
 Use of constants and `for` to avoid repetitive code:
 ```python
+import world
+
 # Place concretes of different colors according to value of an variable
 COLORS -> {
     0: "cyan", 1: "orange", 2: "yellow",
@@ -151,7 +156,7 @@ entity Test:
 
     def __init__():
         world.setblock(Pos(self), world.Block("diamond_block"))
-        world.effect_give(self, "invisibility")
+        world.effect_give(self, "invisibility", duration=1000)
 
     def foo():
         world.tp(self, ORIGIN)

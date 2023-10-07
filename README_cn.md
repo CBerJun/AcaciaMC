@@ -80,10 +80,13 @@ b := (10 + a) * a - 5
 定义函数:
 ```python
 def foo(x: int, y = True) -> int:
-    pass  # 这里写函数体代码
+    # 这里是函数体代码
+    result := x
+    if y:
+        result += 10
+z: int
 # 下面这些都是合法的调用:
 foo(1)
-z: int
 z = foo(2, False)
 z = foo(x=3)
 ```
@@ -119,6 +122,8 @@ m.play()
 
 利用常量和`for`来避免重复性代码:
 ```python
+import world
+
 # 根据变量的值放置不同颜色的混凝土方块
 COLORS -> {
     0: "cyan", 1: "orange", 2: "yellow",
@@ -146,7 +151,7 @@ entity Test:
 
     def __init__():
         world.setblock(Pos(self), world.Block("diamond_block"))
-        world.effect_give(self, "invisibility")
+        world.effect_give(self, "invisibility", duration=1000)
 
     def foo():
         world.tp(self, ORIGIN)
