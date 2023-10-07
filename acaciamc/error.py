@@ -125,11 +125,14 @@ class Error(Exception):
     def set_file(self, file: str):
         self.file = file
 
+    def file_set(self) -> bool:
+        return self.file is not None
+
     def set_location(self, lineno: int, col: int):
         self.lineno = lineno
         self.col = col
 
-    def location_set(self):
+    def location_set(self) -> bool:
         return self.lineno is not None
 
     def __str__(self):

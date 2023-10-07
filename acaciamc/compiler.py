@@ -315,7 +315,8 @@ class Compiler:
             )
             yield self.current_generator
         except Error as err:
-            err.set_file(path)
+            if not err.file_set():
+                err.set_file(path)
             raise err
         finally:
             src_file.close()
