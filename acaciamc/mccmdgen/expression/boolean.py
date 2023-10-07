@@ -43,19 +43,18 @@ from acaciamc.mccmdgen.datatype import (
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
-    from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
+    from acaciamc.compiler import Compiler
+
+export_need_tmp_bool = export_need_tmp(
+    new_tmp=lambda c: BoolVar.new(c, tmp=True)
+)
 
 class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "bool"
 
-    def __init__(self, compiler: "Compiler"):
-        super().__init__()
-        self.compiler = compiler
-
-    def new_var(self, tmp=False):
-        alloc = self.compiler.allocate_tmp if tmp else self.compiler.allocate
-        return BoolVar(alloc(), self.compiler)
+    def new_var(self) -> "BoolVar":
+        return BoolVar.new(self.compiler)
 
     def new_entity_field(self):
         return {"scoreboard": self.compiler.add_scoreboard()}
@@ -102,6 +101,12 @@ class BoolVar(VarValue):
         super().__init__(BoolDataType(compiler), compiler)
         self.slot = slot
 
+    @classmethod
+    def new(cls, compiler: "Compiler", tmp=False):
+        alloc = compiler.allocate_tmp if tmp else compiler.allocate
+        return cls(alloc(), compiler)
+
+
     def __str__(self):
         return self.slot.to_str()
 
@@ -120,7 +125,7 @@ class NotBoolVar(AcaciaExpr):
     def __str__(self):
         return self.slot.to_str()
 
-    @export_need_tmp
+    @export_need_tmp_bool
     def export(self, var: BoolVar):
         return [
             cmds.ScbSetConst(var.slot, 0),
@@ -171,7 +176,7 @@ class BoolCompare(AcaciaExpr):
                 Operator.unequal_to: Operator.unequal_to
             }[self.operator]
 
-    @export_need_tmp
+    @export_need_tmp_bool
     def export(self, var: BoolVar):
         # set `res` to dependencies that as_execute returns
         res, subcmds = self.as_execute()
@@ -288,7 +293,7 @@ class AndGroup(AcaciaExpr):
         for operand in operands:
             self._add_operand(operand)
 
-    @export_need_tmp
+    @export_need_tmp_bool
     def export(self, var: BoolVar):
         # Handle inversion
         TRUE = 0 if self.inverted else 1
@@ -381,7 +386,7 @@ class AndGroup(AcaciaExpr):
             if operand.inverted:
                 # `a and not (b and c)` needs a tmp var:
                 # tmp = `not (b and c)`, self = `a and tmp`
-                tmp = self.data_type.new_var(tmp=True)
+                tmp = BoolVar.new(tmp=True, compiler=self.compiler)
                 self.dependencies.extend(operand.export(tmp))
                 self._add_operand(tmp)
             else:
@@ -467,5 +472,5 @@ def to_BoolVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, BoolVar]:
     if isinstance(expr, BoolVar):
         return [], expr
     else:
-        tmp = expr.data_type.new_var(tmp=tmp)
-        return expr.export(tmp), tmp
+        var = BoolVar.new(expr.compiler, tmp=tmp)
+        return expr.export(var), var

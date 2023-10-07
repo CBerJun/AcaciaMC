@@ -55,15 +55,15 @@ STR2SCBOP = {
     "%": cmds.ScbOp.MOD_EQ,
 }
 
+export_need_tmp_int = export_need_tmp(
+    new_tmp=lambda c: IntVar.new(c, tmp=True)
+)
+
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
 
-    def __init__(self, compiler: "Compiler"):
-        self.compiler = compiler
-
-    def new_var(self, tmp=False) -> "IntVar":
-        alloc = self.compiler.allocate_tmp if tmp else self.compiler.allocate
-        return IntVar(alloc(), self.compiler)
+    def new_var(self) -> "IntVar":
+        return IntVar.new(self.compiler)
 
     def new_entity_field(self):
         return {"scoreboard": self.compiler.add_scoreboard()}
@@ -171,6 +171,11 @@ class IntVar(VarValue):
         super().__init__(IntDataType(compiler), compiler)
         self.slot = slot
 
+    @classmethod
+    def new(cls, compiler: "Compiler", tmp=False):
+        alloc = compiler.allocate_tmp if tmp else compiler.allocate
+        return cls(alloc(), compiler)
+
     def export(self, var: "IntVar"):
         return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
 
@@ -263,7 +268,7 @@ class IntVar(VarValue):
             '*': builtin_op.mul, '/': builtin_op.floordiv, '%': builtin_op.mod
         }[operator](self, other)
         ## Export
-        tmp = self.data_type.new_var(tmp=True)
+        tmp = IntVar.new(self.compiler, tmp=True)
         res = value.export(tmp)
         res.extend(tmp.export(self))
         return res
@@ -311,14 +316,14 @@ class IntOpGroup(AcaciaExpr):
         elif init is not None:
             raise ValueError
 
-    @export_need_tmp
+    @export_need_tmp_int
     def export(self, var: IntVar):
         res = []
         # subvars: Allocate a tmp int for every `IntOpGroup` in
         # `self.libs` and export them to this var.
         subvars: List[IntVar] = []
         for subexpr in self.libs:
-            subvar = self.data_type.new_var(tmp=True)
+            subvar = IntVar.new(self.compiler, tmp=True)
             subvars.append(subvar)
             res.extend(subexpr.export(subvar))
         subslots = tuple(subvar.slot for subvar in subvars)
@@ -448,5 +453,5 @@ def to_IntVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, IntVar]:
     if isinstance(expr, IntVar):
         return [], expr
     else:
-        tmp = expr.data_type.new_var(tmp=tmp)
-        return expr.export(tmp), tmp
+        var = IntVar.new(expr.compiler, tmp=tmp)
+        return expr.export(var), var

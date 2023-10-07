@@ -1,4 +1,4 @@
-# Output the Fibonacci Sequence
+# Output the Fibonacci Sequence up to `MAX`
 # 斐波那契数列计算
 # 输出到MAX为止的斐波那契数列
 
@@ -6,10 +6,10 @@ import print
 
 MAX -> 114514
 
-a = 0
-b = 1
+a := 0
+b := 1
 while b <= MAX:
-    new_b = a + b
+    new_b := a + b
     a = b
     b = new_b
     print.tell(print.format("%0", a))

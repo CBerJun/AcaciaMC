@@ -12,25 +12,43 @@
  *#
 
 #* Variables *#
-# Define a variable `x` and assign 10 to it
-x = 10
+# Define a variable `x` of integer type and assign 10 to it
+x: int = 10
+# Initial value is optional.
+# You can then assign to them using "="
+x = 20
+# The following defines a boolean varaible `y` (its value is either
+# `True` or `False`) with no initial value.
+y: bool
+# Short varaible declaration can be used when there is an initial value
+# for a variable. Type of varaible is inferred by compiler.
+number := 20  # same as `number: int = 20`
 # Following `+` operator should be calculated during compile time
 # `0x` and `0b` can be used to refer to hexadecimal and binary number
 x = 0xF2E + 0b11  # `int` type
 y = True  # `bool` type
+# Augmented assignments can be used to modify a value
+x += 20  # same as `x = x + 20`
+# There are also -=, *=, /= and %=
 
 #* Fancy operators *#
 # Integer operations: + - * / %
 number = (x % -2) * (x + 3)
 # Boolean operations: and or not
-boolean = y and (x > 10) or (x < 0)
+boolean := y and (x > 10) or (x < 0)
 
 #* Binding *#
 scoreboard -> "scb"
 # Some values in Acacia are not representable in Minecraft and are only
 # for your convenience (e.g. strings). "=" Assignments really creates
 # and modifies the values in Minecraft, so its unavailable for these
-# kinds of values. In such cases we use binding instead.
+# kinds of values. "->" Bindings tells the compiler what a symbol stands
+# for.
+# `x: int` actually does `x -> <A newly created integer variable>`,
+# which tells compiler "x is a variable". A variable can be assigned
+# to: `x = 20`, and this operation is done by Minecraft when you run
+# your program, instead of compiler. `x -> 20`, however, is done by
+# compiler and tells it "x stands for the constant literal integer 20".
 player -> "@a[tag=player]"
 
 #* Control statements *#
@@ -40,7 +58,7 @@ if x > 5:
 # `x` will be doubled only when it's larger than 5
 
 ## While loop statement
-sum = 0
+sum := 0
 while x > 0:
     sum += x
     x -= 1
@@ -54,10 +72,11 @@ while x > 0:
 # compiler to *generate repetitive commands* for each iteration. This is
 # very different from a while loop (that's a "runtime loop" and is done
 # in Minecraft).
-m = 10
-n = 20
-q = 30
-# {m, n, q} creates a compile-time array consisting of `m`, `n` and `q`.
+m := 10
+n := 20
+q := 30
+# {m, n, q} creates a compile time array consisting of `m`, `n` and `q`.
+# Since it is compile time only, we use binding instead of assignment.
 arr -> {m, n, q}
 # Values from iterator are *bound* to variable so it's possible to do:
 # (This will increase `m`, `n` and `q` by 10.)
@@ -67,7 +86,7 @@ for i in arr:
     i += 10
 n = arr.get(0)  # assign value of `m` to `n`.
 # Common bisection algorithm implemented with this feature:
-y_length = 23
+y_length := 23
 for i in array.geometric(1, ratio=2, times=5).reverse():
     if y_length >= i:
         y_length -= i
@@ -85,15 +104,15 @@ for i in array.range(10).slice(2, None, 2):
 for i in array.repeat(x, 10):
     i += 5
 
-#* Compile-time map *#
-# Map is similar to array since it is compile time only.
+#* Compile time map *#
+# Map is similar to array since it is also compile time only.
 # Its keys can only be several literal types (e.g. int literal or
 # string). Using for-in on maps will iterate through its keys.
 mp -> {
     0: "zero", 1: "one",
     2: "two", 3: "three"
 }
-i = 0  # calculate `i`...
+i := 0  # calculate `i`...
 for num in mp:
     if i == num:
         /say ${mp.get(num)}
@@ -110,7 +129,7 @@ import print
 print.tell("Hello world!")
 # Show title "Chapter I" on a random player's screen, for 10 seconds
 # (We'll talk about Engroup later.)
-group -> Engroup()
+group: Engroup
 group.select(Enfilter().random("player", limit=1))
 print.title("Chapter I", group, stay_time=200)
 # Show everyone the value of `x` in the form "Value of X: ..." above actionbar
@@ -150,10 +169,10 @@ entity Test:
         # mentioned above.
         # This statement gives `self` invisibility buff for 600 ticks.
         world.effect_give(self, "invisibility", duration=600)
-# Now we have created a template whose entities are of armor stand type
-# and will become invisible when summoned.
+# Now we have created a template of which entities are of armor stand
+# type and will become invisible when summoned.
 # Summon an entity of Test template:
-test_entity = Test()
+test_entity := Test()
 # You can define a template that "extends" another template:
 entity Subtemplate extends Test:
     def __init__():
@@ -163,14 +182,15 @@ entity Subtemplate extends Test:
         print.tell("It's Subtemplate here!")
 # This creates a template that prints a message in chat when any entity
 # of this template is summoned. Plus, it has all the behaviors of Test
-# template. We say that Test is Subtemplate's base.
+# template (become invisible when summoned). We say that Test is
+# Subtemplate's base.
 # You can assign entity variables of Subtemplate template to those of
-# Test template, but it doesn't work when reversing them.
-test_entity = Subtemplate()
+# Test template, but not the other way around.
+test_entity := Subtemplate()
 # A function can take arguments of entity type and the template can be
 # specified:
 def kill(test: entity(Test)):
-    world.msg_say(test, "I'm killed")  # Shout "I'm killed"
+    world.msg_say(test, "I'm killed")  # Let `test` shout "I'm killed"
     world.kill(test)  # Kill the entity
 kill(test_entity)  # Remember Subtemplate is compatible with Test?
 # `Object` is the base of all templates and omitting template in type
@@ -188,7 +208,7 @@ entity Player:
     score: int
 
     def show_score():
-        #* Show the player score. *#
+        #* Show the player their score. *#
         print.title(
             # `self.score` gets the value of score attribute from this
             # entity.
@@ -200,14 +220,16 @@ entity Player:
 # hundreds of entities inside this group. Entity groups also have their
 # template, which is the template that entities inside this group use.
 # Create a group of Player:
-player_group = Engroup(Player)
+player_group: Engroup(Player)
+# Engroup(Template) means a group of entities of Template template.
 # You can select some existing entities using entity filter:
-player_group.select(
-    Enfilter().is_type("player").distance_from(Pos(0, 0, 0), max=5)
+player_group.select(Enfilter()
+    .is_type("player")
+    .distance_from(Pos(0, 0, 0), max=5)
 )
 # Now `player_group` contains all players whose distance from 0, 0, 0 is
-# no more than 5 blocks. Everything in selector can be found in
-# `Enfilter`.
+# no more than 5 blocks. Everything in Minecraft's selector can be found
+# in `Enfilter`.
 # Use for-entity to iterate over all entities inside this group:
 for entity player in player_group:
     player.score += 1
@@ -219,10 +241,7 @@ for entity player in player_group:
 # Most of functions in `world` module accepts both single entity and an
 # entity group. This moves entities in `player_group` 2 blocks lower:
 world.move(player_group, y=-2)
-# Type annotation of entity groups are special:
-def diamonds(e: Engroup.t(Player)):
-    pass
-# A bare `Engroup` is equivalent to `Engroup.t(Object)`.
+# A bare `Engroup` is equivalent to `Engroup(Object)`.
 
 ## Position and rotation
 # Position and rotation are pretty simple.
@@ -257,11 +276,21 @@ world.fill(Pos(10, 10, 10), Offset().offset(+10, +10, +10), world.Block("air"))
 world.fill(Pos(10, 10, 10), Offset().offset(x=+10, z=+10).abs(y=20),
            world.Block("air"))
 
+## `AbsPos`
+# An absolute position can be either a `Pos` or an `Offset`. `AbsPos`
+# is compatible with both of them and represents an absolute position.
+pos1 -> AbsPos(10, 10, 10)
+pos2 -> AbsPos(20, 20, 20)
+world.fill(pos1, pos2, world.Block("diamond_block"))
+world.fill(pos2, pos1, world.Block("air"), replacement="destroy")
+
 #* Functions *#
 # Type of argument or its default value must be specified
 def max(a: int, b = int.MAX) -> int:
                     # int.MAX refers to 2147483647
     #* Return the larger one between a and b *#
+    # Result of a function is specified by assigning to `result`.
+    result: int
     if a >= b:
         result = a
         # Unlike "return" in modern languages like Python,
@@ -271,7 +300,7 @@ def max(a: int, b = int.MAX) -> int:
 
 def is_larger(a: int, b: int) -> bool:
     #* Return whether a is larger than b *#
-    result = a > b
+    result := a > b
 
 if not is_larger(x, 4):
     x = 2
@@ -310,6 +339,7 @@ set_var(x)  # `x` is 10 now
 
 inline def prefix_str(s):
     #* Prefix given string `s` with "I like ". *#
+    # Result of an inline function may be specified using binding.
     result -> "I like " + s
 my_print(prefix_str("CB!"))  # Acacia: I like CB!
 
@@ -322,21 +352,23 @@ struct Struct:
     i: int
     b: bool
 # Create a variable of this custom data type:
-test_struct = Struct()
+test_struct: Struct
 # Setting the members inside this struct:
 test_struct.i = 10
 test_struct.b = test_struct.i < 5
 # This is useful when a function's result has multiple values:
 def result_struct(i: int) -> Struct:
     # You can specify initial values of struct members:
-    result = Struct(i=i, b=i<5)
+    result: Struct | (i=i, b=i<5)
+    # The barline "|" passes arguments when initializing variable.
+    # Different data types accept different arguments.
 test_struct = result_struct(10)
 
 #* Exported interfaces *#
 # These interfaces are exported for later use in Minecraft
 interface a:
     # Local variables are unreachable outside scope
-    local = 20 < x <= 100  # Chained comparison operators!
+    local := 20 < x <= 100  # Chained comparison operators!
     # Do something...
 # Now we can use the `a` interface in Minecraft through /function
 # command (when using default compile options, it is stored at
@@ -358,6 +390,7 @@ x = |player: "data"|
 # Using binding with commands
 /tp ${player} 11 45 14
 /scoreboard players add ${player} ${scoreboard} 10
+# Multi-line command:
 /*
 tellraw @a {"rawtext":[
     {"text": "Hello "},

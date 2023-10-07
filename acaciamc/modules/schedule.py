@@ -83,7 +83,7 @@ class Task(AcaciaExpr):
         super().__init__(TaskDataType(), compiler)
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
-        self.timer = IntDataType(compiler).new_var()
+        self.timer = IntVar.new(compiler)
         # Allocate a file to call the given function
         self.target_file = cmds.MCFunctionFile()
         self.compiler.add_file(self.target_file)
@@ -204,7 +204,7 @@ def _create_register_loop(compiler):
             compiler.file_tick.extend(tick_commands)
             return None
         # Allocate an int for timer
-        timer = IntDataType(compiler).new_var()
+        timer = IntVar.new(compiler)
         # Initialize
         init_cmds = IntLiteral(0, compiler).export(timer)
         # Tick loop

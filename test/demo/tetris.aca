@@ -137,7 +137,7 @@ entity PosDummy:
     def go_to(row: int, col: int):
         #* Teleport dummy to given place. *#
         world.tp(self, ORIGIN_POS)
-        i = row
+        i: int = row
         while i > 0:
             self.move(row=+1)
             i -= 1
@@ -146,28 +146,28 @@ entity PosDummy:
             self.move(col=+1)
             i -= 1
 
-shape_row = 0
-shape_col = 0
-shape_type = -1
-shape_rotation = ROT_NONE
-running = False
-score = 0
-player_group -> Engroup()
-dummy_group -> Engroup(PosDummy)
+shape_row: int
+shape_col: int
+shape_type: int
+shape_rotation: int
+running: bool = False
+score: int = 0
+player_group: Engroup
+dummy_group: Engroup(PosDummy)
 
 def get_dummy() -> entity(PosDummy):
     #*
     Get the dummy entity which only exists when game is running.
     We should have `dummy_group.size() == 1 and running`.
     *#
-    result = dummy_group.to_single()
+    result := dummy_group.to_single()
 
 def get_shape_size(shape: int, rotation: int) -> Size:
     #* Get real shape size, with rotation considered. *#
+    result: Size
     for s in SHAPE_SIZES:
         if shape == s:
             size_arr -> SHAPE_SIZES.get(s)
-            result = Size()
             if rotation == ROT_CLOCKWISE or rotation == ROT_CCLOCKWISE:
                 # When rotated, width is height, vice versa
                 result.height = size_arr.get(0)
@@ -226,11 +226,11 @@ def will_collide(dummy: entity(PosDummy), shape: int, rotation: int) -> bool:
     Whether the shape with given rotation will collide with other
     blocks at dummy.
     *#
-    res = False
+    result: bool = False
+    res -> result
     inline def check(pos: Pos):
         res = res or not world.is_block(pos, BLOCK_EMPTY)
     traverse_shape(dummy, shape, rotation, action=check)
-    result = res
 
 def game_over():
     running = False
@@ -246,7 +246,7 @@ def new_shape():
     shape_row = 0
     shape_col = WIDTH / 2
     shape_rotation = ROT_NONE
-    dummy -> get_dummy()
+    dummy := get_dummy()
     dummy.go_to(shape_row, shape_col)
     if will_collide(dummy, shape_type, shape_rotation):
         game_over()
@@ -257,12 +257,12 @@ def check_completion(shape_height: int):
     landed and this relies on the landed shape information.
     Note: this function moves the global dummy.
     *#
-    dummy -> get_dummy()
-    y = 0
+    dummy := get_dummy()
+    y: int = 0
     while y < shape_height:
         dummy.go_to(shape_row + y, 0)
-        x = 0
-        got_empty = False
+        x: int = 0
+        got_empty: bool = False
         while x < WIDTH:
             if world.is_block(Pos(dummy), BLOCK_EMPTY):
                 got_empty = True
@@ -287,11 +287,11 @@ def check_completion(shape_height: int):
 
 def tick():
     if running:
-        dummy -> get_dummy()
+        dummy := get_dummy()
         # 1. Decide whether shape has landed
         # Land on field bottom
-        shape_height = get_shape_size(shape_type, shape_rotation).height
-        landed = shape_height + shape_row >= HEIGHT
+        shape_height: int = get_shape_size(shape_type, shape_rotation).height
+        landed: bool = shape_height + shape_row >= HEIGHT
         # Land on another tetromino
         # We need to clear origin piece first or the new piece will
         # always collide with the old piece.
@@ -330,13 +330,13 @@ def rotate():
     *#
     # Rotation IDs are 1, 2, 3, 4; when 5 is reached, modulo by 4 to
     # get back to 1.
-    new_rotation = shape_rotation + 1
+    new_rotation: int = shape_rotation + 1
     new_rotation %= 4
     # Move the shape
-    new_col = shape_col
-    new_row = shape_row
+    new_col: int = shape_col
+    new_row: int = shape_row
     for types in SHAPE_ROTATE_MOVE:
-        is_contained = False
+        is_contained: bool = False
         for type in types:
             if type == shape_type:
                 is_contained = True
@@ -349,16 +349,16 @@ def rotate():
                     new_row += arr.get(1)
     # Make sure the shape is not out of game field after rotation
     # This is a simple alternative to Wall Kicks (see link above).
-    new_size = get_shape_size(shape_type, new_rotation)
+    new_size := get_shape_size(shape_type, new_rotation)
     new_col = math.min(new_col, WIDTH - new_size.width)
     new_col = math.max(new_col, 0)
     new_row = math.min(new_row, HEIGHT - new_size.height)
     new_row = math.max(new_row, 0)
-    # Only update when no collision will happen
-    dummy -> get_dummy()
+    dummy := get_dummy()
     dummy.go_to(shape_row, shape_col)
     clear_shape(dummy, shape_type, shape_rotation)
     dummy.go_to(new_row, new_col)
+    # Only update when no collision will happen
     if not will_collide(dummy, shape_type, new_rotation):
         shape_rotation = new_rotation
         shape_col = new_col
@@ -368,11 +368,11 @@ def rotate():
 
 def _update_col(col_offset: int):
     #* Implementation of `left` and `right`. *#
-    new_col = shape_col + col_offset
+    new_col: int = shape_col + col_offset
     # Only continue when in the bound
     if 0 <= new_col < WIDTH:
         # Only continue when no collision will happen
-        dummy -> get_dummy()
+        dummy := get_dummy()
         dummy.go_to(shape_row, shape_col)
         clear_shape(dummy, shape_type, shape_rotation)
         dummy.go_to(shape_row, new_col)
@@ -395,7 +395,7 @@ def check_input():
         pos_left -> PLAYER_POS.offset(x=-1.05)
         pos_right -> PLAYER_POS.offset(x=1.05)
         pos_front -> PLAYER_POS.offset(z=-1.05)
-        player -> player_group.to_single()
+        player := player_group.to_single()
         if world.is_entity(player, Enfilter().distance_from(pos_left, max=1)):
             left()
         if world.is_entity(player, Enfilter().distance_from(pos_right, max=1)):
@@ -411,7 +411,7 @@ schedule.register_loop(check_input, interval=2)
 
 interface start:
     #* Program entry: (re)start Tetris! *#
-    dummy -> PosDummy()  # keeps sync with current shape
+    dummy := PosDummy()
     dummy_group.add(dummy)
     player_group.select(Enfilter().is_type("player").nearest_from(PLAYER_POS))
     print.title("Tetris Game!!!", target=player_group,

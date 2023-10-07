@@ -31,6 +31,7 @@ class ErrorType(enum.Enum):
     POSITIONED_ARG_AFTER_KEYWORD = 'Positional argument after keyword'
     # INVALID_ASSIGN_TARGET is used by both Generator and Parser
     INVALID_ASSIGN_TARGET = 'Invalid assignment target'
+    INVALID_VARDEF_STMT = 'Invalid variable definition target'
     INVALID_BIND_TARGET = 'Invalid bind target'
     # Command Generator
     NAME_NOT_DEFINED = 'Name "{name}" is not defined'
@@ -40,7 +41,7 @@ class ErrorType(enum.Enum):
     INVALID_BOOLOP_OPERAND = 'Invalid operand for boolean operator ' \
         '"{operator}": "{operand}"'
     UNSUPPORTED_VAR_TYPE = 'Can\'t define variables of "{var_type}" type; ' \
-        'To define an alias to expression, use "alias -> expr"'
+        'Try using "name -> expr" instead'
     UNSUPPORTED_ARG_TYPE = 'Argument "{arg}" can\'t be "{arg_type}" type'
     UNSUPPORTED_RESULT_TYPE = 'Result type can\'t be "{result_type}" type'
     UNSUPPORTED_EFIELD_TYPE = 'Entity field can\'t be "{field_type}" type'
@@ -66,7 +67,7 @@ class ErrorType(enum.Enum):
     EFIELD_MULTIPLE_DEFS = 'Multiple definitions for entity attribute "{attr}"'
     SFIELD_MULTIPLE_DEFS = 'Multiple definitions for struct attribute "{attr}"'
     MISSING_ARG = 'Required argument "{arg}" is missing'
-    RESULT_OUT_OF_SCOPE = 'Found "result" statement out of function'
+    RESULT_OUT_OF_SCOPE = 'Found "result" out of function'
     SELF_OUT_OF_SCOPE = 'Found "self" out of entity method'
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
@@ -101,7 +102,7 @@ class ErrorType(enum.Enum):
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
     ARRAY_MULTIMES_NON_LITERAL = 'Array can only be multiplied by literal int'
-    RESULT_UNDEFINED = 'Result accessed before it gets assigned'
+    RESULT_UNDEFINED = '"result" accessed before it gets defined'
     RESULT_BIND_OUT_OF_SCOPE = "Can't bind to result when out of function " \
         "or inside non-inline function"
     NEVER_RESULT = "The function should have set its result but didn't"

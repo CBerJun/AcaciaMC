@@ -8,6 +8,7 @@ sys.path.append(os.path.realpath(
 ))
 
 import io
+from types import MethodType
 
 from acaciamc.tokenizer import Tokenizer, TokenType
 from acaciamc.parser import Parser
@@ -61,8 +62,10 @@ class ASTVisualizer(ASTVisitor):
                         k, subsub
                     )
                 substr += '%s}' % (' ' * (indent + 2))
-            else:
+            elif not isinstance(value, MethodType):
                 substr = str(value)
+            else:
+                continue
             # connect string
             res += '%s%s = %s\n' % (
                 ' ' * (indent + 2),
@@ -70,20 +73,6 @@ class ASTVisualizer(ASTVisitor):
                 substr
             )
         res += '%s)' % (' ' * indent)
-        return res
-
-    def visit_ArgumentTable(self, node: ArgumentTable, indent: int):
-        res = 'ArgumentTable(\n'
-        for name in node.args:
-            type_ = node.types[name]
-            default = node.default[name]
-            # type str
-            type_str = '' if type_ is None else ' : ' + type_.name
-            # default str
-            default_str = ('' if default is None else
-                ' = ' + self.visit(default, indent=(indent + 2)))
-            res += ' ' * (indent + 2) + name + type_str + default_str + '\n'
-        res += ' ' * indent + ')'
         return res
 
     def get_string(self):

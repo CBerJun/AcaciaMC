@@ -2,13 +2,13 @@
 
 __all__ = [
     "EGroupType", "EGroupDataType", "EntityGroup",
-    # Special value returned by Engroup.t(template)
+    # Special value returned by Engroup(Template)
     "GenericEGroup", "GenericEGroupDataType"
 ]
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe, resultlib, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 import acaciamc.mccmdgen.cmds as cmds
@@ -19,6 +19,7 @@ from .entity_filter import EFilterDataType
 from .entity import EntityDataType, EntityReference
 from .boolean import AndGroup
 from .integer import IntOpGroup
+from .callable import BinaryFunction
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -28,10 +29,10 @@ if TYPE_CHECKING:
     from .entity import _EntityBase
 
 class GenericEGroupDataType(DefaultDataType):
-    name = "Engroup.t"
+    name = "Engroup(T)"
 
 class GenericEGroup(AcaciaExpr):
-    """Thing that is returned by Engroup.t()."""
+    """Thing that is returned by Engroup(Template)."""
     def __init__(self, data_type: "DataType", compiler: "Compiler"):
         super().__init__(GenericEGroupDataType(), compiler)
         self.dt = data_type
@@ -43,11 +44,11 @@ class EGroupDataType(Storable):
     name = "Engroup"
 
     def __init__(self, template: "EntityTemplate"):
+        super().__init__(template.compiler)
         self.template = template
-        self.compiler = self.template.compiler
 
     def __str__(self) -> str:
-        return "Engroup.t(%s)" % self.template.name
+        return "Engroup(%s)" % self.template.name
 
     @classmethod
     def name_no_generic(cls) -> str:
@@ -57,38 +58,41 @@ class EGroupDataType(Storable):
         return (isinstance(other, EGroupDataType) and
                 other.template.is_subtemplate_of(self.template))
 
-    def new_var(self, tmp=False):
-        var = EntityGroup(self.template, self.compiler)
-        if tmp:
-            self.compiler.add_tmp_entity(var)
-        return var
+    def new_var(self):
+        return EntityGroup(self.template, self.compiler)
+
+    def get_var_initializer(self, var: "EntityGroup") -> AcaciaExpr:
+        @axe.chop
+        @axe.arg("all_entities", axe.LiteralBool(), default=False)
+        def _new(compiler, all_entities: bool):
+            """
+            Create an empty entity group (unless all_entities is True).
+            o: Engroup  # A group of entities of template Objects
+            o: Engroup(T)  # A group of entities of template T
+            o: Engroup | (all_entities=True)  # Include all entities
+            """
+            # Remove all existsing entities on initialization
+            if not all_entities:
+                commands = var.clear()
+            else:
+                commands = ["tag @e add %s" % var.tag]
+            return resultlib.commands(commands, compiler)
+        return BinaryFunction(_new, self.compiler)
 
 class EGroupType(Type):
     def do_init(self):
-        @method_of(self, "__new__")
-        @axe.chop
-        @axe.arg("template", ETemplateDataType, default=None)
-        def _new(compiler: "Compiler", template: Optional["EntityTemplate"]):
-            if template is None:
-                template = compiler.base_template
-            res = EntityGroup(template, compiler)
-            # Remove all existsing entities on initialization
-            return res, res.clear()
-        @method_of(self, "all_entities")
-        @axe.chop
-        def _all_entities(compiler: "Compiler"):
-            res = EntityGroup(compiler.base_template, compiler)
-            commands = ["tag @e add %s" % res.tag]
-            return res, commands
-        @method_of(self, "t")
         @axe.chop
         @axe.arg("template", ETemplateDataType)
-        def _t(compiler: "Compiler", template: "EntityTemplate"):
+        def _call_me(compiler: "Compiler", template: "EntityTemplate"):
             return GenericEGroup(EGroupDataType(template), compiler)
+        self.call_me = BinaryFunction(_call_me, self.compiler)
+
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
+        return self.call_me.call(args, keywords)
 
     def datatype_hook(self) -> "DataType":
         """When "Engroup" is used as a type specifier, it's an alias to
-        "Engroup.t(Object)".
+        "Engroup(Object)".
         """
         return EGroupDataType(self.compiler.base_template)
 

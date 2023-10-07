@@ -1,7 +1,7 @@
 """Abstarct Syntax Tree definitions for Acacia."""
 from typing import (
     Union as _Union, List as _List, Tuple as _Tuple, Any as _Any,
-    Optional as _Optional
+    Optional as _Optional, Dict as _Dict
 )
 import enum
 
@@ -72,14 +72,21 @@ class Module(AST):  # a module
 class ArgumentTable(AST):  # arguments used in function definition
     def __init__(self, lineno, col):
         super().__init__(lineno, col)
-        self.args = []  # names of arguments
+        self.args: _List[str] = []  # names of arguments
         self.default = {}  # default values of arguments
         self.types = {}  # types of arguments
 
-    def add_arg(self, name: str, type: Expression, default: Expression):
+    def add_arg(self, name: str, type: AnyTypeSpec, default: Expression):
         self.args.append(name)
         self.types[name] = type
         self.default[name] = default
+
+class CallTable(AST):  # call table
+    def __init__(self, args: _List[Expression],
+                 keywords: _Dict[str, Expression], lineno, col):
+        super().__init__(lineno, col)
+        self.args = args
+        self.keywords = keywords
 
 class TypeSpec(AnyTypeSpec):  # specify type of value `int`
     def __init__(self, content: Expression, lineno, col):
@@ -166,6 +173,19 @@ class EntityMeta(Statement):  # entity meta like @type
         super().__init__(lineno, col)
         self.name = name
         self.value = value
+
+class VarDef(Statement):  # define a variable
+    def __init__(self, target: Expression,
+                 type_: _Optional[AnyTypeSpec],
+                 value: _Optional[Expression],
+                 args: _Optional[CallTable], lineno, col):
+        super().__init__(lineno, col)
+        assert not (type_ is None and value is None)
+        assert not (args is not None and value is not None)
+        self.target = target
+        self.type = type_
+        self.value = value
+        self.args = args
 
 class Assign(Statement):  # normal assign
     def __init__(self, target: Expression, value: Expression, lineno, col):
@@ -276,14 +296,10 @@ class BinOp(Expression):  # an expr with binary operator (+, %, >=, etc)
         self.right = right
 
 class Call(Expression):  # call a name
-    def __init__(
-        self, func: Expression, args: list,
-        keywords: dict, lineno, col
-    ):
+    def __init__(self, func: Expression, table: CallTable, lineno, col):
         super().__init__(lineno, col)
         self.func = func
-        self.args = args
-        self.keywords = keywords
+        self.table = table
 
 class Attribute(Expression):  # attr of an expr
     def __init__(self, object_: Expression, attr: str, lineno, col):

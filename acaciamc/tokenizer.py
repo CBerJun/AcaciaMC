@@ -64,6 +64,7 @@ class TokenType(enum.Enum):
     arrow = '->'
     point = '.'
     at = '@'
+    walrus = ':='
     # expressions
     ## literal
     integer = 'INTEGER'  # value:int = this integer
@@ -317,7 +318,7 @@ class Tokenizer:
                 peek = self.peek()
                 for pattern in (
                     '==', '>=', '<=', '!=', '->',
-                    '+=', '-=', '*=', '/=', '%='
+                    '+=', '-=', '*=', '/=', '%=', ':='
                 ):
                     if self.current_char == pattern[0] and peek == pattern[1]:
                         res.append(_gen_and_forward(TokenType(pattern), 2))

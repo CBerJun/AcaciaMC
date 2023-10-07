@@ -273,7 +273,7 @@ class Music(AcaciaExpr):
         #   when 0 <= timer <= music length, the music is playing
         #   when timer > music length, the music has ended
         #   when timer < 0, it's the countdown of starting playing
-        self.timer = IntDataType(self.compiler).new_var()
+        self.timer = IntVar.new(compiler)
         # Volume
         self.user_volume = volume
         # Create file

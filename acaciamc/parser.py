@@ -200,10 +200,9 @@ class Parser:
         """
         level 1 expression := expr_l0 (
           (POINT IDENTIFIER)
-          | (LPAREN (arg COMMA)* arg? RPAREN)
-          | AT expr_l0
+          | call_table
+          | (AT expr_l0)
         )*
-        arg := (IDENTIFIER EQUAL)? expr
         """
         node = self.expr_l0()
         def _attribute(node: Expression):
@@ -214,38 +213,8 @@ class Parser:
             return Attribute(node, attr, lineno=node.lineno, col=node.col)
 
         def _call(node: Expression):
-            # make `node` a `Call`
-            args, keywords = [], {}
-            self.eat(TokenType.lparen)
-            # keywords are always after positioned args, so use this flag to
-            # store if a keyword is read
-            accept_positioned = True
-            while self.current_token.type != TokenType.rparen:
-                self.peek()
-                if self.next_token.type is TokenType.equal:
-                    # keyword
-                    accept_positioned = False
-                    key = self.current_token.value
-                    pos = self.current_pos
-                    self.eat(TokenType.identifier)
-                    if key in keywords:  # if already exists
-                        self.error(
-                            ErrorType.ARG_MULTIPLE_VALUES, arg=key, **pos
-                        )
-                    self.eat(TokenType.equal)
-                    keywords[key] = self.expr()
-                else:  # positioned
-                    if not accept_positioned:
-                        self.error(ErrorType.POSITIONED_ARG_AFTER_KEYWORD)
-                    args.append(self.expr())
-                # read comma
-                if self.current_token.type is TokenType.comma:
-                    self.eat()
-                else:
-                    break
-            self.eat(TokenType.rparen)
             return Call(
-                node, args, keywords,
+                node, self.call_table(),
                 lineno=node.lineno, col=node.col
             )
 
@@ -660,7 +629,8 @@ class Parser:
     def statement(self):
         """
         expr_statement := (
-          assign_stmt | aug_assign_stmt | bind_stmt | expr_stmt
+          var_def_stmt | auto_var_def_stmt | assign_stmt |
+          aug_assign_stmt | bind_stmt | expr_stmt
         )
         simple_statement := (
           pass_stmt | command_stmt | import_stmt | from_import_stmt
@@ -733,6 +703,30 @@ class Parser:
                 self.error(ErrorType.INVALID_BIND_TARGET)
             right = self.expr()  # get assign value
             node = Binding(expr, right, **pos)
+        elif self.current_token.type is TokenType.colon:
+            # var_def_stmt := (identifier | result) COLON type_spec
+            #   ((EQUAL expr) | (BAR call_table)))?
+            self.eat()  # eat colon
+            if not isinstance(expr, (Identifier, Result)):
+                self.error(ErrorType.INVALID_VARDEF_STMT)
+            type_ = self.type_spec()
+            if self.current_token.type is TokenType.equal:
+                self.eat()  # eat equal
+                node = VarDef(expr, type_, value=self.expr(),
+                              args=None, **pos)
+            elif self.current_token.type is TokenType.bar:
+                self.eat()  # eat bar
+                node = VarDef(expr, type_, value=None,
+                              args=self.call_table(), **pos)
+            else:
+                node = VarDef(expr, type_, value=None, args=None, **pos)
+        elif self.current_token.type is TokenType.walrus:
+            # auto_var_def_stmt := (identifier | result) WALRUS expr
+            self.eat()  # eat walrus
+            if not isinstance(expr, (Identifier, Result)):
+                self.error(ErrorType.INVALID_VARDEF_STMT)
+            node = VarDef(expr, type_=None, value=self.expr(),
+                          args=None, **pos)
         else:  # just an expr
             # expr_stmt := expr
             node = ExprStatement(expr, **pos)
@@ -805,3 +799,39 @@ class Parser:
             return EntityTypeSpec(template, **pos)
         else:
             return TypeSpec(self.expr(), **pos)
+
+    def call_table(self):
+        """
+        arg := (IDENTIFIER EQUAL)? expr
+        call_table := LPAREN (arg COMMA)* arg? RPAREN
+        """
+        args, keywords = [], {}
+        self.eat(TokenType.lparen)
+        # Keywords are always after positioned args, so use this flag to
+        # store if a keyword has been read
+        accept_positioned = True
+        while self.current_token.type is not TokenType.rparen:
+            self.peek()
+            if self.next_token.type is TokenType.equal:
+                # keyword
+                accept_positioned = False
+                key = self.current_token.value
+                pos = self.current_pos
+                self.eat(TokenType.identifier)
+                if key in keywords:  # if already exists
+                    self.error(
+                        ErrorType.ARG_MULTIPLE_VALUES, arg=key, **pos
+                    )
+                self.eat(TokenType.equal)
+                keywords[key] = self.expr()
+            else:  # positioned
+                if not accept_positioned:
+                    self.error(ErrorType.POSITIONED_ARG_AFTER_KEYWORD)
+                args.append(self.expr())
+            # read comma
+            if self.current_token.type is TokenType.comma:
+                self.eat()
+            else:
+                break
+        self.eat(TokenType.rparen)
+        return CallTable(args, keywords, **self.current_pos)

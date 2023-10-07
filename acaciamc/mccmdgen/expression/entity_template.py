@@ -9,7 +9,7 @@ import itertools
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
-from .entity import TaggedEntity
+from .entity import EntityReference
 from .callable import BoundMethodDispatcher, BoundMethod, InlineFunction
 from .string import String
 from .none import NoneDataType
@@ -303,7 +303,7 @@ class EntityTemplate(AcaciaExpr):
     def call(self, args, keywords):
         # Calling an entity template returns an entity, the arguments
         # are passed to __init__ if it exists
-        inst, cmds = TaggedEntity.from_template(self, self.compiler)
+        inst, cmds = EntityReference.summon_new(self, self.compiler)
         # Call __init__ if it exists
         initializer = inst.attribute_table.lookup("__init__")
         if initializer:

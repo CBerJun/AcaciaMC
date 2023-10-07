@@ -9,9 +9,9 @@ import math
 import schedule
 
 MAX_ANSWER -> 999  # the last digit should be 9
-answer = 0
-guess = 0
-player -> Engroup()
+answer: int
+guess: int
+player: Engroup
 
 interface input:
     # Input 1 digit

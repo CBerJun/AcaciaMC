@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 class EntityDataType(Storable):
     def __init__(self, template: "EntityTemplate"):
+        super().__init__(template.compiler)
         self.template = template
-        self.compiler = self.template.compiler
 
     def __str__(self) -> str:
         return "entity(%s)" % self.template.name
@@ -32,11 +32,8 @@ class EntityDataType(Storable):
         return (isinstance(other, EntityDataType) and
                 other.template.is_subtemplate_of(self.template))
 
-    def new_var(self, tmp=False) -> "TaggedEntity":
-        var = TaggedEntity.from_empty(self.template, self.compiler)
-        if tmp:
-            self.compiler.add_tmp_entity(var)
-        return var
+    def new_var(self) -> "TaggedEntity":
+        return TaggedEntity.from_empty(self.template, self.compiler)
 
 class _EntityBase(AcaciaExpr):
     def __init__(self, template: "EntityTemplate", compiler,
@@ -70,37 +67,16 @@ class EntityReference(_EntityBase):
         self.selector = selector
         super().__init__(template, compiler, cast_to)
 
-    def cmdstr(self) -> str:
-        return str(self)
-
-    def get_selector(self) -> MCSelector:
-        return self.selector.copy()
-
-    def cast_to(self, template):
-        return EntityReference(
-            self.selector, self.template, self.compiler, template
-        )
-
-class TaggedEntity(_EntityBase, VarValue):
-    def __init__(self, template: "EntityTemplate", compiler: "Compiler",
-                 cast_to: Optional["EntityTemplate"] = None):
-        self.tag = compiler.allocate_entity_tag()
-        super().__init__(template, compiler, cast_to)
-
-    def cast_to(self, template):
-        return TaggedEntity(self.template, self.compiler, template)
-
     @classmethod
-    def from_template(cls, template: "EntityTemplate", compiler: "Compiler"
-                      ) -> Tuple["TaggedEntity", CMDLIST_T]:
-        """Create an entity from the template.
+    def summon_new(cls, template: "EntityTemplate", compiler: "Compiler") \
+            -> Tuple["TaggedEntity", CMDLIST_T]:
+        """Summon an entity of given template.
         Return a 2-tuple.
         Element 0: the `TaggedEntity`
         Element 1: initial commands to run
         """
         # Allocate an entity name to identify it
         name = compiler.allocate_entity_name()
-        inst = cls(template, compiler)
         # Analyze template meta
         # NOTE meta only works when you create an entity using
         # `Template()` (Since this code is in `from_template` method).
@@ -121,13 +97,35 @@ class TaggedEntity(_EntityBase, VarValue):
             SUMMON = "summon {type} {pos} 0 0 {event} {name}"
         else:
             SUMMON = "summon {type} {pos} {event} {name}"
+        sel = MCSelector("e")
+        sel.name(name)
+        inst = cls(sel, template, compiler)
         return inst, [
             cmds.Execute(e_pos[0], cmds.Cmd(SUMMON.format(
                 type=e_type, name=name, pos=e_pos[1], event=e_event
             ))),
-            "tag @e[name=%s] add %s" % (name, inst.template.runtime_tag),
-            "tag @e[name=%s] add %s" % (name, inst.tag)
+            "tag %s add %s" % (sel.to_str(), template.runtime_tag)
         ]
+
+    def cmdstr(self) -> str:
+        return str(self)
+
+    def get_selector(self) -> MCSelector:
+        return self.selector.copy()
+
+    def cast_to(self, template):
+        return EntityReference(
+            self.selector, self.template, self.compiler, template
+        )
+
+class TaggedEntity(_EntityBase, VarValue):
+    def __init__(self, template: "EntityTemplate", compiler: "Compiler",
+                 cast_to: Optional["EntityTemplate"] = None):
+        self.tag = compiler.allocate_entity_tag()
+        super().__init__(template, compiler, cast_to)
+
+    def cast_to(self, template):
+        return TaggedEntity(self.template, self.compiler, template)
 
     @classmethod
     def from_empty(cls, template: "EntityTemplate", compiler):

@@ -8,11 +8,7 @@ from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 class NoneDataType(DefaultDataType, Storable):
     name = 'nonetype'
 
-    def __init__(self, compiler):
-        super().__init__()
-        self.compiler = compiler
-
-    def new_var(self, tmp=False) -> "NoneVar":
+    def new_var(self) -> "NoneVar":
         return NoneVar(self.compiler)
 
 class NoneVar(VarValue):

@@ -2,11 +2,13 @@
 
 __all__ = ["StructDataType", "Struct"]
 
-from typing import TYPE_CHECKING, List, Dict, Tuple
+from typing import TYPE_CHECKING, List, Dict, Tuple, Optional
 
 from .base import *
+from .callable import BinaryFunction
 from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
 from acaciamc.error import *
+from acaciamc.tools import axe, resultlib
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
@@ -15,9 +17,8 @@ if TYPE_CHECKING:
 
 class StructDataType(Storable, SupportsEntityField):
     def __init__(self, template: "StructTemplate"):
-        super().__init__()
         self.template = template
-        self.compiler = self.template.compiler
+        super().__init__(template.compiler)
 
     def __str__(self) -> str:
         return "struct(%s)" % self.template.name
@@ -30,8 +31,31 @@ class StructDataType(Storable, SupportsEntityField):
         return (isinstance(other, StructDataType) and
                 other.template.is_subtemplate_of(self.template))
 
-    def new_var(self, tmp=False) -> "Struct":
-        return Struct.from_template(self.template, self.compiler, tmp=tmp)
+    def new_var(self) -> "Struct":
+        return Struct.from_template(self.template, self.compiler)
+
+    def get_var_initializer(self, var: "Struct") -> AcaciaExpr:
+        decorators = [axe.chop, axe.star]
+        for name, type_ in self.template.field_types.items():
+            decorators.append(axe.arg(name, type_, default=None))
+        def _new(compiler, **fields: Optional[AcaciaExpr]) -> CALLRET_T:
+            """
+            Only keyword arguments are allowed to give initial values
+            to fields. Example:
+            struct A:
+                a: int
+                b: int
+            x: A | (a=10)
+            """
+            commands = []
+            for name, value in fields.items():
+                if value is not None:
+                    commands.extend(value.export(var.vars[name]))
+            return resultlib.commands(commands, compiler)
+        decorators.reverse()
+        for decorator in decorators:
+            _new = decorator(_new)
+        return BinaryFunction(_new, self.compiler)
 
     def new_entity_field(self):
         field_info: Dict[str, Tuple[dict, SupportsEntityField]] = {}
@@ -62,10 +86,10 @@ class Struct(VarValue):
         self.attribute_table.update(vars_)
 
     @classmethod
-    def from_template(cls, template: "StructTemplate", compiler, **kwds):
+    def from_template(cls, template: "StructTemplate", compiler):
         vars_ = {}
         for name, type_ in template.field_types.items():
-            var = type_.new_var(**kwds)
+            var = type_.new_var()
             vars_[name] = var
         return cls(template, vars_, compiler)
 

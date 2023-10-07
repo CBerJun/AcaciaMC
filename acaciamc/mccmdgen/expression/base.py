@@ -23,8 +23,8 @@ if TYPE_CHECKING:
 
 ### --- UTILS --- ###
 
-def export_need_tmp(func):
-    """Decorator for `AcaciaExpr.export`.
+def export_need_tmp(new_tmp: Callable[["Compiler"], "VarValue"]):
+    """Return a decorator for `AcaciaExpr.export`.
     Usually when we do `A.export(B)`, the value of `A` is dumped to
     `B` directly without a temporary value.
     This decorator add a temporary value `T`, first `A.export(T)`,
@@ -33,16 +33,20 @@ def export_need_tmp(func):
     WITHOUT a temporary value, take `a = 1 + a` as an example,
     we let `a` = 1 first, and then plus `a` itself to it, which is 1
     now, so whatever `a` is before assigning, it becomes 2 now.
+    `new_tmp` should return a temporary `VarValue` of the same data type
+    as the class where this decorator is used.
     """
-    def _decorated(self, var: VarValue):
-        assert isinstance(self, AcaciaExpr)
-        assert isinstance(self.data_type, Storable)
-        temp = self.data_type.new_var(tmp=True)
-        cmds = []
-        cmds.extend(func(self, temp))
-        cmds.extend(temp.export(var))
-        return cmds
-    return _decorated
+    def _decorator(func):
+        def _decorated(self, var: VarValue):
+            assert isinstance(self, AcaciaExpr)
+            assert isinstance(self.data_type, Storable)
+            temp = new_tmp(var.compiler)
+            cmds = []
+            cmds.extend(func(self, temp))
+            cmds.extend(temp.export(var))
+            return cmds
+        return _decorated
+    return _decorator
 
 ### --- END UTILS --- ###
 

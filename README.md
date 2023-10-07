@@ -19,8 +19,8 @@ def arithmetic(start: int, to: int, delta=1) -> int:
      * Return sum of arithmetic sequence that starts with `start`,
      * ends with `to` with common difference `delta`.
      *#
-    result = (start + to) * ((to - start) / delta + 1) / 2
-res = arithmetic(-30, 14, delta=2)
+    result := (start + to) * ((to - start) / delta + 1) / 2
+res := arithmetic(-30, 14, delta=2)
 print.tell(print.format("Sum of arithmetic sequence (-30~14, d=2) is %0", res))
 ```
 Acacia will convert the above code into commands:
@@ -74,13 +74,13 @@ Detailed features:
 Check out [this file](test/brief.aca) for more information about Acacia's syntax.
 
 ## Syntax Overview
-This is how to define a variable in Acacia: `a = 1`. That's it.
+This is how to define a variable in Acacia: `a := 1`. That's it.
 No need for scoreboards.
 
 Nested expressions within 1 line of code:
 ```python
-a = 10
-b = (10 + a) * a - 5
+a := 10
+b := (10 + a) * a - 5
 ```
 
 Function definitions:
@@ -89,6 +89,7 @@ def foo(x: int, y = True) -> int:
     pass  # code here...
 # These are all OK:
 foo(1)
+z: int
 z = foo(2, False)
 z = foo(x=3)
 ```
@@ -97,8 +98,8 @@ Flow control statements (selections and loops):
 ```python
 def is_prime(x: int) -> bool:
     #* Test if `x` is a prime number *#
-    mod = 2
-    result = True
+    result: bool = True
+    mod: int = 2
     while mod <= x / 2:
         if x % mod == 0:
             result = False
@@ -108,7 +109,7 @@ def is_prime(x: int) -> bool:
 Various builtin modules:
 ```python
 import print
-money = 10
+money := 10
 # Send "Hello, world!" in chat to everyone
 print.tell("Hello world!")
 # Show "Money: (Value of variable `money`)" on actionbar to everyone
@@ -128,7 +129,7 @@ COLORS -> {
     0: "cyan", 1: "orange", 2: "yellow",
     3: "purple", 4: "lime", 5: "red", 6: "blue"
 }
-i = 0  # Calculate `i`...
+i := 0  # Calculate `i`...
 for c in COLORS:
     if c == i:
         world.setblock(
@@ -141,7 +142,7 @@ Position and entity system:
 ```python
 import world
 
-ORIGIN -> Pos(0, -50, 0)
+ORIGIN -> AbsPos(0, -50, 0)
 world.fill(ORIGIN, Offset().offset(x=5, z=5), world.Block("air"))
 
 entity Test:
@@ -155,7 +156,7 @@ entity Test:
     def foo():
         world.tp(self, ORIGIN)
 
-test_group -> Engroup(Test)
+test_group: Engroup(Test)
 test_group.select(Enfilter().distance_from(ORIGIN, max=5))
 for entity test in test_group:
     test.foo()

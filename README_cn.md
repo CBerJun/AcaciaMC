@@ -6,6 +6,7 @@
 Minecraft 的命令较为复杂、很长、且难以维护。
 Acacia 是命令的替代，它也是用来操控 Minecraft 的，*但是*它的语法相对命令清晰很多、且便于维护，能提升开发效率。
 **想象一下: 仅用写不到14KB代码就能编写一个在 Minecraft 里运行的俄罗斯方块小游戏** (见[下文](#acacia-能干什么))!
+
 Acacia 代码最终会被编译为多个 `.mcfunction` 文件，也就是说 Acacia 其实仍会被程序转换为命令，再通过行为包被加载进一个世界来执行。
 
 还是很疑惑吗? 举个例子吧，这段 Acacia 代码可以在 Minecraft 中计算等差数列和:
@@ -13,8 +14,8 @@ Acacia 代码最终会被编译为多个 `.mcfunction` 文件，也就是说 Aca
 import print
 def arithmetic(start: int, to: int, delta=1) -> int:
     #* 返回以`start`为首项，`to`为末项，`delta`为公差的等差数列的和 *#
-    result = (start + to) * ((to - start) / delta + 1) / 2
-res = arithmetic(-30, 14, delta=2)
+    result := (start + to) * ((to - start) / delta + 1) / 2
+res := arithmetic(-30, 14, delta=2)
 print.tell(print.format("从-30到14，公差为2的等差数列和为%0", res))
 ```
 Acacia 可以把上面这段代码转换为命令:
@@ -44,7 +45,7 @@ scoreboard players set acacia5 acacia 2
 运行这些生成的命令，就会在 Minecraft 聊天栏输出:
 > 从-30到14，公差为2的等差数列和为-184
 
-**总结一下，使用 Acacia 可以制作 Minecraft 的项目————但不是利用命令，而是利用 Acacia 代码，它阅读和维护起来都更加简单。**
+**总结一下，使用 Acacia 可以制作 Minecraft 的项目——但不是利用命令，而是利用 Acacia 代码，它阅读和维护起来都更加简单。**
 
 Acacia 是使用 Python 编写的，所以编译器 (就是把代码转换为命令的程序) 需要 Python（需要 3.6 或以上版本）来运行。
 
@@ -67,13 +68,13 @@ Acacia 是使用 Python 编写的，所以编译器 (就是把代码转换为命
 查看[这个文件](test/brief.aca)来了解更多关于 Acacia 语法的信息。
 
 ## 语法概览
-这是在 Acacia 中定义变量的方法: `a = 1`。
+这是在 Acacia 中定义变量的方法: `a := 1`。
 就这么简单捏，无需研究计分板系统了。
 
 一行代码计算复杂的表达式:
 ```python
-a = 10
-b = (10 + a) * a - 5
+a := 10
+b := (10 + a) * a - 5
 ```
 
 定义函数:
@@ -82,6 +83,7 @@ def foo(x: int, y = True) -> int:
     pass  # 这里写函数体代码
 # 下面这些都是合法的调用:
 foo(1)
+z: int
 z = foo(2, False)
 z = foo(x=3)
 ```
@@ -90,7 +92,8 @@ z = foo(x=3)
 ```python
 def is_prime(x: int) -> bool:
     #* 检测`x`是不是质数 *#
-    mod = 2
+    result: bool = True
+    mod: int = 2
     result = True
     while mod <= x / 2:
         if x % mod == 0:
@@ -101,7 +104,7 @@ def is_prime(x: int) -> bool:
 丰富的内置模块:
 ```python
 import print
-money = 10
+money := 10
 # 在聊天栏向所有人输出"Hello, world!"
 print.tell("Hello world!")
 # 在所有玩家的快捷栏上方显示"Money: (money变量的数值)"
@@ -121,7 +124,7 @@ COLORS -> {
     0: "cyan", 1: "orange", 2: "yellow",
     3: "purple", 4: "lime", 5: "red", 6: "blue"
 }
-i = 0  # 计算`i`...
+i := 0  # 计算`i`...
 for c in COLORS:
     if c == i:
         world.setblock(
@@ -134,7 +137,7 @@ for c in COLORS:
 ```python
 import world
 
-ORIGIN -> Pos(0, -50, 0)
+ORIGIN -> AbsPos(0, -50, 0)
 world.fill(ORIGIN, Offset().offset(x=5, z=5), world.Block("air"))
 
 entity Test:
@@ -148,7 +151,7 @@ entity Test:
     def foo():
         world.tp(self, ORIGIN)
 
-test_group -> Engroup(Test)
+test_group: Engroup(Test)
 test_group.select(Enfilter().distance_from(ORIGIN, max=5))
 for entity test in test_group:
     test.foo()
