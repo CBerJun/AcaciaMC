@@ -304,6 +304,17 @@ class Comment(Command):
     def resolve(self) -> str:
         return self.comment
 
+def _scb_check_for_invoke(func: Callable[["_InvokeFunction", ScbSlot], bool]):
+    # Decorator for `_InvokeFunction`.
+    def _wrapped(self: "_InvokeFunction", slot: ScbSlot) -> bool:
+        if self.file in self._inside_scb_check:
+            return False
+        self._inside_scb_check.append(self.file)
+        result = func(self, slot)
+        self._inside_scb_check.pop()
+        return result
+    return _wrapped
+
 class _InvokeFunction(Command):
     def __init__(self, file: "MCFunctionFile"):
         super().__init__()
@@ -311,29 +322,18 @@ class _InvokeFunction(Command):
 
     _inside_scb_check: List[MCFunctionFile] = []
 
-    @staticmethod
-    def _scb_check(func: Callable[["_InvokeFunction", ScbSlot], bool]):
-        def _wrapped(self: "_InvokeFunction", slot: ScbSlot) -> bool:
-            if self.file in self._inside_scb_check:
-                return False
-            self._inside_scb_check.append(self.file)
-            result = func(self, slot)
-            self._inside_scb_check.pop()
-            return result
-        return _wrapped
-
     def func_ref(self) -> "MCFunctionFile":
         return self.file
 
-    @_scb_check
+    @_scb_check_for_invoke
     def scb_did_assign(self, slot: ScbSlot) -> bool:
         return any(cmd.scb_did_assign(slot) for cmd in self.file.commands)
 
-    @_scb_check
+    @_scb_check_for_invoke
     def scb_did_augassign(self, slot: ScbSlot) -> bool:
         return any(cmd.scb_did_augassign(slot) for cmd in self.file.commands)
 
-    @_scb_check
+    @_scb_check_for_invoke
     def scb_did_read_unreplacable(self, slot: ScbSlot) -> bool:
         return any(
             cmd.scb_did_read(slot) or cmd.scb_did_read_unreplacable(slot)

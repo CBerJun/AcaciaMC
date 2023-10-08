@@ -2,9 +2,11 @@
 
 __all__ = ["Result", "commands", "literal", "nothing"]
 
-from typing import List, NamedTuple, Union, TYPE_CHECKING
+from typing import NamedTuple, Union, TYPE_CHECKING
 
-import acaciamc.mccmdgen.expression as acacia
+# `import acaciamc.mccmdgen.expression as acacia` won't work in 3.6
+# because of a Python bug (see https://bugs.python.org/issue23203)
+from acaciamc.mccmdgen import expression as acacia
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler

@@ -22,7 +22,9 @@ from itertools import chain
 from functools import partial
 import inspect
 
-import acaciamc.mccmdgen.expression as acacia
+# `import acaciamc.mccmdgen.expression as acacia` won't work in 3.6
+# because of a Python bug (see https://bugs.python.org/issue23203)
+from acaciamc.mccmdgen import expression as acacia
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.error import Error as AcaciaError, ErrorType
 from acaciamc.constants import Config
