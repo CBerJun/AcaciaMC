@@ -64,7 +64,7 @@ def build_argparser():
         help="disable optimization"
     )
     argparser.add_argument(
-        '--override-old',
+        '-u', '--override-old',
         action='store_true',
         help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
     )
