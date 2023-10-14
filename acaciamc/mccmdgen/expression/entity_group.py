@@ -179,7 +179,7 @@ class EntityGroup(VarValue):
                 lambda this, libs: cmds.ScbSetConst(this, 0),
                 lambda this, libs: cmds.Execute(
                     [cmds.ExecuteEnv("as", SELF)],
-                    runs=cmds.ScbSetConst(this, 1)
+                    runs=cmds.ScbAddConst(this, 1)
                 )
             )
             return res
