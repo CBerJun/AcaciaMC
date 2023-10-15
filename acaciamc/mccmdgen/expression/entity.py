@@ -67,6 +67,26 @@ class EntityReference(_EntityBase):
         self.selector = selector
         super().__init__(template, compiler, cast_to)
 
+    def cmdstr(self) -> str:
+        return str(self)
+
+    def get_selector(self) -> MCSelector:
+        return self.selector.copy()
+
+    def cast_to(self, template):
+        return EntityReference(
+            self.selector, self.template, self.compiler, template
+        )
+
+class TaggedEntity(_EntityBase, VarValue):
+    def __init__(self, template: "EntityTemplate", compiler: "Compiler",
+                 cast_to: Optional["EntityTemplate"] = None):
+        self.tag = compiler.allocate_entity_tag()
+        super().__init__(template, compiler, cast_to)
+
+    def cast_to(self, template):
+        return TaggedEntity(self.template, self.compiler, template)
+
     @classmethod
     def summon_new(cls, template: "EntityTemplate", compiler: "Compiler") \
             -> Tuple["TaggedEntity", CMDLIST_T]:
@@ -97,35 +117,17 @@ class EntityReference(_EntityBase):
             SUMMON = "summon {type} {pos} 0 0 {event} {name}"
         else:
             SUMMON = "summon {type} {pos} {event} {name}"
-        sel = MCSelector("e")
-        sel.name(name)
-        inst = cls(sel, template, compiler)
+        inst = cls(template, compiler)
         return inst, [
             cmds.Execute(e_pos[0], cmds.Cmd(SUMMON.format(
                 type=e_type, name=name, pos=e_pos[1], event=e_event
             ))),
-            "tag %s add %s" % (sel.to_str(), template.runtime_tag)
+            *inst.clear(),
+            "tag @e[name=%s,tag=!%s] add %s" % (
+                name, template.runtime_tag, inst.tag
+            ),
+            "tag %s add %s" % (inst.to_str(), template.runtime_tag)
         ]
-
-    def cmdstr(self) -> str:
-        return str(self)
-
-    def get_selector(self) -> MCSelector:
-        return self.selector.copy()
-
-    def cast_to(self, template):
-        return EntityReference(
-            self.selector, self.template, self.compiler, template
-        )
-
-class TaggedEntity(_EntityBase, VarValue):
-    def __init__(self, template: "EntityTemplate", compiler: "Compiler",
-                 cast_to: Optional["EntityTemplate"] = None):
-        self.tag = compiler.allocate_entity_tag()
-        super().__init__(template, compiler, cast_to)
-
-    def cast_to(self, template):
-        return TaggedEntity(self.template, self.compiler, template)
 
     @classmethod
     def from_empty(cls, template: "EntityTemplate", compiler):
