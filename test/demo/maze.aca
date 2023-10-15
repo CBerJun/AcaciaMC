@@ -1,0 +1,173 @@
+#**
+ * Random Maze Generator
+ *
+ * Create a super flat world and load this program
+ * Type these in chat to initialize:
+ *   /function acacia/init
+ *   /function acacia/load
+ * Type this to start:
+ *   /function acacia/interface/start
+ *
+ * Generate a random maze using Prim's algorithm.
+ * Here's a size 3 maze template:
+ *     # # # # # # #
+ *     # _ ? _ ? _ #
+ *     # ? # ? # ? #
+ *     # _ ? _ ? _ #
+ *     # ? # ? # ? #
+ *     # _ ? _ ? _ #
+ *     # # # # # # #
+ * where # is a 100% wall, _ is a 100% path and ? is to be determined
+ * by the algorithm.
+ * We start with any one of the _s and "visit" it.
+ *     # # # # # # #
+ *     # V F _ ? _ #
+ *     # F # ? # ? #
+ *     # _ ? _ ? _ #
+ *     # ? # ? # ? #
+ *     # _ ? _ ? _ #
+ *     # # # # # # #
+ * When a _ is "visited":
+ *   For every ? around it:
+ *     If the ? is not "frontier", mark it as a "frontier"
+ *     Else, mark it as a wall, and it is no longer a "frontier"
+ * And we enter a loop until there is no "frontier":
+ *   We choose 1 "frontier" randomly:
+ *     Mark this ? as a path and it is no longer a "frontier"
+ *     "Visit" the un"visited" _s around it
+ *
+ * Here is a possible generation process:
+ *     LEGEND
+ *     V: Visited _; F: "frontier";
+ *     P: Path turned from ?; W: Wall turned from ?
+ *
+ *     # # # # # # #
+ *     # V P V F _ #
+ *     # F # F # ? #
+ *     # _ ? _ ? _ #
+ *     # ? # ? # ? #
+ *     # _ ? _ ? _ #
+ *     # # # # # # #
+ *
+ *     # # # # # # #
+ *     # V P V F _ #
+ *     # F # P # ? #
+ *     # _ F V F _ #
+ *     # ? # F # ? #
+ *     # _ ? _ ? _ #
+ *     # # # # # # #
+ *
+ *     # # # # # # #
+ *     # V P V F _ #
+ *     # W # P # ? #
+ *     # V P V F _ #
+ *     # F # F # ? #
+ *     # _ ? _ ? _ #
+ *     # # # # # # #
+ *
+ *     ...
+ *#
+
+import world
+import schedule
+
+ORIGIN -> AbsPos(0, -50, 0)
+HEIGHT -> 2  # Height of wall of maze
+SIZE -> 10
+DUMMY_ENTITY -> "armor_stand"
+# Block used for final maze:
+BLOCK -> world.Block("concrete", {"color": "white"})
+# Blocks for _:
+BLOCK_VISITED -> world.Block("concrete", {"color": "green"})
+BLOCK_UNVISITED -> world.Block("concrete", {"color": "blue"})
+# Blcoks for ?:
+BLOCK_UNKNOWN -> world.Block("concrete", {"color": "cyan"})
+BLOCK_PATH -> world.Block("concrete", {"color": "yellow"})
+BLOCK_WALL -> world.Block("concrete", {"color": "red"})
+# Other constants
+OFFSET_TABLE -> {{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+
+entity Dummy:
+    @type: DUMMY_ENTITY
+
+    inline def __init__(pos: Pos) -> None:
+        world.tp(self, pos)
+        world.effect_give(
+            self, "invisibility", duration=int.MAX, particle=False
+        )
+
+entity Frontier extends Dummy:
+    pass
+
+frontiers: Engroup(Frontier)
+last_tick_run: bool = False
+
+def visit(pos: entity(Dummy)):
+    world.setblock(Pos(pos).offset(y=-1), BLOCK_VISITED)
+    # For adjacent cells:
+    for offset in OFFSET_TABLE:
+        neighbor -> Pos(pos).offset(x=offset.get(0), z=offset.get(1))
+        neighbor_block -> neighbor.offset(y=-1)
+        neighbor_frontier: Engroup(Frontier)
+        neighbor_frontier.select(Enfilter().distance_from(neighbor, max=0.1))
+        # Only handle undetermined neighbors
+        if world.is_block(neighbor_block, BLOCK_UNKNOWN):
+            # Turn existing frontiers into walls
+            if neighbor_frontier.is_empty():
+                frontiers.add(Frontier(pos=neighbor))
+            # Turn ? into frontiers
+            else:
+                world.kill(neighbor_frontier)
+                world.setblock(neighbor_block, BLOCK_WALL)
+                world.fill(neighbor, Offset().offset(y=HEIGHT-1), BLOCK)
+
+def choose(frontier: entity(Frontier)):
+    world.setblock(Pos(frontier).offset(y=-1), BLOCK_PATH)
+    for offset in OFFSET_TABLE:
+        neighbor -> Pos(frontier).offset(x=offset.get(0), z=offset.get(1))
+        if world.is_block(neighbor.offset(y=-1), BLOCK_UNVISITED):
+            e := Dummy(pos=neighbor)
+            visit(e)
+            world.kill(e)
+    world.kill(frontier)
+
+def tick():
+    if frontiers.size() == 0:
+        if last_tick_run:
+            # Finished!
+            world.fill(ORIGIN, Offset().offset(x=2*SIZE, z=2*SIZE), BLOCK)
+            last_tick_run = False
+    else:
+        choose(
+            frontiers
+            .copy()
+            .filter(Enfilter().random(DUMMY_ENTITY, limit=1))
+            .to_single()
+        )
+        last_tick_run = True
+
+schedule.register_loop(tick)
+
+interface start:
+    world.fill(ORIGIN, Offset().offset(x=2*SIZE, y=HEIGHT, z=2*SIZE),
+               BLOCK, replacement="hollow")
+    world.fill(ORIGIN.offset(x=1, y=HEIGHT, z=1),
+               Offset().offset(x=2*SIZE-2, z=2*SIZE-2),
+               world.Block("air"))
+    world.fill(ORIGIN.offset(x=1, z=1),
+               Offset().offset(x=2*SIZE-2, z=2*SIZE-2),
+               BLOCK_UNKNOWN)
+    for i in array.range(SIZE):
+        for j in array.range(SIZE):
+            world.setblock(ORIGIN.offset(x=2*i+1, z=2*j+1), BLOCK_UNVISITED)
+    for i in array.range(SIZE-1):
+        for j in array.range(SIZE-1):
+            pos -> ORIGIN.offset(x=2*i+2, z=2*j+2)
+            world.fill(pos, Offset().offset(y=HEIGHT), BLOCK)
+    e := Dummy(ORIGIN.offset(+1.5, +1, +1.5))
+    visit(e)
+    world.kill(e)
+
+interface stop:
+    #* Stop generating at once. *#
+    world.kill(frontiers)
