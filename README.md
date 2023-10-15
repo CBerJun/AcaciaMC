@@ -163,7 +163,7 @@ entity Test:
 
 test_group: Engroup(Test)
 test_group.select(Enfilter().distance_from(ORIGIN, max=5))
-for entity test in test_group:
+for test in test_group:
     test.foo()
 ```
 

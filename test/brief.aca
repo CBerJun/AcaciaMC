@@ -230,12 +230,15 @@ player_group.select(Enfilter()
 # Now `player_group` contains all players whose distance from 0, 0, 0 is
 # no more than 5 blocks. Everything in Minecraft's selector can be found
 # in `Enfilter`.
-# Use for-entity to iterate over all entities inside this group:
-for entity player in player_group:
+# Use for-in to iterate over all entities inside this group:
+for player in player_group:
     player.score += 1
 # Now all players inside the `player_group` got their score plus 1.
+# Note that this for-in works *completely* different from the for-in we
+# previously used to iterate over array or map, but they looked the
+# same. This structure is designed like this for readability.
 # This removes players whose score is lower than 10 out of group:
-for entity player in player_group:
+for player in player_group:
     if player.score < 10:
         player_group.remove(player)
 # Most of functions in `world` module accepts both single entity and an

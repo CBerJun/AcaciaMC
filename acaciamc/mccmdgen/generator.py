@@ -680,35 +680,38 @@ class Generator(ASTVisitor):
 
     def visit_For(self, node: For):
         iterable = self.visit(node.expr)
-        try:
-            items = iterable.iterate()
-        except NotImplementedError:
-            raise Error(ErrorType.NOT_ITERABLE, type_=str(iterable.data_type))
-        for value in items:
-            with self.new_scope():
-                self.current_scope.set(node.name, value)
+        # for-in on an entity group has completely different meaning --
+        # it is not a compile-time loop.
+        if not iterable.data_type.matches_cls(EGroupDataType):
+            try:
+                items = iterable.iterate()
+            except NotImplementedError:
+                raise Error(ErrorType.NOT_ITERABLE,
+                            type_=str(iterable.data_type))
+            self.write_debug("Iterating over %d items" % len(items))
+            for value in items:
+                with self.new_scope():
+                    self.current_scope.set(node.name, value)
+                    for stmt in node.body:
+                        self.visit(stmt)
+        else:
+            assert isinstance(iterable, EntityGroup)
+            with self.new_mcfunc_file() as body_file, \
+                 self.new_scope():
+                self.write_debug("Entity group iteration body")
+                self.current_scope.set(
+                    node.name, EntityReference(
+                        MCSelector("s"), iterable.template, self.compiler
+                    )
+                )
                 for stmt in node.body:
                     self.visit(stmt)
-
-    def visit_ForEntity(self, node: ForEntity):
-        egroup = self.visit(node.expr)
-        if not egroup.data_type.matches_cls(EGroupDataType):
-            self.error_c(ErrorType.INVALID_EGROUP, got=str(egroup.data_type))
-        assert isinstance(egroup, EntityGroup)
-        with self.new_mcfunc_file() as body_file, \
-             self.new_scope():
-            self.write_debug("For entity body")
-            self.current_scope.set(
-                node.name, EntityReference(
-                    MCSelector("s"), egroup.template, self.compiler
-                )
-            )
-            for stmt in node.body:
-                self.visit(stmt)
-        self.current_file.write(cmds.Execute(
-            [cmds.ExecuteEnv("as", egroup.get_selector().to_str())],
-            runs=cmds.InvokeFunction(body_file)
-        ))
+            self.write_debug("Entity group iteration at %s"
+                             % body_file.get_path())
+            self.current_file.write(cmds.Execute(
+                [cmds.ExecuteEnv("as", iterable.get_selector().to_str())],
+                runs=cmds.InvokeFunction(body_file)
+            ))
 
     def visit_StructField(self, node: StructField):
         # Check whether type is storable.

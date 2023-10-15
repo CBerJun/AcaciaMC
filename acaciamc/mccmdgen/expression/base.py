@@ -139,6 +139,8 @@ class AcaciaExpr:
         of `AcaciaExpr`, in which values are bound to "for" variable
         one by one. If not implemented, then the object can't be
         iterated in a for-in structure.
+        NOTE that for-in on an entity group is handled completely
+        differently by the generator, so it should never implement this.
         """
         raise NotImplementedError
 

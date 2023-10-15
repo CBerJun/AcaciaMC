@@ -238,14 +238,7 @@ class FromImportAll(Statement):  # import everything in a module
         super().__init__(lineno, col)
         self.meta = meta
 
-class For(Statement):  # for enumeration
-    def __init__(self, name: str, expr: Expression, body: list, lineno, col):
-        super().__init__(lineno, col)
-        self.name = name
-        self.expr = expr
-        self.body = body
-
-class ForEntity(Statement):  # entity group iteration
+class For(Statement):  # for-in iteration
     def __init__(self, name: str, expr: Expression, body: list, lineno, col):
         super().__init__(lineno, col)
         self.name = name

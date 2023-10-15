@@ -573,23 +573,16 @@ class Parser:
     def for_stmt(self):
         """
         for_stmt := FOR IDENTIFIER IN expr COLON statement_block
-        for_entity_stmt := FOR ENTITY IDENTIFIER IN expr
-          COLON statement_block
         """
         pos = self.current_pos
-        is_entity = False
         self.eat(TokenType.for_)
-        if self.current_token.type is TokenType.entity:
-            self.eat()
-            is_entity = True
         name = self.current_token.value
         self.eat(TokenType.identifier)
         self.eat(TokenType.in_)
         expr = self.expr()
         self.eat(TokenType.colon)
         body = self.statement_block()
-        cls = ForEntity if is_entity else For
-        return cls(name, expr, body, **pos)
+        return For(name, expr, body, **pos)
 
     def _struct_body(self):
         pos = self.current_pos
