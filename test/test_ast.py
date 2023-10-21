@@ -185,5 +185,5 @@ array_map_test = '''
 try:
     test(multiline_test)
 except Error as err:
-    err.set_file("<testsrc>")
+    err.location.file = "<testsrc>"
     print("Error:", err)

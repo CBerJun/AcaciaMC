@@ -25,10 +25,11 @@ FUNC_NORMAL = "normal"
 class Generator(ASTVisitor):
     """Generates MC function from an AST for a single file."""
     def __init__(self, node: AST, main_file: cmds.MCFunctionFile,
-                 compiler: "Compiler"):
+                 file_name: str, compiler: "Compiler"):
         super().__init__()
         self.node = node
         self.compiler = compiler
+        self.file_name = file_name
         self.current_file = main_file
         self.current_scope = ScopedSymbolTable(builtins=self.compiler.builtins)
         # current_function: the current function we are visiting
@@ -71,8 +72,10 @@ class Generator(ASTVisitor):
         return AcaciaModule(self.current_scope, self.compiler)
 
     def fix_error_location(self, error: Error):
-        error.set_location(self.processing_node.lineno,
-                           self.processing_node.col)
+        error.location.linecol = (
+            self.processing_node.lineno,
+            self.processing_node.col
+        )
 
     # --- INTERNAL USE ---
 
@@ -80,7 +83,9 @@ class Generator(ASTVisitor):
         self.error(Error(*args, **kwds))
 
     def error(self, error: Error):
-        if not error.location_set():
+        if not error.location.file_set():
+            error.location.file = self.file_name
+        if not error.location.linecol_set():
             self.fix_error_location(error)
         raise error
 
@@ -120,6 +125,9 @@ class Generator(ASTVisitor):
                 self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
         else:
             raise TypeError
+
+    def node_location(self, node: AST) -> SourceLocation:
+        return SourceLocation(self.file_name, (node.lineno, node.col))
 
     def write_debug(self, comment: str,
                     target: Optional[cmds.MCFunctionFile] = None):
@@ -253,7 +261,9 @@ class Generator(ASTVisitor):
             if (result_type is not None) and (not result_type.matches(dt)):
                 self.error_c(ErrorType.WRONG_RESULT_TYPE,
                              expect=str(result_type), got=str(dt))
-        _, cmds = dt.get_var_initializer(var).call(args, keywords)
+        _, cmds = dt.get_var_initializer(var).call_withframe(
+            args, keywords, location=self.node_location(node)
+        )
         self.register_symbol(node.target, var)
         # Assign
         if value is not None:
@@ -322,7 +332,7 @@ class Generator(ASTVisitor):
                     value = expr.cmdstr()
                 except NotImplementedError:
                     err = Error(ErrorType.INVALID_CMD_FORMATTING)
-                    err.set_location(expr_ast.lineno, expr_ast.col)
+                    err.location.linecol = (expr_ast.lineno, expr_ast.col)
                     self.error(err)
                 cmd += value
             elif section[0] is StringMode.text:
@@ -501,7 +511,8 @@ class Generator(ASTVisitor):
         # create function
         return AcaciaFunction(
             name=node.name, args=args, arg_types=types, arg_defaults=defaults,
-            returns=returns, compiler=self.compiler
+            returns=returns, compiler=self.compiler,
+            source=self.node_location(node)
         )
 
     @contextlib.contextmanager
@@ -538,8 +549,10 @@ class Generator(ASTVisitor):
         else:
             returns = self.visit(node.returns)
         args, types, defaults = self.visit(node.arg_table)
-        return InlineFunction(node, args, types, defaults,
-                              returns, self.compiler)
+        return InlineFunction(
+            node, args, types, defaults, returns, self.compiler,
+            source=self.node_location(node)
+        )
 
     def visit_FuncDef(self, node: FuncDef):
         func = self._func_expr(node)
@@ -566,19 +579,25 @@ class Generator(ASTVisitor):
         func = self.handle_inline_func(node)
         self.current_scope.set(node.name, func)
 
-    def _parse_module(self, meta: ModuleMeta):
-        res = self.compiler.parse_module(meta)
-        if isinstance(res, Error):
-            self.error(res)
+    def _parse_module(self, meta: ModuleMeta, lineno: int, col: int):
+        try:
+            res = self.compiler.parse_module(meta)
+        except Error as err:
+            err.add_frame(ErrFrame(
+                SourceLocation(self.file_name, (lineno, col)),
+                "Importing %s" % str(meta),
+                note=None
+            ))
+            raise
         return res
 
     def visit_Import(self, node: Import):
-        module, path = self._parse_module(node.meta)
+        module, path = self._parse_module(node.meta, node.lineno, node.col)
         self.write_debug("Got module from %s" % path)
         self.current_scope.set(node.name, module)
 
     def visit_FromImport(self, node: FromImport):
-        module, path = self._parse_module(node.meta)
+        module, path = self._parse_module(node.meta, node.lineno, node.col)
         self.write_debug("Import from %s" % path)
         for name, alias in node.id2name.items():
             value = module.attribute_table.lookup(name)
@@ -588,7 +607,7 @@ class Generator(ASTVisitor):
             self.current_scope.set(alias, value)
 
     def visit_FromImportAll(self, node: FromImportAll):
-        module, path = self._parse_module(node.meta)
+        module, path = self._parse_module(node.meta, node.lineno, node.col)
         self.write_debug("Import everything from %s" % path)
         for name, value in module.attribute_table:
             self.current_scope.set(name, value)
@@ -631,7 +650,8 @@ class Generator(ASTVisitor):
         # generate the template before 2nd pass, since `self` value
         # needs the template specified.
         template = EntityTemplate(node.name, field_types, field_metas,
-                                  methods, parents, metas, self.compiler)
+                                  methods, parents, metas, self.compiler,
+                                  source=self.node_location(node))
         # 2nd Pass: parse the non-inline method bodies.
         for method, ast in methods_2ndpass:
             with self.new_scope():
@@ -888,8 +908,13 @@ class Generator(ASTVisitor):
     def visit_Call(self, node: Call):
         # find called function
         func = self.visit(node.func)
+        if not isinstance(func, AcaciaCallable):
+            self.error_c(ErrorType.UNCALLABLE, expr_type=str(func.data_type))
         # call it
-        res, cmds = func.call(*self.visit(node.table))
+        res, cmds = func.call_withframe(
+            *self.visit(node.table),
+            location=self.node_location(node)
+        )
         # write commands
         self.current_file.extend(cmds)
         return res

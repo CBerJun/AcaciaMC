@@ -165,16 +165,20 @@ def method_dispatcher(
         res = _SimpleMethodDispatcher(method_name, err, compiler)
     return res
 
-class EntityTemplate(AcaciaExpr):
+class EntityTemplate(AcaciaCallable):
     def __init__(self, name: str,
                  field_types: Dict[str, "DataType"],
                  field_metas: Dict[str, dict],
                  methods: Dict[str, "METHODDEF_T"],
                  parents: List["EntityTemplate"],
                  metas: Dict[str, AcaciaExpr],
-                 compiler):
+                 compiler,
+                 source=None):
         super().__init__(ETemplateDataType(), compiler)
         self.name = name
+        self.func_repr = self.name
+        if source is not None:
+            self.source = source
         self.parents = parents
         self._orig_metas = {}  # Metas are to be handled below
         self._orig_field_types = field_types
@@ -307,7 +311,14 @@ class EntityTemplate(AcaciaExpr):
         # Call __init__ if it exists
         initializer = inst.attribute_table.lookup("__init__")
         if initializer:
-            res, _cmds = initializer.call(args, keywords)
+            if not isinstance(initializer, AcaciaCallable):
+                raise Error(ErrorType.INITIALIZER_NOT_CALLABLE,
+                            got=str(initializer.data_type),
+                            type_=str(inst.data_type))
+            res, _cmds = initializer.call_withframe(
+                args, keywords,
+                location="<entity initializer of %s>" % self.name
+            )
             cmds.extend(_cmds)
             if not res.data_type.matches_cls(NoneDataType):
                 raise Error(ErrorType.INITIALIZER_RESULT,

@@ -202,7 +202,7 @@ class Tokenizer:
         if col is None:
             col = self.current_col
         err = Error(err_type, **kwargs)
-        err.set_location(lineno, col)
+        err.location.linecol = (lineno, col)
         raise err
 
     def forward(self):

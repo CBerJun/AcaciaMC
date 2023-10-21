@@ -65,7 +65,7 @@ class TaskType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
-        @axe.arg("target", FunctionDataType)
+        @axe.arg("target", axe.Callable())
         @axe.star_arg("args", axe.AnyValue())
         @axe.kwds("kwds", axe.AnyValue())
         def _new(compiler, target, args, kwds):
@@ -75,7 +75,7 @@ class TaskType(Type):
         return TaskDataType()
 
 class Task(AcaciaExpr):
-    def __init__(self, target: AcaciaExpr, other_arg, other_kw, compiler):
+    def __init__(self, target: AcaciaCallable, other_arg, other_kw, compiler):
         """
         target: The function to call
         other_arg & other_kw: Arguments to pass to `target`
@@ -87,7 +87,9 @@ class Task(AcaciaExpr):
         # Allocate a file to call the given function
         self.target_file = cmds.MCFunctionFile()
         self.compiler.add_file(self.target_file)
-        _res, call_cmds = target.call(other_arg, other_kw)
+        _res, call_cmds = target.call_withframe(
+            other_arg, other_kw, location="<schedule.Task>"
+        )
         self.target_file.extend(call_cmds)
         def _timer_reset():
             commands = IntLiteral(-1, compiler).export(self.timer)
@@ -185,11 +187,11 @@ class Task(AcaciaExpr):
 
 def _create_register_loop(compiler):
     @axe.chop
-    @axe.arg("target", FunctionDataType)
+    @axe.arg("target", axe.Callable())
     @axe.arg("interval", IntDataType, default=IntLiteral(1, compiler))
     @axe.star_arg("args", axe.AnyValue())
     @axe.kwds("kwds", axe.AnyValue())
-    def _register_loop(compiler: "Compiler", target: AcaciaExpr,
+    def _register_loop(compiler: "Compiler", target: AcaciaCallable,
                        interval: AcaciaExpr, args, kwds):
         """
         schedule.register_loop(
@@ -197,7 +199,9 @@ def _create_register_loop(compiler):
         )
         Call a function repeatly every `interval` ticks with `args` and `kwds`.
         """
-        _res, tick_commands = target.call(args, kwds)
+        _res, tick_commands = target.call_withframe(
+            args, kwds, location="<schedule.register_loop>"
+        )
         compiler.file_tick.write_debug("# schedule.register_loop")
         # Optimization: if the interval is 1, no need for timer
         if isinstance(interval, IntLiteral) and interval.value == 1:

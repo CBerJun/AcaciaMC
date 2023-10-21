@@ -9,14 +9,14 @@ __all__ = [
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
-    "MapOf", "PlayerSelector", "RangedLiteralInt",
+    "MapOf", "PlayerSelector", "RangedLiteralInt", "Callable",
     # Exception
     "ChopError", "ArgumentError"
 ]
 
 from typing import (
-    Callable, Optional, Type, Any, Union, List, Tuple, Dict, Iterable,
-    TYPE_CHECKING
+    Callable as PyCallable, Optional, Type, Any, Union, List, Tuple, Dict,
+    Iterable, TYPE_CHECKING
 )
 from itertools import chain
 from functools import partial
@@ -83,7 +83,7 @@ class _ArgumentList:
         self.converter = converter
 
 class _BuildingParser(List[Tuple[int, Any]]):
-    def __init__(self, target: Callable):
+    def __init__(self, target: PyCallable):
         super().__init__()
         self._target = target
 
@@ -93,12 +93,12 @@ class _BuildingParser(List[Tuple[int, Any]]):
     def get_target(self):
         return self._target
 
-def _parser_component(func: Callable[[_BuildingParser], Any]):
+def _parser_component(func: PyCallable[[_BuildingParser], Any]):
     """Decorator that creates decorators that build the parser.
     If the target function returns None, the building parser will
     then be returned in decorated decorator.
     """
-    def _decorated(user_input: Union[Callable, _BuildingParser]):
+    def _decorated(user_input: Union[PyCallable, _BuildingParser]):
         if isinstance(user_input, _BuildingParser):
             p = user_input
         else:
@@ -496,6 +496,16 @@ class RangedLiteralInt(LiteralInt):
             self.wrong_argument(origin)
         return num
 
+class Callable(Converter):
+    """Accepts a callable Acacia expression."""
+    def get_show_name(self) -> str:
+        return "(callable)"
+
+    def convert(self, origin: acacia.AcaciaExpr) -> acacia.AcaciaCallable:
+        if not isinstance(origin, acacia.AcaciaCallable):
+            self.wrong_argument(origin)
+        return origin
+
 ### Parser
 
 def _check_repeat(names: List[str], renames: List[str]):
@@ -681,7 +691,7 @@ def _create_signature(arg_defs: List[_Argument]) -> str:
     )
 
 class _OverloadImplWrapper:
-    def __init__(self, method: Callable, building: _BuildingParser,
+    def __init__(self, method: PyCallable, building: _BuildingParser,
                  version: Optional["VersionRequirement"]):
         self.method = method
         self.building = building
@@ -697,7 +707,7 @@ class _OverloadMethod(classmethod):
         self.building = building
         self.version = version
 
-    def __get__(self, instance, owner: Union[type, None] = None) -> Callable:
+    def __get__(self, instance, owner: Optional[type] = None) -> PyCallable:
         return _OverloadImplWrapper(
             super().__get__(instance, owner), self.building, self.version
         )

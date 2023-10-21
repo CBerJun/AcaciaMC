@@ -2,7 +2,7 @@
 
 __all__ = [
     # Base classes
-    'AcaciaExpr', 'VarValue',
+    'AcaciaExpr', 'VarValue', 'AcaciaCallable',
     # Utils
     'ArgumentHandler', 'export_need_tmp',
     'ImmutableMixin', 'transform_immutable',
@@ -10,7 +10,10 @@ __all__ = [
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T', 'CMDLIST_T',
 ]
 
-from typing import List, TYPE_CHECKING, Union, Dict, Tuple, Callable, Hashable
+from typing import (
+    List, Union, Dict, Tuple, Callable, Hashable, Optional, TYPE_CHECKING
+)
+from abc import ABCMeta, abstractmethod
 
 from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.symbol import AttributeTable
@@ -74,8 +77,8 @@ class AcaciaExpr:
        which you just need to specify `name` attribute.
      - Define at least one subclass of `AcaciaExpr`, which represents
        the objects of this type.
-       `call` is a special method that would be called when this
-       expression is called in Acacia.
+       To make your object callable in Acacia, subclass `AcaciaCallable`
+       and implement `call` method.
        `cmdstr` is a special method that returns the string
        representation of this expression used in raw command
        substitution.
@@ -109,15 +112,6 @@ class AcaciaExpr:
         self.compiler = compiler
         self.data_type = type_
         self.attribute_table = AttributeTable()
-
-    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
-        """Call this expression.
-        Return value:
-         1st element: Result of this call
-         2nd element: Commands to run
-        If this is not implemented, then the object is uncallable.
-        """
-        raise Error(ErrorType.UNCALLABLE, expr_type=str(self.data_type))
 
     def export(self, var: "VarValue") -> CMDLIST_T:
         """Return the commands that assigns value of `self` to `var`.
@@ -224,6 +218,47 @@ class VarValue(AcaciaExpr):
     e.g. bool -> Type -> Unassignable
     """
     pass
+
+class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
+    """Acacia expressions that are callable."""
+    def __init__(self, type_: "DataType", compiler: "Compiler"):
+        super().__init__(type_, compiler)
+        self.source = SourceLocation()
+        self.func_repr = "<unknown>"
+
+    def call_withframe(
+            self, args: ARGS_T, keywords: KEYWORDS_T,
+            location: Optional[Union[SourceLocation, str]] = None
+        ) -> CALLRET_T:
+        """
+        Call this expression, and add this to error frame if an error
+        occurs.
+        """
+        try:
+            return self.call(args, keywords)
+        except Error as err:
+            if location is None:
+                location = SourceLocation()
+            elif isinstance(location, str):
+                location = SourceLocation(file=location)
+            if self.source.file_set():
+                note = "Callee defined at %s" % self.source
+            else:
+                note = None
+            err.add_frame(ErrFrame(
+                location, "Calling %s" % self.func_repr, note
+            ))
+            raise
+
+    @abstractmethod
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
+        """
+        Call this expression.
+        Return value:
+         1st element: Result of this call
+         2nd element: Commands to run
+        """
+        pass
 
 class ImmutableMixin:
     """An `AcaciaExpr` that can't be changed and only allows

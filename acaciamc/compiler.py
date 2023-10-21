@@ -153,7 +153,7 @@ class Compiler:
 
     def raise_error(self, error: Error):
         self.current_generator.fix_error_location(error)
-        error.set_file(self._current_file)
+        error.location.file = self._current_file
         raise error
 
     def add_file(self, file: cmds.MCFunctionFile, path: Optional[str] = None):
@@ -309,17 +309,17 @@ class Compiler:
         self._loading_files.append(path)
         try:
             node = Parser(Tokenizer(src_file)).module()
-            self.current_generator = Generator(
-                node=node, main_file=self.file_main,
-                compiler=self
-            )
-            yield self.current_generator
         except Error as err:
-            if not err.file_set():
-                err.set_file(path)
-            raise err
+            if not err.location.file_set():
+                err.location.file = path
+            raise
         finally:
             src_file.close()
+        self.current_generator = Generator(
+            node=node, main_file=self.file_main,
+            file_name=path, compiler=self
+        )
+        yield self.current_generator
         self._current_file = oldf
         self.current_generator = oldg
         self._loading_files.pop()

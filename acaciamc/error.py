@@ -1,8 +1,30 @@
 """Error definition for Acacia."""
 
-__all__ = ['ErrorType', 'Error']
+__all__ = ['SourceLocation', 'ErrorType', 'Error', 'ErrFrame']
 
+from typing import Optional, Tuple, NamedTuple, List
 import enum
+
+class SourceLocation:
+    """Represent a location in a source file for showing errors."""
+    def __init__(
+            self, file: Optional[str] = None,
+            linecol: Optional[Tuple[int, int]] = None):
+        self.file = file
+        self.linecol = linecol
+
+    def file_set(self) -> bool:
+        return self.file is not None
+
+    def linecol_set(self) -> bool:
+        return self.linecol is not None
+
+    def __str__(self) -> str:
+        if self.file is None:
+            return "<unknown>"
+        if self.linecol is None:
+            return self.file
+        return "%s:%d:%d" % (self.file, self.linecol[0], self.linecol[1])
 
 class ErrorType(enum.Enum):
     # Tokenizer
@@ -80,8 +102,10 @@ class ErrorType(enum.Enum):
     INVALID_BIN_FUNC_ARG = 'Invalid argument "{arg}" for binary function: ' \
         '{message}'
     CANT_CREATE_INSTANCE = 'Can\'t create instance of "{type_}" type'
-    INITIALIZER_RESULT = '{type_}.__init__ initializer should not produce ' \
-        'result'
+    INITIALIZER_RESULT = '__init__ initializer for "{type_}" should not ' \
+        'produce result'
+    INITIALIZER_NOT_CALLABLE = '__init__ initializer for "{type_}" should ' \
+        'be callable, not "{got}"'
     CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
     REPEAT_ENTITY_META = 'Repeated entity meta "{meta}"'
     ENTITY_META = 'Error on entity meta "{meta}": {msg}'
@@ -112,32 +136,37 @@ class ErrorType(enum.Enum):
     # Any; should only be used by binary modules
     ANY = '{message}'
 
+class ErrFrame(NamedTuple):
+    location: SourceLocation
+    msg: str
+    note: Optional[str]
+
 class Error(Exception):
     def __init__(self, err_type: ErrorType, **kwargs):
-        self.lineno = None
-        self.col = None
         self.error_args = kwargs
         self.type = err_type
-        self.file = None
+        self.location = SourceLocation()
+        self.frames: List[ErrFrame] = []
         super().__init__()
 
-    def set_file(self, file: str):
-        self.file = file
-
-    def file_set(self) -> bool:
-        return self.file is not None
-
-    def set_location(self, lineno: int, col: int):
-        self.lineno = lineno
-        self.col = col
-
-    def location_set(self) -> bool:
-        return self.lineno is not None
-
     def __str__(self):
-        assert self.file is not None
-        assert self.lineno is not None
         res = self.type.value  # unformatted error
         res = res.format(**self.error_args)  # formatted
-        res = '%s:%d:%d: %s' % (self.file, self.lineno, self.col, res)
+        res = '%s: %s' % (self.location, res)
         return res
+
+    def full_msg(self) -> str:
+        return (
+            "compiler error:" +
+            ("\n" if self.frames else " ") +
+            "".join(
+                "  %s: %s" % (frame.location, frame.msg) +
+                ("\n    %s" % frame.note if frame.note else "") +
+                "\n"
+                for frame in reversed(self.frames)
+            ) +
+            "%s" % str(self)
+        )
+
+    def add_frame(self, frame: ErrFrame):
+        self.frames.append(frame)

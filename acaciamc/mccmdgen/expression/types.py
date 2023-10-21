@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class TypeDataType(DefaultDataType):
     name = "type"
 
-class Type(AcaciaExpr, metaclass=ABCMeta):
+class Type(AcaciaCallable, metaclass=ABCMeta):
     """Base class for type of a variable that represents a type.
     (e.g. type of builtin "int" is `IntType`).
     """
@@ -33,6 +33,7 @@ class Type(AcaciaExpr, metaclass=ABCMeta):
     def __init__(self, compiler: "Compiler"):
         """Override `do_init` instead of this."""
         super().__init__(TypeDataType(), compiler)
+        self.func_repr = str(self.datatype_hook())
         self.do_init()
 
     def do_init(self):
@@ -51,10 +52,16 @@ class Type(AcaciaExpr, metaclass=ABCMeta):
         new = self.attribute_table.lookup('__new__')
         if new is None:
             raise Error(ErrorType.CANT_CREATE_INSTANCE, type_=self.name)
+        if not isinstance(new, AcaciaCallable):
+            raise TypeError("__new__ of Type objects must be a callable"
+                            " expression")
         instance, cmds = new.call(args, keywords)
         # Call initializer of instance if exists
         initializer = instance.attribute_table.lookup('__init__')
         if initializer is not None:
+            if not isinstance(initializer, AcaciaCallable):
+                raise TypeError("__init__ of Type objects must be a callable"
+                                " expression")
             ret, _cmds = initializer.call(args, keywords)
             if not ret.data_type.matches_cls(NoneDataType):
                 raise Error(ErrorType.INITIALIZER_RESULT, type_=self.name)

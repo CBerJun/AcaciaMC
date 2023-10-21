@@ -61,7 +61,7 @@ class EGroupDataType(Storable):
     def new_var(self):
         return EntityGroup(self.template, self.compiler)
 
-    def get_var_initializer(self, var: "EntityGroup") -> AcaciaExpr:
+    def get_var_initializer(self, var: "EntityGroup") -> AcaciaCallable:
         @axe.chop
         @axe.arg("all_entities", axe.LiteralBool(), default=False)
         def _new(compiler, all_entities: bool):

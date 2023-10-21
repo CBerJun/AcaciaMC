@@ -12,7 +12,9 @@ import acaciamc.tools as acaciatools
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.expression.entity import _EntityBase
-    from acaciamc.mccmdgen.expression.base import AcaciaExpr, VarValue
+    from acaciamc.mccmdgen.expression.base import (
+        AcaciaExpr, VarValue, AcaciaCallable
+    )
     from acaciamc.compiler import Compiler
 
 class DataType(metaclass=ABCMeta):
@@ -63,7 +65,7 @@ class Storable(DataType):
         """
         pass
 
-    def get_var_initializer(self, var: "VarValue") -> "AcaciaExpr":
+    def get_var_initializer(self, var: "VarValue") -> "AcaciaCallable":
         """Return a callable `AcaciaExpr` that accepts user arguments
         and initialize a `VarValue` of this type. Result of this
         callable should be Acacia "None" and commands may be added.

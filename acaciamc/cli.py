@@ -156,7 +156,7 @@ def run(args):
         compiler = Compiler(args.file, open_args={'encoding': encoding})
         compiler.output(out_path)
     except CompileError as err:
-        fatal(str(err))
+        fatal(err.full_msg())
     except Exception as err:
         import traceback
         if args.verbose:

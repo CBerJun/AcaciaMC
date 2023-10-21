@@ -50,11 +50,12 @@ if TYPE_CHECKING:
 class FunctionDataType(DefaultDataType):
     name = 'function'
 
-class AcaciaFunction(AcaciaExpr):
+class AcaciaFunction(AcaciaCallable):
     def __init__(self, name: str, args: List[str],
                  arg_types: Dict[str, "Storable"],
                  arg_defaults: Dict[str, Union[AcaciaExpr, None]],
-                 returns: "Storable", compiler):
+                 returns: "Storable", compiler,
+                 source=None):
         super().__init__(FunctionDataType(), compiler)
         self.name = name
         self.result_type = returns
@@ -70,6 +71,10 @@ class AcaciaFunction(AcaciaExpr):
         # `file`: the target file of function. When it is None,
         # the function is empty. It should be assigned by `Generator`.
         self.file: Union[cmds.MCFunctionFile, None] = None
+        # For error hint
+        if source is not None:
+            self.source = source
+        self.func_repr = self.name
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         res = []
@@ -83,22 +88,26 @@ class AcaciaFunction(AcaciaExpr):
             res.append(cmds.InvokeFunction(self.file))
         return self.result_var, res
 
-class InlineFunction(AcaciaExpr):
+class InlineFunction(AcaciaCallable):
     def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
-                 returns: Optional["DataType"], compiler):
+                 returns: Optional["DataType"], compiler, source=None):
         super().__init__(FunctionDataType(), compiler)
         # We store the InlineFuncDef node directly
         self.node = node
         self.name = node.name
         self.result_type = returns
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
+        # For error hint
+        if source is not None:
+            self.source = source
+        self.func_repr = self.name
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         return self.compiler.current_generator.call_inline_func(
             self, args, keywords
         )
 
-class BinaryFunction(AcaciaExpr):
+class BinaryFunction(AcaciaCallable):
     """These are the functions that are written in Python,
     rather than `AcaciaFunction`s which are written in Acacia.
     The arguments passed to `AcaicaFunction` are *assigned* to local
@@ -132,8 +141,9 @@ class BinaryFunction(AcaciaExpr):
         """
         super().__init__(FunctionDataType(), compiler)
         self.implementation = implementation
+        self.func_repr = "<binary function>"
 
-    def call(self, args, keywords: dict):
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         res = self.implementation(self.compiler, args, keywords)
         if isinstance(res, tuple):  # CALLRET_T
             return res
@@ -147,13 +157,15 @@ class BinaryFunction(AcaciaExpr):
 
 METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 
-class BoundMethod(AcaciaExpr):
+class BoundMethod(AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T, compiler):
         super().__init__(FunctionDataType(), compiler)
         self.name = method_name
         self.object = object_
         self.definition = definition
+        self.func_repr = self.name
+        self.source = self.definition.source
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         if isinstance(self.definition, AcaciaFunction):
@@ -169,7 +181,7 @@ class BoundMethod(AcaciaExpr):
             raise TypeError("Unexpected target function %r" % self.definition)
         return result, cmds
 
-class BoundMethodDispatcher(AcaciaExpr):
+class BoundMethodDispatcher(AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
                  result_var: VarValue, compiler):
         super().__init__(FunctionDataType(), compiler)
@@ -180,6 +192,7 @@ class BoundMethodDispatcher(AcaciaExpr):
         self.files: \
             List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
         self.result_var = result_var
+        self.func_repr = self.name
 
     def _give_implementation(
             self, args: "ARGS_T", keywords: "KEYWORDS_T",
@@ -187,7 +200,9 @@ class BoundMethodDispatcher(AcaciaExpr):
             template: "EntityTemplate", bound_method: BoundMethod
         ):
         try:
-            result, commands = bound_method.call(args, keywords)
+            result, commands = bound_method.call_withframe(
+                args, keywords, location="<dispatcher of %s>" % self.name
+            )
         except Error:
             if template is self.object.template:
                 raise  # required function

@@ -34,7 +34,7 @@ class StructDataType(Storable, SupportsEntityField):
     def new_var(self) -> "Struct":
         return Struct.from_template(self.template, self.compiler)
 
-    def get_var_initializer(self, var: "Struct") -> AcaciaExpr:
+    def get_var_initializer(self, var: "Struct") -> AcaciaCallable:
         decorators = [axe.chop, axe.star]
         for name, type_ in self.template.field_types.items():
             decorators.append(axe.arg(name, type_, default=None))
