@@ -164,9 +164,11 @@ class EntityField(Statement):  # entity field definition
         self.type = type_
 
 class EntityMethod(Statement):  # entity method definition
-    def __init__(self, content: _Union[FuncDef, InlineFuncDef], lineno, col):
+    def __init__(self, content: _Union[FuncDef, InlineFuncDef],
+                 virtual: bool, lineno, col):
         super().__init__(lineno, col)
         self.content = content
+        self.virtual = virtual
 
 class EntityMeta(Statement):  # entity meta like @type
     def __init__(self, name: str, value: Expression, lineno, col):

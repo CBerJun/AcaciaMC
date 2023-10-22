@@ -99,8 +99,8 @@ class Compiler:
         self.builtins = SymbolTable()
         self.base_template = EntityTemplate(
             name="Object",
-            field_types={}, field_metas={},
-            methods={}, parents=[], metas={}, compiler=self
+            field_types={}, field_metas={}, methods={},
+            virtual_methods={}, parents=[], metas={}, compiler=self
         )
         # builtin types
         for name, cls in (

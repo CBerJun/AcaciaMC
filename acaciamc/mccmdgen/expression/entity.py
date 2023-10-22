@@ -33,7 +33,7 @@ class EntityDataType(Storable):
                 other.template.is_subtemplate_of(self.template))
 
     def new_var(self) -> "TaggedEntity":
-        return TaggedEntity.from_empty(self.template, self.compiler)
+        return TaggedEntity.new_tag(self.template, self.compiler)
 
 class _EntityBase(AcaciaExpr):
     def __init__(self, template: "EntityTemplate", compiler,
@@ -79,13 +79,23 @@ class EntityReference(_EntityBase):
         )
 
 class TaggedEntity(_EntityBase, VarValue):
-    def __init__(self, template: "EntityTemplate", compiler: "Compiler",
+    def __init__(self, tag: str, template: "EntityTemplate",
+                 compiler: "Compiler",
                  cast_to: Optional["EntityTemplate"] = None):
-        self.tag = compiler.allocate_entity_tag()
+        self.tag = tag
         super().__init__(template, compiler, cast_to)
 
     def cast_to(self, template):
-        return TaggedEntity(self.template, self.compiler, template)
+        return TaggedEntity(self.tag, self.template, self.compiler, template)
+
+    @classmethod
+    def new_tag(cls, template: "EntityTemplate", compiler: "Compiler",
+                cast_to: Optional["EntityTemplate"] = None):
+        """Create a new entity tag that points to no entity."""
+        return cls(
+            compiler.allocate_entity_tag(),
+            template, compiler, cast_to
+        )
 
     @classmethod
     def summon_new(cls, template: "EntityTemplate", compiler: "Compiler") \
@@ -117,7 +127,7 @@ class TaggedEntity(_EntityBase, VarValue):
             SUMMON = "summon {type} {pos} 0 0 {event} {name}"
         else:
             SUMMON = "summon {type} {pos} {event} {name}"
-        inst = cls(template, compiler)
+        inst = cls.new_tag(template, compiler)
         return inst, [
             cmds.Execute(e_pos[0], cmds.Cmd(SUMMON.format(
                 type=e_type, name=name, pos=e_pos[1], event=e_event
@@ -128,11 +138,6 @@ class TaggedEntity(_EntityBase, VarValue):
             ),
             "tag %s add %s" % (inst.to_str(), template.runtime_tag)
         ]
-
-    @classmethod
-    def from_empty(cls, template: "EntityTemplate", compiler):
-        # Create an entity reference (a tag), pointing to no entity.
-        return cls(template, compiler)
 
     def get_selector(self) -> MCSelector:
         res = MCSelector("e")

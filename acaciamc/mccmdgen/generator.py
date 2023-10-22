@@ -11,7 +11,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.symbol import ScopedSymbolTable
 from acaciamc.mccmdgen.mcselector import MCSelector
-from acaciamc.mccmdgen.datatype import Storable
+from acaciamc.mccmdgen.datatype import Storable, SupportsEntityField
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -615,7 +615,8 @@ class Generator(ASTVisitor):
     def visit_EntityTemplateDef(self, node: EntityTemplateDef):
         field_types = {}  # Field name to `DataType`
         field_metas = {}  # Field name to field meta
-        methods = {}  # Method name to function `AcaciaExpr`
+        methods = {}  # Non-virtual method name to function `AcaciaExpr`
+        methods_virtual = {}  # Virtual method name to function `AcaciaExpr`
         metas = {}  # Meta name to value
         # Handle parents
         parents = []
@@ -638,7 +639,10 @@ class Generator(ASTVisitor):
                 field_types[decl.name], field_metas[decl.name] = res
             elif isinstance(decl, EntityMethod):
                 # `res` is `AcaciaFunction` or `InlineFunction`
-                methods[decl.content.name] = res
+                if decl.virtual:
+                    methods_virtual[decl.content.name] = res
+                else:
+                    methods[decl.content.name] = res
                 if isinstance(res, AcaciaFunction):
                     methods_2ndpass.append((res, decl.content))
             elif isinstance(decl, EntityMeta):
@@ -649,9 +653,11 @@ class Generator(ASTVisitor):
                 metas[key] = value
         # generate the template before 2nd pass, since `self` value
         # needs the template specified.
-        template = EntityTemplate(node.name, field_types, field_metas,
-                                  methods, parents, metas, self.compiler,
-                                  source=self.node_location(node))
+        template = EntityTemplate(
+            node.name, field_types, field_metas,
+            methods, methods_virtual, parents, metas,
+            self.compiler, source=self.node_location(node)
+        )
         # 2nd Pass: parse the non-inline method bodies.
         for method, ast in methods_2ndpass:
             with self.new_scope():
@@ -676,11 +682,10 @@ class Generator(ASTVisitor):
 
     def visit_EntityField(self, node: EntityField):
         data_type = self.visit(node.type)
-        try:
-            field_meta = data_type.new_entity_field()
-        except NotImplementedError:
+        if not isinstance(data_type, SupportsEntityField):
             self.error_c(ErrorType.UNSUPPORTED_EFIELD_TYPE,
                          field_type=str(data_type))
+        field_meta = data_type.new_entity_field()
         return data_type, field_meta
 
     def visit_EntityMethod(self, node: EntityMethod):

@@ -463,15 +463,18 @@ class Parser:
             return res
         else:
             # method_decl
+            virtual = self.current_token.type is TokenType.virtual
+            if virtual:
+                self.eat()  # eat "virtual"
             content = self.def_stmt()
-            return EntityMethod(content, **pos)
+            return EntityMethod(content, virtual, **pos)
 
     def entity_stmt(self):
         """
         entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
           (COMMA expr)*)? COLON entity_body_block
         entity_field_decl := IDENTIFIER COLON type_spec
-        method_decl := def_stmt
+        method_decl := VIRTUAL? def_stmt
         meta_decl := AT IDENTIFIER COLON expr
         entity_body := method_decl | (
           (entity_field_decl | meta_decl | pass_stmt) NEW_LINE)

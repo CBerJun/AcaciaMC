@@ -8,19 +8,22 @@ There are 5 types of functions:
   which is usually a builtin function
 - BoundMethod: methods that are bound to an entity
   and we are sure which implementation we are calling
-  (e.g. entity A: def foo(): ...
-        entity B extends A: def foo(): ...
-        b = B()
-        A@b.foo()  # Definitely A.foo called
-  )
 - BoundMethodDispatcher: methods that are bound to an
   entity and we are not sure which implementation
   we are calling.
-  (e.g. entity A: def foo(): ...
-        entity B extends A: def foo(): ...
-        def bar(a: entity(A)):
-            a.foo()  # Is it A.foo or B.foo?
-  )
+  Example:
+    entity A:
+      def foo():
+        pass
+      virtual def bar():
+        pass
+    entity B extends A:
+      def bar():
+        pass
+    def f(a: entity(A)):
+      a.foo()  # BoundMethod: must be foo in A
+      A@a.bar()  # BoundMethod: must be bar in A
+      a.bar()  # BoundMethodDispatcher: bar in A or B?
 """
 
 __all__ = [
@@ -157,7 +160,15 @@ class BinaryFunction(AcaciaCallable):
 
 METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 
-class BoundMethod(AcaciaCallable):
+class _BoundMethod(AcaciaCallable):
+    """
+    A method bound to an entity, but when called it does not add
+    /execute as (bound entity) run ...
+    This exists to optimize in virtual method dispatchers. 
+    Virtual method dispatchers are guaranteed to be executed "as" the
+    entity which is bound to the dispatcher, so there is no need to say
+    "as" again in the dispatcher.
+    """
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T, compiler):
         super().__init__(FunctionDataType(), compiler)
@@ -169,17 +180,35 @@ class BoundMethod(AcaciaCallable):
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         if isinstance(self.definition, AcaciaFunction):
-            result, cmds = self.definition.call(args, keywords)
+            result, commands = self.definition.call(args, keywords)
         elif isinstance(self.definition, InlineFunction):
             old_self = self.compiler.current_generator.self_value
             self.compiler.current_generator.self_value = self.object
-            result, cmds = self.definition.call(args, keywords)
+            result, commands = self.definition.call(args, keywords)
             self.compiler.current_generator.self_value = old_self
         # `BinaryFunction`s cannot be method implementation
         # because we are not sure about their result data type
         else:
             raise TypeError("Unexpected target function %r" % self.definition)
-        return result, cmds
+        return result, commands
+
+class BoundMethod(AcaciaCallable):
+    def __init__(self, object_: "_EntityBase", method_name: str,
+                 definition: METHODDEF_T, compiler):
+        super().__init__(FunctionDataType(), compiler)
+        self.content = _BoundMethod(object_, method_name, definition, compiler)
+        self.func_repr = self.content.func_repr
+        self.source = self.content.source
+
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+        result, commands = self.content.call(args, keywords)
+        commands2 = [
+            cmds.execute([
+                cmds.ExecuteEnv("as", self.content.object.to_str())
+            ], runs=cmd)
+            for cmd in commands
+        ]
+        return result, commands2
 
 class BoundMethodDispatcher(AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
@@ -188,7 +217,7 @@ class BoundMethodDispatcher(AcaciaCallable):
         self.name = method_name
         self.object = object_
         self.possible_implementations: \
-            List[Tuple["EntityTemplate", BoundMethod]] = []
+            List[Tuple["EntityTemplate", _BoundMethod]] = []
         self.files: \
             List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
         self.result_var = result_var
@@ -197,16 +226,12 @@ class BoundMethodDispatcher(AcaciaCallable):
     def _give_implementation(
             self, args: "ARGS_T", keywords: "KEYWORDS_T",
             file: cmds.MCFunctionFile,
-            template: "EntityTemplate", bound_method: BoundMethod
+            template: "EntityTemplate", bound_method: _BoundMethod
         ):
-        try:
-            result, commands = bound_method.call_withframe(
-                args, keywords, location="<dispatcher of %s>" % self.name
-            )
-        except Error:
-            if template is self.object.template:
-                raise  # required function
-            return
+        result, commands = bound_method.call_withframe(
+            args, keywords,
+            location="<dispatcher of virtual method %s>" % self.name
+        )
         commands.extend(result.export(self.result_var))
         file.write_debug("# To implementation in %s" % template.name)
         file.extend(
@@ -221,8 +246,9 @@ class BoundMethodDispatcher(AcaciaCallable):
     def add_implementation(self, template: "EntityTemplate",
                            definition: METHODDEF_T):
         if template.is_subtemplate_of(self.object.template):
-            bound_method = BoundMethod(
-                self.object, self.name, definition, self.compiler)
+            bound_method = _BoundMethod(
+                self.object, self.name, definition, self.compiler
+            )
             self.possible_implementations.append((template, bound_method))
             for args, keywords, file in self.files:
                 self._give_implementation(args, keywords,
@@ -232,7 +258,7 @@ class BoundMethodDispatcher(AcaciaCallable):
         file = cmds.MCFunctionFile()
         self.files.append((args, keywords, file))
         self.compiler.add_file(file)
-        file.write_debug("## Method dispatcher for %s.%s()"
+        file.write_debug("## Virtual method dispatcher for %s.%s()"
                          % (self.object.template.name, self.name))
         for template, bound_method in self.possible_implementations:
             self._give_implementation(args, keywords,
