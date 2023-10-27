@@ -53,9 +53,6 @@ class Generator(ASTVisitor):
         # current_tmp_scores: tmp scores allocated on current statement
         # see method `visit`.
         self.current_tmp_scores = []
-        # current_tmp_entities: just like `current_tmp_scores`, but
-        # store tmp `EntityVar`s.
-        self.current_tmp_entities: List[Union[TaggedEntity, EntityGroup]] = []
 
     def parse(self):
         """Parse the AST and generate commands."""
@@ -185,16 +182,13 @@ class Generator(ASTVisitor):
         self.processing_node = node
         self.node_depth += 1  # used by `self.write_debug`
         if isinstance(node, Statement):
-            # NOTE `current_tmp_scores` and `current_tmp_entities` are
-            # modified by `Compiler`, to tell the tmp scores that are
-            # allocated in this statement so that we can free them when
-            # the statement ends.
+            # NOTE `current_tmp_scores` is modified by `Compiler`, to
+            # tell the tmp scores that are allocated in this statement
+            # so that we can free them when the statement ends.
             # Therefore, only update tmp scores when node is a
             # `Statement`.
             old_tmp_scores = self.current_tmp_scores
             self.current_tmp_scores = []
-            old_tmp_entities = self.current_tmp_entities
-            self.current_tmp_entities = []
         # write debug
         if not isinstance(node, (Expression, ArgumentTable,
                                  AnyTypeSpec, CallTable)):
@@ -208,10 +202,7 @@ class Generator(ASTVisitor):
             # free used vars
             for score in self.current_tmp_scores:
                 self.compiler.free_tmp(score)
-            for entity in self.current_tmp_entities:
-                self.current_file.extend(entity.clear())
             self.current_tmp_scores = old_tmp_scores
-            self.current_tmp_entities = old_tmp_entities
         return res
 
     def visit_Module(self, node: Module):

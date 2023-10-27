@@ -219,9 +219,6 @@ class Compiler:
         self._entity_tag_max += 1
         return Config.entity_tag + str(self._entity_tag_max)
 
-    def add_tmp_entity(self, entity: Union[TaggedEntity, EntityGroup]):
-        self.current_generator.current_tmp_entities.append(entity)
-
     # -- End allocation --
 
     def before_finish(self, callback: Callable[[], None]):
