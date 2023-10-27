@@ -4,7 +4,7 @@ It assembles files and classes together and write output.
 
 __all__ = ['Compiler']
 
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, Callable
 import os
 from contextlib import contextmanager
 
@@ -94,6 +94,7 @@ class Compiler:
         self._current_file = None  # str; Path of current parsing file
         self._cached_modules = {}  # loaded modules are cached here
         self._loading_files = []  # paths of Acacia modules that are loading
+        self._before_finish_cbs = []  # callbacks to run before finish
 
         # --- BUILTINS ---
         self.builtins = SymbolTable()
@@ -131,6 +132,9 @@ class Compiler:
         ## start
         with self._load_generator(main_path) as generator:
             generator.parse()
+        ## callback
+        for cb in self._before_finish_cbs:
+            cb()
 
     def output(self, path: str):
         """Output result to `path`
@@ -219,6 +223,10 @@ class Compiler:
         self.current_generator.current_tmp_entities.append(entity)
 
     # -- End allocation --
+
+    def before_finish(self, callback: Callable[[], None]):
+        """Add a callback before compilation finishes."""
+        self._before_finish_cbs.append(callback)
 
     def find_module(self, meta: ModuleMeta) -> Union[str, None]:
         """Find a module.

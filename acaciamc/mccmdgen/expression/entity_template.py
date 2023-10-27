@@ -9,14 +9,14 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
 from .entity import TaggedEntity
-from .functions import BoundMethodDispatcher, BoundMethod, InlineFunction
+from .functions import BoundVirtualMethod, BoundMethod, InlineFunction
 from .string import String
 from .none import NoneDataType
 from .position import Position
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
-    from acaciamc.mccmdgen.datatype import SupportsEntityField, DataType
+    from acaciamc.mccmdgen.datatype import SupportsEntityField
     from .functions import METHODDEF_T
     from .entity import _EntityBase
 
@@ -24,10 +24,14 @@ class ETemplateDataType(DefaultDataType):
     name = 'entity_template'
 
 class _MethodDispatcher:
+    """
+    Every virtual method and methods that override it share one
+    `_MethodDispatcher`.
+    """
     def __init__(self, method_name: str, compiler: "Compiler"):
         self.compiler = compiler
         self.method_name = method_name
-        self.bound: List[BoundMethodDispatcher] = []
+        self.bound: List[BoundVirtualMethod] = []
         self.temp_n_impl: List[Tuple["EntityTemplate", "METHODDEF_T"]] = []
         self.result_var: Union[VarValue, None] = None
 
@@ -50,12 +54,15 @@ class _MethodDispatcher:
 
     def register_inherit(self, template: "EntityTemplate",
                          parent: "EntityTemplate"):
-        # XXX this will repeat the whole code that calls implementation
-        impl = parent._orig_methods[self.method_name]
-        self.register(template, impl)
+        for got_template, impl in self.temp_n_impl:
+            if got_template is parent:
+                self.register(template, impl)
+                break
+        else:
+            raise ValueError("Base not found")
 
     def bind_to(self, entity: "_EntityBase"):
-        res = BoundMethodDispatcher(entity, self.method_name,
+        res = BoundVirtualMethod(entity, self.method_name,
                                     self.result_var, self.compiler)
         self.bound.append(res)
         for template, implementation in self.temp_n_impl:
@@ -105,7 +112,7 @@ class EntityTemplate(AcaciaCallable):
         self._orig_methods = methods
         self.field_types: Dict[str, "SupportsEntityField"] = {}
         self.field_metas: Dict[str, dict] = {}
-        # method_dispatchers: for virtual methods AND overload methods
+        # method_dispatchers: for virtual methods AND override methods
         self.method_dispatchers: Dict[str, _MethodDispatcher] = {}
         self.simple_methods: Dict[str, "METHODDEF_T"] = {}
         self.metas: Dict[str, Any] = {}

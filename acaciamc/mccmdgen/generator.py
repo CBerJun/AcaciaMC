@@ -550,8 +550,8 @@ class Generator(ASTVisitor):
             returns = self.visit(node.returns)
         args, types, defaults = self.visit(node.arg_table)
         return InlineFunction(
-            node, args, types, defaults, returns, self.compiler,
-            source=self.node_location(node)
+            node, args, types, defaults, returns, owner=self,
+            compiler=self.compiler, source=self.node_location(node)
         )
 
     def visit_FuncDef(self, node: FuncDef):

@@ -2,15 +2,14 @@
 
 There are 5 types of functions:
 - AcaciaFunction: functions that are written in Acacia
-- InlineFunction: functions written in Acacia that
-  are annotated with `inline`
-- BinaryFunction: functions that are written in Python,
-  which is usually a builtin function
-- BoundMethod: methods that are bound to an entity
-  and we are sure which implementation we are calling
-- BoundMethodDispatcher: methods that are bound to an
-  entity and we are not sure which implementation
-  we are calling.
+- InlineFunction: functions written in Acacia that are annotated with
+  `inline`
+- BinaryFunction: functions that are written in Python, which are
+  usually builtin functions
+- BoundMethod: methods that are bound to an entity and we are sure
+  which implementation we are calling
+- BoundVirtualMethod: virtual/override methods that are bound to an
+  entity and we are not sure which implementation we are calling.
   Example:
     entity A:
       def foo():
@@ -23,7 +22,7 @@ There are 5 types of functions:
     def f(a: entity(A)):
       a.foo()  # BoundMethod: must be foo in A
       A@a.bar()  # BoundMethod: must be bar in A
-      a.bar()  # BoundMethodDispatcher: bar in A or B?
+      a.bar()  # BoundVirtualMethod: bar in A or B?
 """
 
 __all__ = [
@@ -31,7 +30,7 @@ __all__ = [
     'FunctionDataType',
     # Expressions
     'AcaciaFunction', 'InlineFunction', 'BinaryFunction',
-    'BoundMethod', 'BoundMethodDispatcher'
+    'BoundMethod', 'BoundVirtualMethod'
 ]
 
 from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
@@ -46,6 +45,7 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.ast import InlineFuncDef
     from acaciamc.mccmdgen.datatype import DataType
+    from acaciamc.mccmdgen.generator import Generator
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
@@ -93,10 +93,12 @@ class AcaciaFunction(AcaciaCallable):
 
 class InlineFunction(AcaciaCallable):
     def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
-                 returns: Optional["DataType"], compiler, source=None):
+                 returns: Optional["DataType"], owner: "Generator",
+                 compiler, source=None):
         super().__init__(FunctionDataType(), compiler)
         # We store the InlineFuncDef node directly
         self.node = node
+        self.owner = owner
         self.name = node.name
         self.result_type = returns
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
@@ -106,9 +108,7 @@ class InlineFunction(AcaciaCallable):
         self.func_repr = self.name
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
-        return self.compiler.current_generator.call_inline_func(
-            self, args, keywords
-        )
+        return self.owner.call_inline_func(self, args, keywords)
 
 class BinaryFunction(AcaciaCallable):
     """These are the functions that are written in Python,
@@ -182,10 +182,10 @@ class _BoundMethod(AcaciaCallable):
         if isinstance(self.definition, AcaciaFunction):
             result, commands = self.definition.call(args, keywords)
         elif isinstance(self.definition, InlineFunction):
-            old_self = self.compiler.current_generator.self_value
-            self.compiler.current_generator.self_value = self.object
+            old_self = self.definition.owner.self_value
+            self.definition.owner.self_value = self.object
             result, commands = self.definition.call(args, keywords)
-            self.compiler.current_generator.self_value = old_self
+            self.definition.owner.self_value = old_self
         # `BinaryFunction`s cannot be method implementation
         # because we are not sure about their result data type
         else:
@@ -210,60 +210,90 @@ class BoundMethod(AcaciaCallable):
         ]
         return result, commands2
 
-class BoundMethodDispatcher(AcaciaCallable):
+class BoundVirtualMethod(AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
                  result_var: VarValue, compiler):
         super().__init__(FunctionDataType(), compiler)
         self.name = method_name
         self.object = object_
-        self.possible_implementations: \
-            List[Tuple["EntityTemplate", _BoundMethod]] = []
+        self.impls: \
+            Dict[METHODDEF_T, Tuple[_BoundMethod, List["EntityTemplate"]]] = {}
         self.files: \
             List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
         self.result_var = result_var
         self.func_repr = self.name
-
-    def _give_implementation(
-            self, args: "ARGS_T", keywords: "KEYWORDS_T",
-            file: cmds.MCFunctionFile,
-            template: "EntityTemplate", bound_method: _BoundMethod
-        ):
-        result, commands = bound_method.call_withframe(
-            args, keywords,
-            location="<dispatcher of virtual method %s>" % self.name
-        )
-        commands.extend(result.export(self.result_var))
-        file.write_debug("# To implementation in %s" % template.name)
-        file.extend(
-            cmds.execute(
-                [cmds.ExecuteCond(
-                    "entity", "@s[tag=%s]" % template.runtime_tag
-                )], runs=cmd
-            )
-            for cmd in commands
-        )
+        self.compiler.before_finish(self._generate)
 
     def add_implementation(self, template: "EntityTemplate",
                            definition: METHODDEF_T):
-        if template.is_subtemplate_of(self.object.template):
+        if definition in self.impls:
+            self.impls[definition][1].append(template)
+        elif template.is_subtemplate_of(self.object.template):
             bound_method = _BoundMethod(
                 self.object, self.name, definition, self.compiler
             )
-            self.possible_implementations.append((template, bound_method))
-            for args, keywords, file in self.files:
-                self._give_implementation(args, keywords,
-                                          file, template, bound_method)
+            self.impls[definition] = (bound_method, [template])
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         file = cmds.MCFunctionFile()
         self.files.append((args, keywords, file))
         self.compiler.add_file(file)
-        file.write_debug("## Virtual method dispatcher for %s.%s()"
-                         % (self.object.template.name, self.name))
-        for template, bound_method in self.possible_implementations:
-            self._give_implementation(args, keywords,
-                                      file, template, bound_method)
         return self.result_var, [cmds.Execute(
             [cmds.ExecuteEnv("as", self.object.to_str())],
             runs=cmds.InvokeFunction(file)
         )]
+
+    def _generate(self):
+        def _call_bm(args: "ARGS_T", keywords: "KEYWORDS_T",
+                     bm: _BoundMethod) -> CMDLIST_T:
+            result, commands = bm.call_withframe(
+                args, keywords,
+                location="<dispatcher of virtual method %s>" % self.name
+            )
+            commands.extend(result.export(self.result_var))
+            return commands
+
+        LEN_IMPLS = len(self.impls)
+        for args, keywords, file in self.files:
+            file.write_debug(
+                "## Virtual method dispatcher for %s.%s()"
+                % (self.object.template.name, self.name)
+            )
+            # Optimize: only one implementation
+            if LEN_IMPLS == 1:
+                file.write_debug("## Only one implementation found")
+                bound_method, _ = next(iter(self.impls.values()))
+                file.extend(_call_bm(args, keywords, bound_method))
+                continue
+            # Fallback
+            impls = tuple(self.impls.values())
+            for bound_method, templates in impls:
+                file.write_debug(
+                    "# implementation for %s"
+                    % (", ".join(template.name for template in templates))
+                )
+                sel = "@s[%s]" % ",".join(
+                    "tag=!%s" % template.runtime_tag
+                    for template in templates
+                )
+                commands = _call_bm(args, keywords, bound_method)
+                if len(commands) > 10:
+                    # Long commands: dump commands to a new file
+                    f = cmds.MCFunctionFile()
+                    self.compiler.add_file(f)
+                    f.write_debug("## Extra file for virtual method")
+                    f.extend(commands)
+                    file.write(
+                        cmds.Execute(
+                            [cmds.ExecuteCond("entity", sel, invert=True)],
+                            runs=cmds.InvokeFunction(f)
+                        )
+                    )
+                else:
+                    file.extend(
+                        cmds.execute(
+                            [cmds.ExecuteCond("entity", sel, invert=True)],
+                            runs=cmd
+                        )
+                        for cmd in commands
+                    )
