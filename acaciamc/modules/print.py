@@ -328,7 +328,8 @@ _DEF_TITLE_CONFIG = (_FADE_IN, _STAY_TIME, _FADE_OUT)
 @axe.chop
 @axe.arg("text", ArgFString())
 @axe.arg("target", axe.PlayerSelector(), default=None)
-@axe.arg("mode", axe.LiteralString(), default=_TITLE)
+@axe.arg("mode", axe.LiteralStringEnum(_TITLE, _SUBTITLE, _ACTIONBAR),
+         default=_TITLE)
 @axe.arg("fade_in", axe.LiteralInt(), default=_FADE_IN)
 @axe.arg("stay_time", axe.LiteralInt(), default=_STAY_TIME)
 @axe.arg("fade_out", axe.LiteralInt(), default=_FADE_OUT)
@@ -346,9 +347,6 @@ def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
     `fade_in`, `stay_time` and `fade_out` are in ticks.
     """
     commands = []
-    # Check valid mode
-    if mode not in (_TITLE, _SUBTITLE, _ACTIONBAR):
-        raise axe.ArgumentError('mode', 'invalid mode: %s' % mode)
     if target is None:
         target_str = "@a"
     else:
