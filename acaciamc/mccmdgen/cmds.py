@@ -261,6 +261,14 @@ class MCFunctionFile:
         """Return if there are any commands in this file."""
         return any((not isinstance(cmd, Comment)) for cmd in self.commands)
 
+    def cmd_length(self):
+        """Return the length of commands (not including comments)."""
+        return sum(
+            1
+            for cmd in self.commands
+            if not isinstance(cmd, Comment)
+        )
+
     # --- About Path ---
 
     def get_path(self):

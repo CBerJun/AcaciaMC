@@ -178,21 +178,13 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                 tasks.append((caller_index, callee))
             tasks.sort(key=lambda x: x[0], reverse=True)
             for index, callee in tasks:
-                s = 0
-                long_callee = False
-                for command in callee.commands:
-                    if not isinstance(command, cmds.Comment):
-                        s += 1
-                        if s > self.max_inline_file_size:
-                            # File is very long
-                            long_callee = True
-                            break
                 runs = caller.commands[index]
-                if long_callee and isinstance(runs, cmds.Execute):
+                if isinstance(runs, cmds.Execute):
                     # Prefixing every command in a long file with
                     # /execute condition can reduce performance,
                     # so we don't inline it.
-                    continue
+                    if callee.cmd_length() > self.max_inline_file_size:
+                        continue
                 # print("Merging %s to %s:%d" % (
                 #     callee.get_path(), caller.get_path(), index
                 # ))
