@@ -1,4 +1,10 @@
+# IDE
 .vscode
+
+# Generated output
 *.acaout
 __pycache__
-TODO.txt
+
+# Specific files
+/TODO.txt
+/test/temp.aca
