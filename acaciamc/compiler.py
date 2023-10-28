@@ -99,7 +99,7 @@ class Compiler:
         # --- BUILTINS ---
         self.builtins = SymbolTable()
         self.base_template = EntityTemplate(
-            name="Object",
+            name="Entity",
             field_types={}, field_metas={}, methods={},
             virtual_methods={}, parents=[], metas={}, compiler=self
         )
@@ -119,7 +119,7 @@ class Compiler:
             self.builtins.set(name, cls(self))
         # builtin names
         for name, value in (
-            ('Object', self.base_template),
+            ('Entity', self.base_template),
         ):
             self.builtins.set(name, value)
 

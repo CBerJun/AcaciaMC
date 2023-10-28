@@ -67,7 +67,7 @@ class EGroupDataType(Storable):
         def _new(compiler, all_entities: bool):
             """
             Create an empty entity group (unless all_entities is True).
-            o: Engroup  # A group of entities of template Objects
+            o: Engroup  # A group of entities of template `Entity`
             o: Engroup(T)  # A group of entities of template T
             o: Engroup | (all_entities=True)  # Include all entities
             """
@@ -92,7 +92,7 @@ class EGroupType(Type):
 
     def datatype_hook(self) -> "DataType":
         """When "Engroup" is used as a type specifier, it's an alias to
-        "Engroup(Object)".
+        "Engroup(Entity)".
         """
         return EGroupDataType(self.compiler.base_template)
 

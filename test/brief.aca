@@ -192,8 +192,8 @@ def kill(test: Test):
     world.msg_say(test, "I'm killed")  # Let `test` shout "I'm killed"
     world.kill(test)  # Kill the entity
 kill(test_entity)  # Remember Subtemplate is compatible with Test?
-# `Object` is the base of all templates and omitting template in type
-# specifier will default template to `Object`.
+# `Entity` is the base of all templates and using it in type specifier
+# will accept all entities.
 # To advance users: entity methods can be virtual and support overriding
 # (like classes in C++).
 # Though this might not be that useful in Minecraft...
@@ -244,7 +244,7 @@ for player in player_group:
 # Most of functions in `world` module accepts both single entity and an
 # entity group. This moves entities in `player_group` 2 blocks lower:
 world.move(player_group, y=-2)
-# A bare `Engroup` is equivalent to `Engroup(Object)`.
+# A bare `Engroup` is equivalent to `Engroup(Entity)`.
 
 ## Position and rotation
 # Position and rotation are pretty simple.

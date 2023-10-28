@@ -609,7 +609,7 @@ class Generator(ASTVisitor):
                 self.error_c(ErrorType.INVALID_ETEMPLATE,
                              got=str(parent.data_type))
             parents.append(parent)
-        # If parent is not specified, use builtin `Object`
+        # If parent is not specified, use builtin `Entity`
         if not parents:
             parents.append(self.compiler.base_template)
         # 1st Pass: get all the attributes and give every non-inline
