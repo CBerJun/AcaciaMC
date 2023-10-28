@@ -802,11 +802,15 @@ class Generator(ASTVisitor):
         if not isinstance(objective, String):
             self.error_c(ErrorType.INVALID_RAWSCORE_OBJECTIVE,
                          got=str(objective.data_type))
-        if not isinstance(selector, String):
+        if isinstance(selector, String):
+            selector_str = selector.value
+        elif selector.data_type.matches_cls(EntityDataType):
+            selector_str = selector.get_selector().to_str()
+        else:
             self.error_c(ErrorType.INVALID_RAWSCORE_SELECTOR,
                          got=str(selector.data_type))
         return IntVar(
-            cmds.ScbSlot(selector.value, objective.value),
+            cmds.ScbSlot(selector_str, objective.value),
             compiler=self.compiler
         )
 
