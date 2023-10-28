@@ -143,7 +143,7 @@ print.title(print.format("Value of X: %0", x), mode=print.ACTIONBAR)
 # The builtin `world` module contains interfaces to interact with the
 # Minecraft world. We'll use it later.
 import world
-# Plese see acaciamc/modules/world.py for everything it can do.
+# Please see acaciamc/modules/world.py for detailed information.
 
 ## `entity` and entity template
 # `entity` is an Acacia type that represents *exactly one* entity.
@@ -187,15 +187,15 @@ entity Subtemplate extends Test:
 # You can assign entity variables of Subtemplate template to those of
 # Test template, but not the other way around.
 test_entity := Subtemplate()
-# A function can take arguments of entity type and the template can be
-# specified:
-def kill(test: entity(Test)):
+# A function can take arguments of entity type by specifying template:
+def kill(test: Test):
     world.msg_say(test, "I'm killed")  # Let `test` shout "I'm killed"
     world.kill(test)  # Kill the entity
 kill(test_entity)  # Remember Subtemplate is compatible with Test?
 # `Object` is the base of all templates and omitting template in type
 # specifier will default template to `Object`.
-# To advance users: entity templates even support method overloading!
+# To advance users: entity methods can be virtual and support overriding
+# (like classes in C++).
 # Though this might not be that useful in Minecraft...
 
 ## Entity group and entity filter

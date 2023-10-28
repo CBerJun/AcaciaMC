@@ -19,7 +19,7 @@ There are 5 types of functions:
     entity B extends A:
       def bar():
         pass
-    def f(a: entity(A)):
+    def f(a: A):
       a.foo()  # BoundMethod: must be foo in A
       A@a.bar()  # BoundMethod: must be bar in A
       a.bar()  # BoundVirtualMethod: bar in A or B?

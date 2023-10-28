@@ -8,7 +8,7 @@ import itertools
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
-from .entity import TaggedEntity
+from .entity import TaggedEntity, EntityDataType
 from .functions import BoundVirtualMethod, BoundMethod, InlineFunction
 from .string import String
 from .none import NoneDataType
@@ -109,7 +109,6 @@ class EntityTemplate(AcaciaCallable):
         self._orig_metas = {}  # Metas are to be handled below
         self._orig_field_types = field_types
         self._orig_field_metas = field_metas
-        self._orig_methods = methods
         self.field_types: Dict[str, "SupportsEntityField"] = {}
         self.field_metas: Dict[str, dict] = {}
         # method_dispatchers: for virtual methods AND override methods
@@ -225,6 +224,9 @@ class EntityTemplate(AcaciaCallable):
                         and method not in self.simple_methods):
                     # Inherited simple methods
                     self.simple_methods[method] = implementation
+
+    def datatype_hook(self):
+        return EntityDataType(self)
 
     def register_entity(self, entity: "_EntityBase"):
         # Register attributes to and initialize an entity

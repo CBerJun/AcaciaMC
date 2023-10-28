@@ -208,7 +208,7 @@ class Generator(ASTVisitor):
             self.current_tmp_scores = []
         # write debug
         if not isinstance(node, (Expression, ArgumentTable,
-                                 AnyTypeSpec, CallTable)):
+                                 TypeSpec, CallTable)):
             self.write_debug(type(node).__name__)
         # visit the node
         res = super().visit(node, **kwargs)
@@ -485,17 +485,6 @@ class Generator(ASTVisitor):
         for arg, value in node.keywords.items():
             keywords[arg] = self.visit(value)
         return args, keywords
-
-    def visit_EntityTypeSpec(self, node: EntityTypeSpec):
-        if node.template is None:
-            # When template is omitted, use builtin `Object` template
-            template = self.compiler.base_template
-        else:
-            template = self.visit(node.template)
-            if not template.data_type.matches_cls(ETemplateDataType):
-                self.error_c(ErrorType.INVALID_ETEMPLATE,
-                             got=str(template.data_type))
-        return EntityDataType(template)
 
     def _func_expr(self, node: FuncDef) -> AcaciaFunction:
         """Return the function object to a function definition

@@ -18,13 +18,15 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
 class DataType(metaclass=ABCMeta):
-    """Data type like `int`, `bool` or entity like `entity(Template)`.
+    """
+    Type of Acacia expressions, like `int` or entity with a specified
+    template.
     WHAT'S THE FIFFERENCE BETWEEN `Type` AND THIS?
-     `Type` is JUST an expression that implements `datatype_hook` so it
-     can be used as a type specifier by users. `DataType` is not an
-     expression but an internal representation of expression type. It
+     `Type` is just a dummy expression that implements `datatype_hook`
+     so it can be used as a type specifier by users. `DataType` is not
+     an expression but an internal representation of expression type. It
      specifies the type of an expression including extra information
-     like template for entity.
+     like template for entity and `Engroup`.
     """
     @abstractmethod
     def __str__(self) -> str:

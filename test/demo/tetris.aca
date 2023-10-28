@@ -155,7 +155,7 @@ score: int = 0
 player_group: Engroup
 dummy_group: Engroup(PosDummy)
 
-def get_dummy() -> entity(PosDummy):
+def get_dummy() -> PosDummy:
     #*
     Get the dummy entity which only exists when game is running.
     We should have `dummy_group.size() == 1 and running`.
@@ -176,10 +176,7 @@ def get_shape_size(shape: int, rotation: int) -> Size:
                 result.width = size_arr.get(0)
                 result.height = size_arr.get(1)
 
-inline def traverse_shape(
-    dummy: entity(PosDummy), shape: int,
-    rotation: int, action
-):
+inline def traverse_shape(dummy: PosDummy, shape: int, rotation: int, action):
     #*
     Find all blocks in a shape (relative to `dummy`'s position) and
     execute function `action` with each position of block as argument.
@@ -204,7 +201,7 @@ inline def traverse_shape(
         if shape == s:
             do_action(SHAPE_PATTERNS_90.get(s))
 
-def draw_shape(dummy: entity(PosDummy), shape: int, rotation: int):
+def draw_shape(dummy: PosDummy, shape: int, rotation: int):
     #* Render current shape at `dummy`. *#
     inline def place_block(pos: Pos):
         for s in SHAPE_COLORS:
@@ -215,13 +212,13 @@ def draw_shape(dummy: entity(PosDummy), shape: int, rotation: int):
                 world.setblock(pos, block)
     traverse_shape(dummy, shape, rotation, action=place_block)
 
-def clear_shape(dummy: entity(PosDummy), shape: int, rotation: int):
+def clear_shape(dummy: PosDummy, shape: int, rotation: int):
     #* Clear the shape (i.e. place empty block). *#
     inline def empty_block(pos: Pos):
         world.setblock(pos, BLOCK_EMPTY)
     traverse_shape(dummy, shape, rotation, action=empty_block)
 
-def will_collide(dummy: entity(PosDummy), shape: int, rotation: int) -> bool:
+def will_collide(dummy: PosDummy, shape: int, rotation: int) -> bool:
     #*
     Whether the shape with given rotation will collide with other
     blocks at dummy.

@@ -102,7 +102,7 @@ entity Frontier extends Dummy:
 frontiers: Engroup(Frontier)
 last_tick_run: bool = False
 
-def visit(pos: entity(Dummy)):
+def visit(pos: Dummy):
     world.setblock(Pos(pos).offset(y=-1), BLOCK_VISITED)
     # For adjacent cells:
     for offset in OFFSET_TABLE:
@@ -112,16 +112,16 @@ def visit(pos: entity(Dummy)):
         neighbor_frontier.select(Enfilter().distance_from(neighbor, max=0.1))
         # Only handle undetermined neighbors
         if world.is_block(neighbor_block, BLOCK_UNKNOWN):
-            # Turn existing frontiers into walls
+            # Turn ? into frontier
             if neighbor_frontier.is_empty():
                 frontiers.add(Frontier(pos=neighbor))
-            # Turn ? into frontiers
+            # Turn existing frontier into a wall
             else:
                 world.kill(neighbor_frontier)
                 world.setblock(neighbor_block, BLOCK_WALL)
                 world.fill(neighbor, Offset().offset(y=HEIGHT-1), BLOCK)
 
-def choose(frontier: entity(Frontier)):
+def choose(frontier: Frontier):
     world.setblock(Pos(frontier).offset(y=-1), BLOCK_PATH)
     for offset in OFFSET_TABLE:
         neighbor -> Pos(frontier).offset(x=offset.get(0), z=offset.get(1))

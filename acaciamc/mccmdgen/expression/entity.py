@@ -22,7 +22,7 @@ class EntityDataType(Storable):
         self.template = template
 
     def __str__(self) -> str:
-        return "entity(%s)" % self.template.name
+        return self.template.name
 
     @classmethod
     def name_no_generic(cls) -> str:

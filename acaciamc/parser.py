@@ -782,19 +782,9 @@ class Parser:
         return arg_table
 
     def type_spec(self):
-        """type_spec := expr | (ENTITY (LPAREN expr RPAREN)?)"""
+        """type_spec := expr"""
         pos = self.current_pos
-        if self.current_token.type is TokenType.entity:
-            self.eat()  # Eat "entity"
-            if self.current_token.type is TokenType.lparen:
-                self.eat()  # Eat "("
-                template = self.expr()
-                self.eat(TokenType.rparen)
-            else:
-                template = None
-            return EntityTypeSpec(template, **pos)
-        else:
-            return TypeSpec(self.expr(), **pos)
+        return TypeSpec(self.expr(), **pos)
 
     def call_table(self):
         """

@@ -60,7 +60,6 @@ class AST:
 # these classes are for classifying
 class Statement(AST): pass
 class Expression(AST): pass
-class AnyTypeSpec(AST): pass
 
 # details
 
@@ -76,7 +75,7 @@ class ArgumentTable(AST):  # arguments used in function definition
         self.default = {}  # default values of arguments
         self.types = {}  # types of arguments
 
-    def add_arg(self, name: str, type: AnyTypeSpec, default: Expression):
+    def add_arg(self, name: str, type: "TypeSpec", default: Expression):
         self.args.append(name)
         self.types[name] = type
         self.default[name] = default
@@ -88,15 +87,10 @@ class CallTable(AST):  # call table
         self.args = args
         self.keywords = keywords
 
-class TypeSpec(AnyTypeSpec):  # specify type of value `int`
+class TypeSpec(AST):  # specify type of value `int`
     def __init__(self, content: Expression, lineno, col):
         super().__init__(lineno, col)
         self.content = content
-
-class EntityTypeSpec(AnyTypeSpec):  # specify entity template `entity(Temp)`
-    def __init__(self, template: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.template = template
 
 class ExprStatement(Statement):  # a statement that is an expression
     def __init__(self, value: AST, lineno, col):
@@ -125,7 +119,7 @@ class While(Statement):  # while statement
 class FuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: _Optional[AnyTypeSpec], lineno, col
+        body: list, returns: _Optional[TypeSpec], lineno, col
     ):  # function definition
         super().__init__(lineno, col)
         self.name = name
@@ -136,7 +130,7 @@ class FuncDef(Statement):
 class InlineFuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: _Optional[AnyTypeSpec], lineno, col
+        body: list, returns: _Optional[TypeSpec], lineno, col
     ):  # inline function definition
         super().__init__(lineno, col)
         self.name = name
@@ -158,7 +152,7 @@ class EntityTemplateDef(Statement):  # entity statement
         self.body = body
 
 class EntityField(Statement):  # entity field definition
-    def __init__(self, name: str, type_: AnyTypeSpec, lineno, col):
+    def __init__(self, name: str, type_: TypeSpec, lineno, col):
         super().__init__(lineno, col)
         self.name = name
         self.type = type_
@@ -178,7 +172,7 @@ class EntityMeta(Statement):  # entity meta like @type
 
 class VarDef(Statement):  # define a variable
     def __init__(self, target: Expression,
-                 type_: _Optional[AnyTypeSpec],
+                 type_: _Optional[TypeSpec],
                  value: _Optional[Expression],
                  args: _Optional[CallTable], lineno, col):
         super().__init__(lineno, col)
@@ -248,7 +242,7 @@ class For(Statement):  # for-in iteration
         self.body = body
 
 class StructField(Statement):  # a struct's field
-    def __init__(self, name: str, type_: AnyTypeSpec, lineno, col):
+    def __init__(self, name: str, type_: TypeSpec, lineno, col):
         super().__init__(lineno, col)
         self.name = name
         self.type = type_
