@@ -9,3 +9,10 @@ import print
 
 def test(x: int) -> bool:
     result := x >= 0
+
+inline def get_inline_func():
+    a: int = 0
+    inline def inline_func():
+        a += 1
+        print.tell(print.format("a: %0", a))
+    result -> inline_func

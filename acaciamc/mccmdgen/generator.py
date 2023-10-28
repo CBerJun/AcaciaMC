@@ -1,6 +1,6 @@
 """Minecraft Command Generator of Acacia."""
 
-__all__ = ['Generator']
+__all__ = ['Generator', 'Context']
 
 from typing import Union, TYPE_CHECKING, Optional, List, Tuple, Callable, Dict
 import contextlib
@@ -22,6 +22,40 @@ FUNC_NONE = "none"
 FUNC_INLINE = "inline"
 FUNC_NORMAL = "normal"
 
+class Context:
+    def __init__(self, compiler: "Compiler", scope: ScopedSymbolTable = None):
+        self.compiler = compiler
+        if scope is None:
+            scope = ScopedSymbolTable(builtins=compiler.builtins)
+        self.scope: ScopedSymbolTable = scope
+        # current_function: the current function we are visiting
+        self.current_function: \
+            Optional[Union[AcaciaFunction, InlineFunction]] = None
+        # result_var_declared: whether result var is declared by user
+        # only exists when visiting non-inline functions.
+        self.result_var_declared: Optional[bool] = None
+        # inline_result: stores result expression of inline function
+        # only exists when visiting inline functions.
+        self.inline_result: Optional[AcaciaExpr] = None
+        # function_state: "none" | "inline" | "normal"
+        # stores type of the nearest level of function. If not in any
+        # function, it is "none".
+        self.function_state: str = FUNC_NONE
+        # self_value: value of `self` keyword
+        self.self_value: Optional[AcaciaExpr] = None
+
+    def copy(self):
+        res = Context(self.compiler, self.scope)
+        res.current_function = self.current_function
+        res.result_var_declared = self.result_var_declared
+        res.inline_result = self.inline_result
+        res.function_state = self.function_state
+        res.self_value = self.self_value
+        return res
+
+    def new_scope(self):
+        self.scope = ScopedSymbolTable(self.scope, self.compiler.builtins)
+
 class Generator(ASTVisitor):
     """Generates MC function from an AST for a single file."""
     def __init__(self, node: AST, main_file: cmds.MCFunctionFile,
@@ -31,25 +65,12 @@ class Generator(ASTVisitor):
         self.compiler = compiler
         self.file_name = file_name
         self.current_file = main_file
-        self.current_scope = ScopedSymbolTable(builtins=self.compiler.builtins)
-        # current_function: the current function we are visiting
-        self.current_function = None
-        # result_var_declared: whether result var is declared by user
-        # only exists when visiting non-inline functions.
-        self.result_var_declared: Optional[bool] = None
-        # inline_result: stores result expression of inline function
-        # only exists when visiting inline functions.
-        self.inline_result = None
-        # function_state: "none" | "inline" | "normal"
-        # stores type of the nearest level of function. If not in any
-        # function, it is "none".
-        self.function_state = FUNC_NONE
-        # self_value: the entity keyword `self` value
-        self.self_value = None
+        self.ctx = Context(compiler)
         # processing_node: prepared for showing errors
         # to know which AST we are passing (so that lineno and col are known)
         self.processing_node = self.node
-        self.node_depth = -1  # how deep we are in the tree (for debug comment)
+        # node_depth: how deep we are in the tree (for debugging comments)
+        self.node_depth: int = -1
         # current_tmp_scores: tmp scores allocated on current statement
         # see method `visit`.
         self.current_tmp_scores = []
@@ -66,7 +87,7 @@ class Generator(ASTVisitor):
         self.current_file.write_debug("## Start of module parsing")
         self.parse()
         self.current_file.write_debug("## End of module parsing")
-        return AcaciaModule(self.current_scope, self.compiler)
+        return AcaciaModule(self.ctx.scope, self.compiler)
 
     def fix_error_location(self, error: Error):
         error.location.linecol = (
@@ -98,10 +119,10 @@ class Generator(ASTVisitor):
         """Register a value to a symbol table according to AST.
         `target_value` is the value that the ast represents
         e.g. Identifier(name='a'), IntVar(...) ->
-             self.current_scope.set('a', IntVar(...))
+             self.ctx.scope.set('a', IntVar(...))
         """
         if isinstance(target_node, Identifier):
-            self.current_scope.set(target_node.name, target_value)
+            self.ctx.scope.set(target_node.name, target_value)
         elif isinstance(target_node, Attribute):
             # get AttributeTable and register
             object_ = self.visit(target_node.object)
@@ -112,13 +133,13 @@ class Generator(ASTVisitor):
                              attr=target_node.attr)
             object_.attribute_table.set(target_node.attr, target_value)
         elif isinstance(target_node, Result):
-            if self.function_state == FUNC_INLINE:
-                self.inline_result = target_value
-            elif self.function_state == FUNC_NORMAL:
-                assert target_value is self.current_function.result_var
-                self.result_var_declared = True
+            if self.ctx.function_state == FUNC_INLINE:
+                self.ctx.inline_result = target_value
+            elif self.ctx.function_state == FUNC_NORMAL:
+                assert target_value is self.ctx.current_function.result_var
+                self.ctx.result_var_declared = True
             else:
-                assert self.function_state == FUNC_NONE
+                assert self.ctx.function_state == FUNC_NONE
                 self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
         else:
             raise TypeError
@@ -159,20 +180,16 @@ class Generator(ASTVisitor):
                 self.compiler.add_file(f, path)
 
     @contextlib.contextmanager
-    def new_scope(self):
-        """Create a new scope."""
-        old = self.current_scope
-        s = ScopedSymbolTable(outer=old, builtins=self.compiler.builtins)
-        self.current_scope = s
-        yield s
-        self.current_scope = old
+    def set_ctx(self, ctx: Context):
+        old = self.ctx
+        self.ctx = ctx
+        yield
+        self.ctx = old
 
     @contextlib.contextmanager
-    def set_func_state(self, state: str):
-        old = self.function_state
-        self.function_state = state
-        yield
-        self.function_state = old
+    def new_ctx(self):
+        with self.set_ctx(self.ctx.copy()):
+            yield
 
     # --- VISITORS ---
 
@@ -239,16 +256,16 @@ class Generator(ASTVisitor):
         else:
             args, keywords = self.visit(node.args)
         is_result = isinstance(node.target, Result)
-        if not (is_result and self.function_state == FUNC_NORMAL):
+        if not (is_result and self.ctx.function_state == FUNC_NORMAL):
             var = dt.new_var()
         if is_result:
-            if self.function_state == FUNC_NORMAL:
-                assert isinstance(self.current_function, AcaciaFunction)
-                var = self.current_function.result_var
+            if self.ctx.function_state == FUNC_NORMAL:
+                assert isinstance(self.ctx.current_function, AcaciaFunction)
+                var = self.ctx.current_function.result_var
             else:
-                assert self.function_state == FUNC_INLINE
+                assert self.ctx.function_state == FUNC_INLINE
                 assert var is not None
-            result_type = self.current_function.result_type
+            result_type = self.ctx.current_function.result_type
             if (result_type is not None) and (not result_type.matches(dt)):
                 self.error_c(ErrorType.WRONG_RESULT_TYPE,
                              expect=str(result_type), got=str(dt))
@@ -298,7 +315,7 @@ class Generator(ASTVisitor):
     def visit_Binding(self, node: Binding):
         # special check for result
         if isinstance(node.target, Result):
-            if self.function_state != FUNC_INLINE:
+            if self.ctx.function_state != FUNC_INLINE:
                 self.error_c(ErrorType.RESULT_BIND_OUT_OF_SCOPE)
         # analyze value
         value = self.visit(node.value)
@@ -410,7 +427,8 @@ class Generator(ASTVisitor):
             self.write_debug('No commands generated')
 
     def visit_InterfaceDef(self, node: InterfaceDef):
-        with self.new_scope():
+        with self.new_ctx():
+            self.ctx.new_scope()
             # body
             with self.new_mcfunc_file(
                 'interface/%s' % '/'.join(node.path)
@@ -508,30 +526,16 @@ class Generator(ASTVisitor):
 
     @contextlib.contextmanager
     def _in_noninline_func(self, func: AcaciaFunction):
-        old = self.current_function
-        oldd = self.result_var_declared
-        self.current_function = func
-        self.result_var_declared = False
-        with self.set_func_state(FUNC_NORMAL):
+        with self.new_ctx():
+            self.ctx.new_scope()
+            self.ctx.current_function = func
+            self.ctx.result_var_declared = False
+            self.ctx.function_state = FUNC_NORMAL
             yield
-        # Check result var
-        if (not self.result_var_declared
-            and not func.result_type.matches_cls(NoneDataType)):
-            self.error_c(ErrorType.NEVER_RESULT)
-        # Resume
-        self.current_function = old
-        self.result_var_declared = oldd
-
-    @contextlib.contextmanager
-    def _in_inline_func(self, func: InlineFunction):
-        old = self.current_function
-        oldr = self.inline_result
-        self.inline_result = None
-        self.current_function = func
-        with self.set_func_state(FUNC_INLINE):
-            yield
-        self.inline_result = oldr
-        self.current_function = old
+            # Check result var
+            if (not self.ctx.result_var_declared
+                and not func.result_type.matches_cls(NoneDataType)):
+                self.error_c(ErrorType.NEVER_RESULT)
 
     def handle_inline_func(self, node: InlineFuncDef) -> InlineFunction:
         # Return the inline function object to a function definition
@@ -541,18 +545,17 @@ class Generator(ASTVisitor):
             returns = self.visit(node.returns)
         args, types, defaults = self.visit(node.arg_table)
         return InlineFunction(
-            node, args, types, defaults, returns, owner=self,
+            node, args, types, defaults, returns, self.ctx, owner=self,
             compiler=self.compiler, source=self.node_location(node)
         )
 
     def visit_FuncDef(self, node: FuncDef):
         func = self._func_expr(node)
-        with self.new_scope(), \
-             self._in_noninline_func(func), \
+        with self._in_noninline_func(func), \
              self.new_mcfunc_file() as body_file:
             # Register arguments to scope
             for arg, var in func.arg_vars.items():
-                self.current_scope.set(arg, var)
+                self.ctx.scope.set(arg, var)
             # Write file
             self.write_debug('Function definition of %s()' % node.name)
             for stmt in node.body:
@@ -563,12 +566,12 @@ class Generator(ASTVisitor):
             func.file = body_file
         else:
             self.write_debug('No commands generated')
-        self.current_scope.set(node.name, func)
+        self.ctx.scope.set(node.name, func)
         return func
 
     def visit_InlineFuncDef(self, node: InlineFuncDef):
         func = self.handle_inline_func(node)
-        self.current_scope.set(node.name, func)
+        self.ctx.scope.set(node.name, func)
 
     def _parse_module(self, meta: ModuleMeta, lineno: int, col: int):
         try:
@@ -585,7 +588,7 @@ class Generator(ASTVisitor):
     def visit_Import(self, node: Import):
         module, path = self._parse_module(node.meta, node.lineno, node.col)
         self.write_debug("Got module from %s" % path)
-        self.current_scope.set(node.name, module)
+        self.ctx.scope.set(node.name, module)
 
     def visit_FromImport(self, node: FromImport):
         module, path = self._parse_module(node.meta, node.lineno, node.col)
@@ -595,13 +598,13 @@ class Generator(ASTVisitor):
             if value is None:
                 self.error_c(ErrorType.MODULE_NO_ATTRIBUTE,
                              attr=name, module=str(node.meta))
-            self.current_scope.set(alias, value)
+            self.ctx.scope.set(alias, value)
 
     def visit_FromImportAll(self, node: FromImportAll):
         module, path = self._parse_module(node.meta, node.lineno, node.col)
         self.write_debug("Import everything from %s" % path)
         for name, value in module.attribute_table:
-            self.current_scope.set(name, value)
+            self.ctx.scope.set(name, value)
 
     def visit_EntityTemplateDef(self, node: EntityTemplateDef):
         field_types = {}  # Field name to `DataType`
@@ -651,25 +654,21 @@ class Generator(ASTVisitor):
         )
         # 2nd Pass: parse the non-inline method bodies.
         for method, ast in methods_2ndpass:
-            with self.new_scope():
+            with self._in_noninline_func(method):
+                self.ctx.self_value = EntityReference(
+                    MCSelector("s"), template, self.compiler
+                )
                 # Register arguments to scope
                 for arg, var in method.arg_vars.items():
-                    self.current_scope.set(arg, var)
-                # Handle `self`
-                old_self = self.self_value
-                self.self_value = EntityReference(
-                    MCSelector("s"), template, self.compiler)
+                    self.ctx.scope.set(arg, var)
                 # Write file
-                with self.set_mcfunc_file(method.file), \
-                     self._in_noninline_func(method):
+                with self.set_mcfunc_file(method.file):
                     self.write_debug('Entity method definition of %s.%s()' %
                                      (node.name, ast.name))
                     for stmt in ast.body:
                         self.visit(stmt)
-                # Resume `self`
-                self.self_value = old_self
         # Register
-        self.current_scope.set(node.name, template)
+        self.ctx.scope.set(node.name, template)
 
     def visit_EntityField(self, node: EntityField):
         data_type = self.visit(node.type)
@@ -706,16 +705,18 @@ class Generator(ASTVisitor):
                             type_=str(iterable.data_type))
             self.write_debug("Iterating over %d items" % len(items))
             for value in items:
-                with self.new_scope():
-                    self.current_scope.set(node.name, value)
+                with self.new_ctx():
+                    self.ctx.new_scope()
+                    self.ctx.scope.set(node.name, value)
                     for stmt in node.body:
                         self.visit(stmt)
         else:
             assert isinstance(iterable, EntityGroup)
             with self.new_mcfunc_file() as body_file, \
-                 self.new_scope():
+                 self.new_ctx():
+                self.ctx.new_scope()
                 self.write_debug("Entity group iteration body")
-                self.current_scope.set(
+                self.ctx.scope.set(
                     node.name, EntityReference(
                         MCSelector("s"), iterable.template, self.compiler
                     )
@@ -749,7 +750,7 @@ class Generator(ASTVisitor):
                 fields[name] = type_
             else:
                 assert isinstance(decl, Pass)
-        self.current_scope.set(node.name, StructTemplate(
+        self.ctx.scope.set(node.name, StructTemplate(
             node.name, fields, base_structs, self.compiler
         ))
 
@@ -772,7 +773,7 @@ class Generator(ASTVisitor):
         raise TypeError
 
     def visit_Self(self, node: Self):
-        v = self.self_value
+        v = self.ctx.self_value
         if v is None:
             self.error_c(ErrorType.SELF_OUT_OF_SCOPE)
         return v
@@ -788,7 +789,7 @@ class Generator(ASTVisitor):
     # assignable
 
     def visit_Identifier(self, node: Identifier):
-        res = self.current_scope.lookup(node.name)
+        res = self.ctx.scope.lookup(node.name)
         # check undef
         if res is None:
             self.error_c(ErrorType.NAME_NOT_DEFINED, name=node.name)
@@ -821,16 +822,16 @@ class Generator(ASTVisitor):
         )
 
     def visit_Result(self, node: Result):
-        if self.function_state == FUNC_NORMAL:
-            if not self.result_var_declared:
+        if self.ctx.function_state == FUNC_NORMAL:
+            if not self.ctx.result_var_declared:
                 self.error_c(ErrorType.RESULT_UNDEFINED)
-            return self.current_function.result_var
-        elif self.function_state == FUNC_INLINE:
-            if self.inline_result is None:
+            return self.ctx.current_function.result_var
+        elif self.ctx.function_state == FUNC_INLINE:
+            if self.ctx.inline_result is None:
                 self.error_c(ErrorType.RESULT_UNDEFINED)
-            return self.inline_result
+            return self.ctx.inline_result
         else:
-            assert self.function_state == FUNC_NONE
+            assert self.ctx.function_state == FUNC_NONE
             self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
 
     # operators
@@ -919,21 +920,23 @@ class Generator(ASTVisitor):
                          args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         # We visit the AST node every time an inline function is called
         # Return a list of commands
-        with self.new_scope():
+        with self.set_ctx(func.context):
+            self.ctx.inline_result = None
+            self.ctx.current_function = func
+            self.ctx.function_state = FUNC_INLINE
             # Register args directly into scope, without assigning
             # (as normal function calls do)
             arg2value = func.arg_handler.match(args, keywords)
             for arg, value in arg2value.items():
-                self.current_scope.set(arg, value)
+                self.ctx.scope.set(arg, value)
             # Visit body
             file = cmds.MCFunctionFile()
-            with self.set_mcfunc_file(file), \
-                 self._in_inline_func(func):
-                self.write_debug("Start of inline function")
+            with self.set_mcfunc_file(file):
+                file.write_debug("## Start of inline function")
                 for stmt in func.node.body:
                     self.visit(stmt)
-                self.write_debug("End of inline function")
-                result = self.inline_result
+                file.write_debug("## End of inline function")
+                result = self.ctx.inline_result
         # Check result type
         expect = func.result_type
         if result is None:

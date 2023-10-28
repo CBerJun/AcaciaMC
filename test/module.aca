@@ -49,6 +49,9 @@ from .mod import *
 b := testmod.test(-10)
 b = test_function(-10)
 b = test(-10)
+f -> testmod.get_inline_func()
+f()
+f()
 
 #* Importing a module written in Python *#
 import .test_mod

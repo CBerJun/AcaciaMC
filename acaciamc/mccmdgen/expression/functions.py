@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.ast import InlineFuncDef
     from acaciamc.mccmdgen.datatype import DataType
-    from acaciamc.mccmdgen.generator import Generator
+    from acaciamc.mccmdgen.generator import Generator, Context
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
     from .entity import _EntityBase
     from .entity_template import EntityTemplate
@@ -93,12 +93,14 @@ class AcaciaFunction(AcaciaCallable):
 
 class InlineFunction(AcaciaCallable):
     def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
-                 returns: Optional["DataType"], owner: "Generator",
+                 returns: Optional["DataType"],
+                 context: "Context", owner: "Generator",
                  compiler, source=None):
         super().__init__(FunctionDataType(), compiler)
         # We store the InlineFuncDef node directly
         self.node = node
         self.owner = owner
+        self.context = context
         self.name = node.name
         self.result_type = returns
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
@@ -175,21 +177,20 @@ class _BoundMethod(AcaciaCallable):
         self.name = method_name
         self.object = object_
         self.definition = definition
+        self.is_inline = isinstance(definition, InlineFunction)
         self.func_repr = self.name
         self.source = self.definition.source
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
-        if isinstance(self.definition, AcaciaFunction):
+        if not self.is_inline:
             result, commands = self.definition.call(args, keywords)
-        elif isinstance(self.definition, InlineFunction):
-            old_self = self.definition.owner.self_value
-            self.definition.owner.self_value = self.object
+        else:
+            assert isinstance(self.definition, InlineFunction), \
+                   "Unexpected target function %r" % self.definition
+            self.definition.context.self_value = self.object
             result, commands = self.definition.call(args, keywords)
-            self.definition.owner.self_value = old_self
         # `BinaryFunction`s cannot be method implementation
         # because we are not sure about their result data type
-        else:
-            raise TypeError("Unexpected target function %r" % self.definition)
         return result, commands
 
 class BoundMethod(AcaciaCallable):
@@ -202,12 +203,16 @@ class BoundMethod(AcaciaCallable):
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         result, commands = self.content.call(args, keywords)
-        commands2 = [
-            cmds.execute([
-                cmds.ExecuteEnv("as", self.content.object.to_str())
-            ], runs=cmd)
-            for cmd in commands
-        ]
+        if self.content.is_inline:
+            # Inline function calls does not need execute `as` context
+            commands2 = commands
+        else:
+            commands2 = [
+                cmds.execute([
+                    cmds.ExecuteEnv("as", self.content.object.to_str())
+                ], runs=cmd)
+                for cmd in commands
+            ]
         return result, commands2
 
 class BoundVirtualMethod(AcaciaCallable):
