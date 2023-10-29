@@ -16,9 +16,9 @@ class AbsPosType(Type):
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
-        @axe.arg("x", axe.LiteralFloat())
+        @axe.arg("x", axe.PosXZ())
         @axe.arg("y", axe.LiteralFloat())
-        @axe.arg("z", axe.LiteralFloat())
+        @axe.arg("z", axe.PosXZ())
         def _new(compiler, x: float, y: float, z: float):
             return AbsPos(x, y, z, compiler)
 
@@ -41,9 +41,9 @@ class AbsPos(Position, PosOffset):
 
         @method_of(self, "abs")
         @axe.chop
-        @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("x", axe.Nullable(axe.PosXZ()), default=None)
         @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
-        @axe.arg("z", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("z", axe.Nullable(axe.PosXZ()), default=None)
         @transform_immutable(self)
         def _abs(self: "AbsPos", compiler, x, y, z):
             for i, value in enumerate((x, y, z)):

@@ -164,7 +164,7 @@ interface start:
         for j in array.range(SIZE-1):
             pos -> ORIGIN.offset(x=2*i+2, z=2*j+2)
             world.fill(pos, Offset().offset(y=HEIGHT), BLOCK)
-    e := Dummy(ORIGIN.offset(+1.5, +1, +1.5))
+    e := Dummy(ORIGIN.offset(+1, +1, +1))
     visit(e)
     world.kill(e)
 

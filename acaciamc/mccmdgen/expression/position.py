@@ -45,6 +45,8 @@ class PosType(Type):
                 `Pos.FEET`).
             Pos(int-literal, int-literal, int-literal):
                 absolute position.
+                If integer is provided for x and z, they are increased
+                by 0.5, so that the position is at block center.
             """
             @axe.overload
             @axe.arg("target", EntityDataType)
@@ -61,9 +63,9 @@ class PosType(Type):
                 return cls.from_entity(compiler, target, DEFAULT_ANCHOR)
 
             @axe.overload
-            @axe.arg("x", axe.LiteralFloat())
+            @axe.arg("x", axe.PosXZ())
             @axe.arg("y", axe.LiteralFloat())
-            @axe.arg("z", axe.LiteralFloat())
+            @axe.arg("z", axe.PosXZ())
             def absolute(cls, compiler, x: float, y: float, z: float):
                 offset = PosOffset(compiler)
                 offset.set(0, x, CoordinateType.ABSOLUTE)

@@ -9,7 +9,7 @@ __all__ = [
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
-    "MapOf", "PlayerSelector", "RangedLiteralInt", "Callable",
+    "MapOf", "PlayerSelector", "RangedLiteralInt", "Callable", "PosXZ",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -505,6 +505,19 @@ class Callable(Converter):
         if not isinstance(origin, acacia.AcaciaCallable):
             self.wrong_argument(origin)
         return origin
+
+class PosXZ(LiteralFloat):
+    """
+    Accepts a literal float or int and converts it to Python `float`.
+    If the value is an integer, it gets `0.5` added to it.
+    This is used for x and z axis in absolute position, as Minecraft
+    also does this (move the position to block center).
+    """
+    def convert(self, origin: acacia.AcaciaExpr) -> float:
+        res = super().convert(origin)
+        if origin.data_type.matches_cls(acacia.IntDataType):
+            res += 0.5
+        return res
 
 ### Parser
 

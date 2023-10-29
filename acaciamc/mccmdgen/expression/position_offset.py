@@ -54,12 +54,26 @@ class PosOffset(AcaciaExpr):
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]
         self.already_set: Set[int] = set()
-        _abs = self._create_setter(CoordinateType.ABSOLUTE)
-        _offset = self._create_setter(CoordinateType.RELATIVE)
-        """.offset(x, y, z) .abs(x, y, z)
+        @axe.chop
+        @axe.arg("x", axe.Nullable(axe.PosXZ()), default=None)
+        @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("z", axe.Nullable(axe.PosXZ()), default=None)
+        def _abs(compiler, x, y, z):
+            self._set(CoordinateType.ABSOLUTE, x, y, z)
+            return self
+        @axe.chop
+        @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("z", axe.Nullable(axe.LiteralFloat()), default=None)
+        def _offset(compiler, x, y, z):
+            self._set(CoordinateType.RELATIVE, x, y, z)
+            return self
+        """
+        .offset(x, y, z) .abs(x, y, z)
         "x", "y" and "z" are either "None" or int literal or float.
         "offset" sets given axes to use relative coordinate,
         while "abs" sets them to use absolute coordinate.
+        "abs" rounds integer x and z value to block center.
         """
         self.attribute_table.set(
             "offset", BinaryFunction(_offset, self.compiler))
@@ -72,21 +86,14 @@ class PosOffset(AcaciaExpr):
             for type_, value in zip(self.value_types, self.values)
         )
 
-    def _create_setter(self, offset_type: CoordinateType):
-        @axe.chop
-        @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
-        @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
-        @axe.arg("z", axe.Nullable(axe.LiteralFloat()), default=None)
-        def _setter(compiler, x, y, z):
-            for i, arg in enumerate((x, y, z)):
-                if arg is not None:
-                    if i in self.already_set:
-                        raise Error(ErrorType.POS_OFFSET_ALREADY_SET,
-                                    axis=XYZ[i])
-                    self.already_set.add(i)
-                    self.set(i, arg, offset_type)
-            return self
-        return _setter
+    def _set(self, coord_type: CoordinateType, x, y, z):
+        for i, arg in enumerate((x, y, z)):
+            if arg is not None:
+                if i in self.already_set:
+                    raise Error(ErrorType.POS_OFFSET_ALREADY_SET,
+                                axis=XYZ[i])
+                self.already_set.add(i)
+                self.set(i, arg, coord_type)
 
     @classmethod
     def local(cls, left: float, up: float, front: float, compiler):
