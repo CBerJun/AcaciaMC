@@ -17,7 +17,7 @@ There are 5 types of functions:
       virtual def bar():
         pass
     entity B extends A:
-      def bar():
+      override def bar():
         pass
     def f(a: A):
       a.foo()  # BoundMethod: must be foo in A

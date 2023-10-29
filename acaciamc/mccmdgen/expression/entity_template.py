@@ -5,6 +5,7 @@ __all__ = ["ETemplateDataType", "EntityTemplate"]
 from typing import List, Tuple, Dict, Union, Any, TYPE_CHECKING
 import itertools
 
+from acaciamc.ast import MethodQualifier
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
@@ -80,7 +81,10 @@ class _MethodDispatcher:
                            implementation, self.compiler)
 
 def _check_override(implementation: "METHODDEF_T", method: str):
-    """Check if `implementation` can be used to override a virtual method."""
+    """
+    Check if `implementation` can be used as virtual method or
+    override a virtual method.
+    """
     if isinstance(implementation, InlineFunction):
         res_type = implementation.result_type
         if res_type is None:
@@ -95,7 +99,7 @@ class EntityTemplate(AcaciaCallable):
                  field_types: Dict[str, "SupportsEntityField"],
                  field_metas: Dict[str, dict],
                  methods: Dict[str, "METHODDEF_T"],
-                 virtual_methods: Dict[str, "METHODDEF_T"],
+                 method_qualifiers: Dict[str, MethodQualifier],
                  parents: List["EntityTemplate"],
                  metas: Dict[str, AcaciaExpr],
                  compiler,
@@ -189,29 +193,37 @@ class EntityTemplate(AcaciaCallable):
             self.field_types.update(parent._orig_field_types)
             self.field_metas.update(parent._orig_field_metas)
         ## Handle methods
-        for method, implementation in virtual_methods.items():
-            for parent in self.mro_:
-                if method in parent.method_dispatchers:
-                    # This method has been declared as a virtual method
-                    # in a base template, and is still using "virtual"
-                    # in this subtemplate. Complain.
-                    raise Error(ErrorType.VIRTUAL_OVERRIDE, name=method)
-            _check_override(implementation, method)
-            disp = _MethodDispatcher(method, self.compiler)
-            self.method_dispatchers[method] = disp
-            disp.register(self, implementation)
         for method, implementation in methods.items():
+            qualifier = method_qualifiers[method]
             for parent in self.mro_:
                 if method in parent.method_dispatchers:
-                    # This method is overriding a virtual method
+                    if qualifier is MethodQualifier.override:
+                        # This method is overriding a virtual method
+                        _check_override(implementation, method)
+                        disp = parent.method_dispatchers[method]
+                        self.method_dispatchers[method] = disp
+                        disp.register(self, implementation)
+                        break
+                    else:
+                        # This method is overriding a virtual method but
+                        # did not use `override` qualifier. Complain.
+                        raise Error(ErrorType.OVERRIDE_QUALIFIER,
+                                    name=method, got=qualifier.value)
+            else:
+                if qualifier is MethodQualifier.none:
+                    # This method is a simple method
+                    self.simple_methods[method] = implementation
+                elif qualifier is MethodQualifier.virtual:
+                    # This method is a virtual method
                     _check_override(implementation, method)
-                    disp = parent.method_dispatchers[method]
+                    disp = _MethodDispatcher(method, self.compiler)
                     self.method_dispatchers[method] = disp
                     disp.register(self, implementation)
-                    break
-            else:
-                # This method is a simple method
-                self.simple_methods[method] = implementation
+                else:
+                    assert qualifier is MethodQualifier.override
+                    # This method is marked as override, but actually
+                    # did not override any virtual method. Complain.
+                    raise Error(ErrorType.NOT_OVERRIDING, name=method)
         for parent in self.mro_:
             for method, disp in parent.method_dispatchers.items():
                 if (method not in self.method_dispatchers

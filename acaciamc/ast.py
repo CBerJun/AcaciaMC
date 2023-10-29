@@ -31,6 +31,13 @@ class Operator(enum.Enum):
     and_ = 0x30
     or_ = 0x31
 
+class MethodQualifier(enum.Enum):
+    """Entity method qualifiers."""
+    # These values are shown in error messages
+    none = "(none)"
+    virtual = "virtual"
+    override = "override"
+
 class ModuleMeta:
     """Specifies a module."""
     def __init__(self, last_name: str, leading_dots=0, parents=[]):
@@ -159,10 +166,10 @@ class EntityField(Statement):  # entity field definition
 
 class EntityMethod(Statement):  # entity method definition
     def __init__(self, content: _Union[FuncDef, InlineFuncDef],
-                 virtual: bool, lineno, col):
+                 qualifier: MethodQualifier, lineno, col):
         super().__init__(lineno, col)
         self.content = content
-        self.virtual = virtual
+        self.qualifier = qualifier
 
 class EntityMeta(Statement):  # entity meta like @type
     def __init__(self, name: str, value: Expression, lineno, col):

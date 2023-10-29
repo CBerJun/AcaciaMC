@@ -598,8 +598,8 @@ class Generator(ASTVisitor):
     def visit_EntityTemplateDef(self, node: EntityTemplateDef):
         field_types = {}  # Field name to `DataType`
         field_metas = {}  # Field name to field meta
-        methods = {}  # Non-virtual method name to function `AcaciaExpr`
-        methods_virtual = {}  # Virtual method name to function `AcaciaExpr`
+        methods = {}  # Method name to function `AcaciaExpr`
+        method_qualifiers = {}  # Method name to qualifier
         metas = {}  # Meta name to value
         # Handle parents
         parents = []
@@ -622,10 +622,8 @@ class Generator(ASTVisitor):
                 field_types[decl.name], field_metas[decl.name] = res
             elif isinstance(decl, EntityMethod):
                 # `res` is `AcaciaFunction` or `InlineFunction`
-                if decl.virtual:
-                    methods_virtual[decl.content.name] = res
-                else:
-                    methods[decl.content.name] = res
+                methods[decl.content.name] = res
+                method_qualifiers[decl.content.name] = decl.qualifier
                 if isinstance(res, AcaciaFunction):
                     methods_2ndpass.append((res, decl.content))
             elif isinstance(decl, EntityMeta):
@@ -638,7 +636,7 @@ class Generator(ASTVisitor):
         # needs the template specified.
         template = EntityTemplate(
             node.name, field_types, field_metas,
-            methods, methods_virtual, parents, metas,
+            methods, method_qualifiers, parents, metas,
             self.compiler, source=self.node_location(node)
         )
         # 2nd Pass: parse the non-inline method bodies.

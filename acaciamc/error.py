@@ -118,8 +118,10 @@ class ErrorType(enum.Enum):
         'doesn\'t produce a meaningful result'
     OVERRIDE_RESULT_UNSTORABLE = 'Virtual/override inline method "{name}" ' \
         'can not use "{type_}" as result type'
-    VIRTUAL_OVERRIDE = 'No need to use "virtual" specifier on override ' \
-        'method "{name}"'
+    OVERRIDE_QUALIFIER = 'Override method "{name}" should have qualifier ' \
+        '"override", not "{got}"'
+    NOT_OVERRIDING = 'Method "{name}" is marked as "override" but did not ' \
+        'actually override a virtual method'
     POS_OFFSET_ALREADY_SET = '"{axis}" set already'
     INVALID_POS_ALIGN = 'Invalid position alignment "{align}"'
     ARRAY_INDEX_OUT_OF_BOUNDS = 'Array with length {length} got out of ' \

@@ -101,7 +101,7 @@ class Compiler:
         self.base_template = EntityTemplate(
             name="Entity",
             field_types={}, field_metas={}, methods={},
-            virtual_methods={}, parents=[], metas={}, compiler=self
+            method_qualifiers={}, parents=[], metas={}, compiler=self
         )
         # builtin types
         for name, cls in (

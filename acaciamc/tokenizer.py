@@ -101,6 +101,7 @@ class TokenType(enum.Enum):
     in_ = 'in'
     struct = 'struct'
     virtual = 'virtual'
+    override = 'override'
     false = 'False'  # must at end of keyword part
 
 KEYWORDS = {}
