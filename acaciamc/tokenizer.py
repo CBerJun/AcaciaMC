@@ -2,7 +2,7 @@
 
 __all__  = ['TokenType', 'Token', 'Tokenizer', 'StringMode']
 
-from typing import Union, List, TextIO, Tuple
+from typing import Union, List, TextIO, Tuple, Dict
 import enum
 import io
 
@@ -104,7 +104,7 @@ class TokenType(enum.Enum):
     override = 'override'
     false = 'False'  # must at end of keyword part
 
-KEYWORDS = {}
+KEYWORDS: Dict[str, TokenType] = {}
 def _kw_builder():
     # NOTE this relies on that keywords in `TokenType` enum are all
     # between `true` and `false`.
@@ -127,7 +127,15 @@ class Token:
         self.type = token_type
         self.value = value
 
-    def __str__(self):
+    def __str__(self) -> str:
+        v = self.type.value
+        if not v.isupper():
+            v = repr(v)
+        if self.value is not None:
+            v += ' (%s)' % self.value
+        return v
+
+    def __repr__(self):
         if self.value is None:
             value_str = ''
         else:
@@ -136,7 +144,6 @@ class Token:
             self.type.name, value_str,
             self.lineno, self.col
         )
-    __repr__ = __str__
 
 class StringMode(enum.Enum):
     text = 0
