@@ -109,20 +109,41 @@ class EntityGroup(VarValue):
         @axe.chop
         @axe.arg("filter", EFilterDataType, rename="filter_")
         def _select(compiler, filter_: "EntityFilter"):
+            """
+            .select(filter: Enfilter) -> EntityGroup
+            Selects entities from all entities in the world that match
+            the filter and add them to this entity group.
+            """
             cmds = filter_.dump("tag {selected} add %s" % self.tag)
             return self, cmds
         @method_of(self, "drop")
         @axe.chop
         @axe.arg("filter", EFilterDataType, rename="filter_")
         def _drop(compiler, filter_: "EntityFilter"):
-            cmds = filter_.dump("tag {selected} remove %s" % self.tag)
+            """
+            .drop(filter: Enfilter) -> EntityGroup
+            Selects entities from this entity group that match the
+            filter and remove them.
+            """
+            cmds = filter_.dump(
+                "tag {selected} remove %s" % self.tag,
+                among_tag=self.tag
+            )
             return self, cmds
         @method_of(self, "filter")
         @axe.chop
         @axe.arg("filter", EFilterDataType, rename="filter_")
         def _filter(compiler: "Compiler", filter_: "EntityFilter"):
+            """
+            .filter(filter: Enfilter) -> EntityGroup
+            Selects entities from this entity group that match the
+            filter and only keep them.
+            """
             tmp = compiler.allocate_entity_tag()
-            cmds = filter_.dump("tag {selected} add %s" % tmp)
+            cmds = filter_.dump(
+                "tag {selected} add %s" % tmp,
+                among_tag=self.tag
+            )
             cmds.append("tag @e[tag={0},tag=!{1}] remove {0}".format(
                 self.tag, tmp
             ))

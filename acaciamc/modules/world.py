@@ -852,6 +852,10 @@ def is_same_area(compiler, pos: Position, offset: PosOffset,
 @axe.arg("ent", EntityDataType)
 @axe.arg("filter", EFilterDataType)
 def is_entity(compiler: "Compiler", ent: "_EntityBase", filter: EntityFilter):
+    """
+    Select entities that match the filter and return whether given
+    entity is in those entities.
+    """
     res = AndGroup((), compiler)
     tmp = compiler.allocate_entity_tag()
     selector = ent.get_selector()

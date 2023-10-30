@@ -362,13 +362,16 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
         res.entity_type = self.entity_type
         return res
 
-    def dump(self, command: str) -> List[str]:
-        """Select entities filtered by this filter run given command.
+    def dump(self, command: str, among_tag: Optional[str] = None) -> CMDLIST_T:
+        """
+        Select entities filtered by this filter and return commands.
         The command can have "{selected}" placeholder, which will be
         replaced by the selected entity.
+        When `among_tag` is specified, the filter will begin selecting
+        among entities with that tag, instead of all entities.
         """
         res = []
-        last_tag = None
+        last_tag = among_tag
         for tag, subcmds, selector in self.data[:-1]:
             if last_tag is not None:
                 selector = selector.copy()
