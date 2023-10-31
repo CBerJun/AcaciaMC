@@ -4,10 +4,12 @@ Most important: it is compatible with both `Pos` and `Offset`.
 
 import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.tools import axe, method_of
+from acaciamc.constants import XYZ
 from .base import *
 from .types import Type
 from .position import PosDataType, Position
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
+from .integer import IntLiteral
 
 class AbsPosDataType(PosDataType, PosOffsetDataType):
     name = "AbsPos"
@@ -35,7 +37,7 @@ class AbsPos(Position, PosOffset):
         self.values = [x, y, z]
         self.value_types = [CoordinateType.ABSOLUTE for _ in range(3)]
         self.already_set = set()
-        self._update_context()
+        self._update()
         # for attr in ("dim", "local", "apply", "align"):
         #     self.attribute_table.delete(attr)
 
@@ -65,13 +67,15 @@ class AbsPos(Position, PosOffset):
     def copy(self):
         return AbsPos(*self.values, self.compiler)
 
-    def _update_context(self):
+    def _update(self):
         self._context.args = str(self)
+        for name, value in zip(XYZ, self.values):
+            self.attribute_table.set(name, IntLiteral(value, self.compiler))
 
     def set_abs(self, i: int, value: float):
         self.values[i] = value
-        self._update_context()
+        self._update()
 
     def set_offset(self, i: int, value: float):
         self.values[i] += value
-        self._update_context()
+        self._update()
