@@ -50,6 +50,12 @@ class _EntityBase(AcaciaExpr):
         return str(self)
 
     def get_selector(self) -> MCSelector:
+        res = self._get_selector()
+        if res.var == "e" or res.var == "a":
+            res.limit(1)
+        return res
+
+    def _get_selector(self) -> MCSelector:
         # Caller owns the selector
         raise NotImplementedError
 
@@ -70,7 +76,7 @@ class EntityReference(_EntityBase):
     def cmdstr(self) -> str:
         return str(self)
 
-    def get_selector(self) -> MCSelector:
+    def _get_selector(self) -> MCSelector:
         return self.selector.copy()
 
     def cast_to(self, template):
@@ -139,7 +145,7 @@ class TaggedEntity(_EntityBase, VarValue):
             "tag %s add %s" % (inst.to_str(), template.runtime_tag)
         ]
 
-    def get_selector(self) -> MCSelector:
+    def _get_selector(self) -> MCSelector:
         res = MCSelector("e")
         res.tag(self.tag)
         return res
