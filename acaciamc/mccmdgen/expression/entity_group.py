@@ -168,8 +168,11 @@ class EntityGroup(VarValue):
         @axe.chop
         def _copy(compiler):
             res = EntityGroup(self.template, compiler)
-            cmds = ["tag %s add %s" % (SELF, res.tag)]
-            return res, cmds
+            _, commands = (
+                self.data_type.get_var_initializer(res).call([], {})
+            )
+            commands.append("tag %s add %s" % (SELF, res.tag))
+            return res, commands
         @method_of(self, "clear")
         @axe.chop
         def _clear(compiler):
