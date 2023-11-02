@@ -12,6 +12,7 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
     def optimize(self):
         """Start optimizing."""
         self.opt_dead_functions()
+        self.opt_execute_as_ats()
         self.opt_tmp_variables()
         self.opt_function_inliner()
 
@@ -236,3 +237,18 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
         for caller, _ in todo.values():
             if caller not in todo:
                 _merge(caller)
+
+    def opt_execute_as_ats(self):
+        """Remove "as @s" in /execute commands. """
+        for file in self.files:
+            for i, command in enumerate(file.commands):
+                if isinstance(command, cmds.Execute):
+                    for j, subcmd in enumerate(command.subcmds):
+                        if (isinstance(subcmd, cmds.ExecuteEnv)
+                                and subcmd.cmd == "as"
+                                and subcmd.args == "@s"):
+                            del command.subcmds[j]
+                    if not command.subcmds:
+                        # /execute with only a run subcommand can get
+                        # rid of the /execute.
+                        file.commands[i] = command.runs
