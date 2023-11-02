@@ -9,7 +9,7 @@ from .base import *
 from .types import Type
 from .position import PosDataType, Position
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
-from .integer import IntLiteral
+from .float_ import Float
 
 class AbsPosDataType(PosDataType, PosOffsetDataType):
     name = "AbsPos"
@@ -70,7 +70,7 @@ class AbsPos(Position, PosOffset):
     def _update(self):
         self._context.args = str(self)
         for name, value in zip(XYZ, self.values):
-            self.attribute_table.set(name, IntLiteral(value, self.compiler))
+            self.attribute_table.set(name, Float(value, self.compiler))
 
     def set_abs(self, i: int, value: float):
         self.values[i] = value
