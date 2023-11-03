@@ -87,13 +87,13 @@ class Cmd(Command):
     def __init__(self, cmd: str, suppress_special_cmd=False):
         self.value = cmd
         # Read command name
-        for i, char in enumerate(cmd):
-            if char in _TERMINATOR_CHARS:
-                break
-        name = cmd[:i]
-        if name in ("scoreboard", "schedule", "execute", "function",
-                    "tellraw", "titleraw"):
-            if not suppress_special_cmd:
+        if cmd and not suppress_special_cmd:
+            for i, char in enumerate(cmd):
+                if char in _TERMINATOR_CHARS:
+                    break
+            name = cmd[:i]
+            if name in ("scoreboard", "schedule", "execute", "function",
+                        "tellraw", "titleraw"):
                 raise ValueError(
                     "/%s command need to be invoked by special class" % name
                 )
