@@ -83,7 +83,7 @@ def test_tokenize(src: str):
     tk = Tokenizer(io.StringIO(src))
     while True:
         token = tk.get_next_token()
-        print(token)
+        print(repr(token))
         if token.type is TokenType.end_marker:
             break
 
