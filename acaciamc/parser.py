@@ -499,21 +499,21 @@ class Parser:
         return EntityTemplateDef(name, parents, body, **pos)
 
     def command_stmt(self):
-        """command_stmt := COMMAND"""
+        """command_stmt := COMMAND_BEGIN
+          (COMMAND_STRING | (DOLLAR_LBRACE expr RBRACE))* COMMAND_END
+        """
         pos = self.current_pos
-        # NOTE the ${expressions} in COMMAND token need to be parsed
         res = []
-        for section in self.current_token.value:
-            if section[0] is StringMode.expression:
-                # we need to parse section[1] by using another Parser
-                # XXX which can be optimized
-                parser = Parser(section[1])
-                res.append((section[0], parser.expr()))
-                parser.eat(TokenType.new_line)
-                parser.eat(TokenType.end_marker)
+        self.eat(TokenType.command_begin)
+        while self.current_token.type is not TokenType.command_end:
+            if self.current_token.type is TokenType.command_string:
+                res.append(self.current_token.value)
+                self.eat()
             else:
-                res.append(section)
-        self.eat(TokenType.command)
+                self.eat(TokenType.dollar_lbrace)
+                res.append(self.expr())
+                self.eat(TokenType.rbrace)
+        self.eat()  # eat COMMAND_END
         return Command(res, **pos)
 
     def module_meta(self):
@@ -655,7 +655,7 @@ class Parser:
         }
         TOK2STMT_SIMPLE = {
             TokenType.pass_: self.pass_stmt,
-            TokenType.command: self.command_stmt,
+            TokenType.command_begin: self.command_stmt,
             TokenType.import_: self.import_stmt,
             TokenType.from_: self.from_import_stmt,
         }

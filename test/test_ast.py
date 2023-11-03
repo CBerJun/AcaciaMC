@@ -182,8 +182,25 @@ array_map_test = '''
 {}
 '''
 
+command_test = '''
+/sss
+/*  a \${ */
+/s${xxx}ss
+{}
+/*${1
+}
+f
+*/
+/*xxx${aaa *
+    some_expr +
+    # comment
+    1 \\
+        + 2
+}*/
+'''
+
 try:
-    test(multiline_test)
+    test(command_test)
 except Error as err:
     err.location.file = "<testsrc>"
     print("Error:", err)

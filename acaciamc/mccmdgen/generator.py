@@ -329,24 +329,20 @@ class Generator(ASTVisitor):
         pass
 
     def visit_Command(self, node: Command):
-        # get exact command (without formatting)
         cmd = ''
         for section in node.values:
             # expressions in commands need to be parsed
-            if section[0] is StringMode.expression:
-                expr_ast = section[1]
-                expr = self.visit(expr_ast)
+            if isinstance(section, str):
+                cmd += section
+            else:
+                expr = self.visit(section)
                 try:
                     value = expr.cmdstr()
                 except NotImplementedError:
                     err = Error(ErrorType.INVALID_CMD_FORMATTING)
-                    err.location.linecol = (expr_ast.lineno, expr_ast.col)
+                    err.location.linecol = (section.lineno, section.col)
                     self.error(err)
                 cmd += value
-            elif section[0] is StringMode.text:
-                cmd += section[1]
-            else:
-                raise ValueError
         command = cmds.Cmd(cmd, suppress_special_cmd=True)
         self.current_file.write(command)
 

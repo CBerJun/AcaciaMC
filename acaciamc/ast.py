@@ -51,9 +51,6 @@ class ModuleMeta:
                 + ("." if self.parents else "")
                 + self.last_name)
 
-# This is to export `StringMode` from tokenizer
-from acaciamc.tokenizer import StringMode
-
 #################
 ### AST NODES ###
 #################
@@ -197,7 +194,7 @@ class Assign(Statement):  # normal assign
         self.value = value
 
 class Command(Statement):  # raw command
-    def __init__(self, values: _List[_Tuple[StringMode, _Any]], lineno, col):
+    def __init__(self, values: _List[_Union[Expression, str]], lineno, col):
         super().__init__(lineno, col)
         self.values = values
 

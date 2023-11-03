@@ -1,10 +1,9 @@
 """Tokenizer (Lexer) for Acacia."""
 
-__all__  = ['TokenType', 'Token', 'Tokenizer', 'StringMode']
+__all__  = ['TokenType', 'Token', 'Tokenizer']
 
-from typing import Union, List, TextIO, Tuple, Dict
+from typing import Union, List, TextIO, Tuple, Dict, Optional
 import enum
-import io
 
 from acaciamc.error import *
 from acaciamc.constants import COLORS, COLORS_NEW, Config
@@ -37,8 +36,11 @@ class TokenType(enum.Enum):
     colon = ':'
     comma = ','
     end_marker = 'END_MARKER'  # end of file
-    # statement
-    command = 'COMMAND'
+    # command
+    command_begin = 'COMMAND_BEGIN'
+    command_string = 'COMMAND_STRING'  # value: str
+    dollar_lbrace = '${'
+    command_end = 'COMMAND_END'
     # operator
     ## binary operators
     plus = '+'
@@ -67,15 +69,11 @@ class TokenType(enum.Enum):
     walrus = ':='
     # expressions
     ## literal
-    integer = 'INTEGER'  # value:int = this integer
-    string = 'STRING'
-    # string value: list[tuple(StringMode, Any)]
-    # Every tuple in list means a part of string, where mode can be:
-    #  text: Normal text
-    #  expression: A formatted expression (e.g. "Value: ${expr}")
-    float_ = 'FLOAT'  # value:float = this float
+    integer = 'INTEGER'  # value: int
+    string = 'STRING'  # value: str
+    float_ = 'FLOAT'  # value: float
     ## id
-    identifier = 'IDENTIFIER'  # value:str = this id
+    identifier = 'IDENTIFIER'  # value: str
     # keywords
     true = 'True'  # must at beginning of keyword part
     def_ = 'def'
@@ -145,63 +143,67 @@ class Token:
             self.lineno, self.col
         )
 
-class StringMode(enum.Enum):
-    text = 0
-    expression = 1
+class _CommandManager:
+    def __init__(self, owner: 'Tokenizer') -> None:
+        self.lineno = owner.current_lineno
+        self.col = owner.current_col
+        self.owner = owner
+        self._texts = ""
+        self._text_ln = 0
+        self._text_col = 0
+        self._tokens: List[Token] = [
+            Token(TokenType.command_begin, self.lineno, self.col)
+        ]
 
-class CommandToken(Token):
-    """A command token, which needs formatted ${expressions}"""
-    def __init__(self, lineno, col):
-        super().__init__(TokenType.command, lineno, col, value=[])
-        self._texts = ''
-
-    def _dump_text(self):
-        """Dump stacked _texts into a tuple (StringMode.text, ...)"""
+    def _dump_texts(self):
         if self._texts:
-            self.value.append((StringMode.text, self._texts))
-            self._texts = ''
+            self._tokens.append(Token(
+                TokenType.command_string,
+                self._text_ln, self._text_col, self._texts
+            ))
+            self._texts = ""
 
     def add_text(self, text: str):
-        """Add text to command content"""
+        if not self._texts:
+            self._text_ln = self.owner.current_lineno
+            self._text_col = self.owner.current_col
         self._texts += text
 
-    def add_expression(self, tokenizer: "Tokenizer"):
-        """Add a formatted expression to command content
-        tokenizer: `Tokenizer` that tokenize the expression"""
-        # XXX adding an expression to command now requires creating a new
-        # Tokenizer for each expressions, which can be optimized.
-        ## first empty _texts
-        self._dump_text()
-        ## then add expression
-        self.value.append((StringMode.expression, tokenizer))
+    def add_token(self, token: Token):
+        self._dump_texts()
+        self._tokens.append(token)
 
-    def command_end(self):
-        """Declare that the command has ended and there will not be
-        any contents added.
-        """
-        self._dump_text()
+    def get_tokens(self) -> List[Token]:
+        res = self._tokens.copy()
+        self._tokens.clear()
+        return res
+
+    def finish(self):
+        self._dump_texts()
+        self._tokens.append(Token(
+            TokenType.command_end, self.owner.current_lineno,
+            self.owner.current_col
+        ))
 
 class Tokenizer:
-    def __init__(self, src: TextIO, _ln_offset=0, _col_offset=0):
-        """
-        src: source code
-        _ln_offset, _col_offset: position offset
-        """
+    def __init__(self, src: TextIO):
+        """src: source code"""
         self.src = src
         self.current_char = ''
-        self._col_offset = _col_offset
-        self.current_lineno = _ln_offset
+        self.current_lineno = 0
         self.current_col = 0
         self.position = 0  # string pointer
         self.buffer_tokens: List[Token] = []
         self.parens = 0
         self.braces = 0
+        self.dollar_lbrace = False
         self.prespaces = 0
         self.indent_record: List[int] = [0]
         self.indent_len: int = 1  # always = len(self.indent_record)
         self.last_token_newline = True  # whether last token is new_line
         self.last_line_continued = False
-        self.continued_command: Union[None, CommandToken] = None
+        self.inside_command: Optional[_CommandManager] = None
+        self.continued_command = False
         self.continued_comment = False
         self.continued_comment_pos: Union[None, Tuple[int, int]] = None
 
@@ -218,7 +220,7 @@ class Tokenizer:
         """Read next char and push pointer."""
         if self.position >= self.line_len:
             self.current_char = None
-            self.current_col = self.line_len + self._col_offset + 1
+            self.current_col = self.line_len + 1
         else:
             self.current_char = self.current_line[self.position]
             self.position += 1
@@ -245,7 +247,7 @@ class Tokenizer:
         self.current_line = self.src.readline()
         self.line_len = len(self.current_line)
         self.current_lineno += 1
-        self.current_col = self._col_offset
+        self.current_col = 0
         self.position = 0
         res: List[Token] = []
         self.forward()
@@ -280,11 +282,17 @@ class Tokenizer:
         else:
             if self.continued_comment:
                 self.handle_long_comment()
-            if self.continued_command:
-                token = self.handle_long_command()
-                if token is not None:
-                    res.append(token)
         while True:
+            if self.inside_command and not self.dollar_lbrace:
+                if self.continued_command:
+                    res.extend(self.handle_long_command())
+                    assert self.continued_command or not self.dollar_lbrace
+                    # If dollar lbrace is not closed, then the long
+                    # command should not have ended. Instead the
+                    # tokenizer would keep tokenizing as normal.
+                    # e.g. `/* ${ */` results in unexpected token '*'.
+                else:
+                    res.extend(self.handle_command())
             # skip spaces
             self.skip_spaces()
             # check end of line
@@ -310,17 +318,11 @@ class Tokenizer:
                 res.append(self.handle_name())
             elif self.current_char == '/' and not res:
                 # Only read when "/" is first character of this line
-                if self.peek() == '*':
-                    self.continued_command = CommandToken(
-                        self.current_lineno, self.current_col
-                    )
-                    self.forward()  # skip "/"
+                self.forward()  # skip "/"
+                self.inside_command = _CommandManager(self)
+                if self.current_char == '*':
+                    self.continued_command = True
                     self.forward()  # skip "*"
-                    token = self.handle_long_command()
-                    if token is not None:
-                        res.append(token)
-                else:
-                    res.append(self.handle_command())
             elif self.current_char == '"':
                 res.append(self.handle_string())
             else:  ## 2-char token
@@ -349,11 +351,17 @@ class Tokenizer:
                             if self.parens < 0:
                                 self.error(ErrorType.UNMATCHED_PAREN)
                         elif token_type is TokenType.rbrace:
-                            self.braces -= 1
-                            if self.braces < 0:
-                                self.error(ErrorType.UNMATCHED_BRACE)
+                            if self.dollar_lbrace:
+                                self.dollar_lbrace = False
+                            else:
+                                self.braces -= 1
+                                if self.braces < 0:
+                                    self.error(ErrorType.UNMATCHED_BRACE)
                         res.append(_gen_and_forward(token_type, 1))
         # Now self.current_char is either '\n', '\\' or None (EOF)
+        if self.dollar_lbrace and not self.continued_command:
+            # Single line command can't use implicit line continuation.
+            self.error(ErrorType.UNCLOSED_FEXPR)
         has_content = bool(res)
         if self.current_char == '\n':
             if has_content:
@@ -371,8 +379,8 @@ class Tokenizer:
                            *self.continued_comment_pos)
             if self.continued_command:
                 self.error(ErrorType.UNCLOSED_LONG_COMMAND,
-                           self.continued_command.lineno,
-                           self.continued_command.col)
+                           self.inside_command.lineno,
+                           self.inside_command.col)
             if self.last_line_continued:
                 self.error(ErrorType.EOF_AFTER_CONTINUATION)
             if self.is_in_bracket():
@@ -592,64 +600,64 @@ class Tokenizer:
         self.forward()  # skip last '"'
         return Token(TokenType.string, lineno=ln, col=col, value=res)
 
-    # following 2 methods handle commands, which are very similar to
-    # method `skip_comment` and `skip_long_comment` above
-
-    def _command_unit(self, result_token: CommandToken):
-        """Used by method `handle_command` and `handle_long_command`
-        read a unit in command (a normal char, \$ escape,
-        formatted ${expr}, etc.) and add it to given `result_token`.
-        """
-        peek = self.peek()
-        if self.current_char == '\\' and peek == '$':
-            # special escape in commands
-            result_token.add_text('$')
-            self.forward()  # skip "$"
-        elif self.current_char == '$' and peek == '{':
-            # formatted expression; read until "}"
-            self.forward()
-            self.forward()  # skip "${"
-            expr_str = ''
-            start_ln, start_col = self.current_lineno, self.current_col
-            while self.current_char != '}':
-                # check EOF
-                if self.current_char is None or self.current_char == '\n':
-                    self.error(ErrorType.UNCLOSED_FEXPR,
-                               lineno=start_ln, col=start_col)
-                expr_str += self.current_char
-                self.forward()
-            self.forward()  # skip "}"
-            # create the Tokenizer
-            tokenizer = Tokenizer(io.StringIO(expr_str),
-                                  start_ln - 1, start_col - 1)
-            result_token.add_expression(tokenizer)
-        else:  # a normal character
-            result_token.add_text(self._read_escapable_char())
-
-    def handle_long_command(self) -> Union[CommandToken, None]:
-        """Help read a multi-line /*...*/ COMMAND token. Return token
-        if we finished, or None otherwise.
-        """
+    def handle_long_command(self) -> List[Token]:
+        """Help read a multi-line /*...*/ command. Return the tokens."""
+        mgr = self.inside_command
         while not (self.current_char == '*' and self.peek() == '/'):
-            # check whether reach end of line
+            # check whether we reach end of line
             if self.current_char in ("\n", None):
                 # replace "\n" with " " (space)
-                self.continued_command.add_text(' ')
-                return
-            # read unit
-            self._command_unit(self.continued_command)
-        self.forward()  # skip "*"
-        self.forward()  # skip "/"
-        self.continued_command.command_end()
-        token = self.continued_command
-        self.continued_command = None
-        return token
+                mgr.add_text(' ')
+                break
+            peek = self.peek()
+            if self.current_char == '\\' and peek == '$':
+                # special escape in commands
+                mgr.add_text('$')
+                self.forward()  # skip "\\"
+                self.forward()  # skip "$"
+            elif self.current_char == '$' and peek == '{':
+                # formatted expression
+                mgr.add_token(Token(
+                    TokenType.dollar_lbrace, lineno=self.current_lineno,
+                    col=self.current_col
+                ))
+                self.dollar_lbrace = True
+                self.forward()
+                self.forward()  # skip "${"
+                break
+            else:  # a normal character
+                mgr.add_text(self._read_escapable_char())
+        else:
+            mgr.finish()
+            self.forward()  # skip "*"
+            self.forward()  # skip "/"
+            self.continued_command = False
+            self.inside_command = None
+        return mgr.get_tokens()
 
-    def handle_command(self):
-        """Read a single-line / COMMAND token."""
-        token = CommandToken(self.current_lineno, self.current_col)
-        self.forward()  # skip slash "/"
+    def handle_command(self) -> List[Token]:
+        """Help read a single line command. Return the tokens."""
+        mgr = self.inside_command
         while self.current_char is not None and self.current_char != '\n':
-            self._command_unit(token)
-        token.command_end()
-        return token
+            peek = self.peek()
+            if self.current_char == '\\' and peek == '$':
+                # special escape in commands
+                mgr.add_text('$')
+                self.forward()  # skip "\\"
+                self.forward()  # skip "$"
+            elif self.current_char == '$' and peek == '{':
+                # formatted expression
+                mgr.add_token(Token(
+                    TokenType.dollar_lbrace, lineno=self.current_lineno,
+                    col=self.current_col
+                ))
+                self.dollar_lbrace = True
+                self.forward()
+                self.forward()  # skip "${"
+                break
+            else:  # a normal character
+                mgr.add_text(self._read_escapable_char())
+        else:
+            mgr.finish()
+            self.inside_command = None
+        return mgr.get_tokens()
