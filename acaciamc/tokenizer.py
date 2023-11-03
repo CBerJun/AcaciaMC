@@ -600,6 +600,34 @@ class Tokenizer:
         self.forward()  # skip last '"'
         return Token(TokenType.string, lineno=ln, col=col, value=res)
 
+    def _command_unit(self) -> bool:
+        """
+        Helper for parsing commands.
+        Read a character / escape sequence / start of a formatted
+        expression. Return True if we got a formatted expression.
+        """
+        mgr = self.inside_command
+        peek = self.peek()
+        do_break = False
+        if self.current_char == '\\' and peek == '$':
+            # special escape in commands
+            mgr.add_text('$')
+            self.forward()  # skip "\\"
+            self.forward()  # skip "$"
+        elif self.current_char == '$' and peek == '{':
+            # formatted expression
+            mgr.add_token(Token(
+                TokenType.dollar_lbrace, lineno=self.current_lineno,
+                col=self.current_col
+            ))
+            self.dollar_lbrace = True
+            self.forward()
+            self.forward()  # skip "${"
+            do_break = True
+        else:  # a normal character
+            mgr.add_text(self._read_escapable_char())
+        return do_break
+
     def handle_long_command(self) -> List[Token]:
         """Help read a multi-line /*...*/ command. Return the tokens."""
         mgr = self.inside_command
@@ -609,24 +637,8 @@ class Tokenizer:
                 # replace "\n" with " " (space)
                 mgr.add_text(' ')
                 break
-            peek = self.peek()
-            if self.current_char == '\\' and peek == '$':
-                # special escape in commands
-                mgr.add_text('$')
-                self.forward()  # skip "\\"
-                self.forward()  # skip "$"
-            elif self.current_char == '$' and peek == '{':
-                # formatted expression
-                mgr.add_token(Token(
-                    TokenType.dollar_lbrace, lineno=self.current_lineno,
-                    col=self.current_col
-                ))
-                self.dollar_lbrace = True
-                self.forward()
-                self.forward()  # skip "${"
+            if self._command_unit():
                 break
-            else:  # a normal character
-                mgr.add_text(self._read_escapable_char())
         else:
             mgr.finish()
             self.forward()  # skip "*"
@@ -639,24 +651,8 @@ class Tokenizer:
         """Help read a single line command. Return the tokens."""
         mgr = self.inside_command
         while self.current_char is not None and self.current_char != '\n':
-            peek = self.peek()
-            if self.current_char == '\\' and peek == '$':
-                # special escape in commands
-                mgr.add_text('$')
-                self.forward()  # skip "\\"
-                self.forward()  # skip "$"
-            elif self.current_char == '$' and peek == '{':
-                # formatted expression
-                mgr.add_token(Token(
-                    TokenType.dollar_lbrace, lineno=self.current_lineno,
-                    col=self.current_col
-                ))
-                self.dollar_lbrace = True
-                self.forward()
-                self.forward()  # skip "${"
+            if self._command_unit():
                 break
-            else:  # a normal character
-                mgr.add_text(self._read_escapable_char())
         else:
             mgr.finish()
             self.inside_command = None
