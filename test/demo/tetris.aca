@@ -167,14 +167,14 @@ def get_shape_size(shape: int, rotation: int) -> Size:
     result: Size
     for s in SHAPE_SIZES:
         if shape == s:
-            size_arr -> SHAPE_SIZES.get(s)
+            size_arr -> SHAPE_SIZES[s]
             if rotation == ROT_CLOCKWISE or rotation == ROT_CCLOCKWISE:
                 # When rotated, width is height, vice versa
-                result.height = size_arr.get(0)
-                result.width = size_arr.get(1)
+                result.height = size_arr[0]
+                result.width = size_arr[1]
             else:
-                result.width = size_arr.get(0)
-                result.height = size_arr.get(1)
+                result.width = size_arr[0]
+                result.height = size_arr[1]
 
 inline def traverse_shape(dummy: PosDummy, shape: int, rotation: int, action):
     #*
@@ -183,23 +183,23 @@ inline def traverse_shape(dummy: PosDummy, shape: int, rotation: int, action):
     *#
     inline def do_action(arr_of_arr):
         for arr in arr_of_arr:
-            action(Pos(dummy).offset(x=arr.get(0), z=arr.get(1)))
+            action(Pos(dummy).offset(x=arr[0], z=arr[1]))
     for s in SHAPE_PATTERNS_360:
         if shape == s:
-            shape_def -> SHAPE_PATTERNS_360.get(s)
+            shape_def -> SHAPE_PATTERNS_360[s]
             for r in shape_def:
                 if rotation == r:
-                    do_action(shape_def.get(r))
+                    do_action(shape_def[r])
     for s in SHAPE_PATTERNS_180:
         if shape == s:
-            shape_def -> SHAPE_PATTERNS_180.get(s)
+            shape_def -> SHAPE_PATTERNS_180[s]
             if rotation == ROT_NONE or rotation == ROT_180:
-                do_action(shape_def.get(0))
+                do_action(shape_def[0])
             else:
-                do_action(shape_def.get(1))
+                do_action(shape_def[1])
     for s in SHAPE_PATTERNS_90:
         if shape == s:
-            do_action(SHAPE_PATTERNS_90.get(s))
+            do_action(SHAPE_PATTERNS_90[s])
 
 def draw_shape(dummy: PosDummy, shape: int, rotation: int):
     #* Render current shape at `dummy`. *#
@@ -207,7 +207,7 @@ def draw_shape(dummy: PosDummy, shape: int, rotation: int):
         for s in SHAPE_COLORS:
             if shape == s:
                 block -> world.Block(
-                    "concrete", {"color": SHAPE_COLORS.get(s)}
+                    "concrete", {"color": SHAPE_COLORS[s]}
                 )
                 world.setblock(pos, block)
     traverse_shape(dummy, shape, rotation, action=place_block)
@@ -338,12 +338,12 @@ def rotate():
             if type == shape_type:
                 is_contained = True
         if is_contained:
-            rot_def -> SHAPE_ROTATE_MOVE.get(types)
+            rot_def -> SHAPE_ROTATE_MOVE[types]
             for rotation in rot_def:
                 if rotation == shape_rotation:
-                    arr -> rot_def.get(rotation)
-                    new_col += arr.get(0)
-                    new_row += arr.get(1)
+                    arr -> rot_def[rotation]
+                    new_col += arr[0]
+                    new_row += arr[1]
     # Make sure the shape is not out of game field after rotation
     # This is a simple alternative to Wall Kicks (see link above).
     new_size := get_shape_size(shape_type, new_rotation)

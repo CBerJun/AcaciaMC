@@ -136,7 +136,7 @@ for c in COLORS:
     if c == i:
         world.setblock(
             Pos(0, -50, 0),
-            world.Block("concrete", {"color": COLORS.get(c)})
+            world.Block("concrete", {"color": COLORS[c]})
         )
 ```
 

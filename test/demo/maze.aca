@@ -106,7 +106,7 @@ def visit(pos: Dummy):
     world.setblock(Pos(pos).offset(y=-1), BLOCK_VISITED)
     # For adjacent cells:
     for offset in OFFSET_TABLE:
-        neighbor -> Pos(pos).offset(x=offset.get(0), z=offset.get(1))
+        neighbor -> Pos(pos).offset(x=offset[0], z=offset[1])
         neighbor_block -> neighbor.offset(y=-1)
         neighbor_frontier: Engroup(Frontier)
         neighbor_frontier.select(Enfilter().distance_from(neighbor, max=0.1))
@@ -124,7 +124,7 @@ def visit(pos: Dummy):
 def choose(frontier: Frontier):
     world.setblock(Pos(frontier).offset(y=-1), BLOCK_PATH)
     for offset in OFFSET_TABLE:
-        neighbor -> Pos(frontier).offset(x=offset.get(0), z=offset.get(1))
+        neighbor -> Pos(frontier).offset(x=offset[0], z=offset[1])
         if world.is_block(neighbor.offset(y=-1), BLOCK_UNVISITED):
             e := Dummy(pos=neighbor)
             visit(e)

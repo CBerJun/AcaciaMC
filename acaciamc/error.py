@@ -93,6 +93,7 @@ class ErrorType(enum.Enum):
     SELF_OUT_OF_SCOPE = 'Found "self" out of entity method'
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
+    SUBSCRIPT_TOO_MANY_ARGS = 'Too many arguments for subscript'
     UNCALLABLE = '"{expr_type}" is not callable'
     NOT_ITERABLE = '"{type_}" is not iterable'
     NO_GETITEM = '"{type_}" is not subscriptable'
@@ -132,6 +133,7 @@ class ErrorType(enum.Enum):
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
     ARRAY_MULTIMES_NON_LITERAL = 'Array can only be multiplied by literal int'
+    ARRAY_INDEX_NON_LITERAL = 'Array index must be a literal int'
     RESULT_UNDEFINED = '"result" accessed before it gets defined'
     RESULT_BIND_OUT_OF_SCOPE = "Can't bind to result when out of function " \
         "or inside non-inline function"

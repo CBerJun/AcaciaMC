@@ -4,7 +4,7 @@ Only a few literal values are supported as keys.
 
 __all__ = ["MapType", "MapDataType", "Map"]
 
-from typing import Dict, Hashable, Iterable
+from typing import Dict, Hashable, Iterable, Tuple
 from itertools import repeat
 
 from .base import *
@@ -36,7 +36,7 @@ class MapType(Type):
     def datatype_hook(self):
         return MapDataType()
 
-class Map(AcaciaExpr, ImmutableMixin):
+class Map(SupportsGetItem, SupportsSetItem):
     def __init__(self, keys: Iterable[AcaciaExpr],
                  values: Iterable[AcaciaExpr], compiler):
         super().__init__(MapDataType(), compiler)
@@ -44,43 +44,40 @@ class Map(AcaciaExpr, ImmutableMixin):
         self.py_key2key: Dict[Hashable, AcaciaExpr] = {}
         for key, value in zip(keys, values):
             self.set(key, value)
-        @method_of(self, "get")
-        @axe.chop
-        @axe.arg("key", axe.AnyValue())
-        def _get(compiler, key: AcaciaExpr):
-            return self.get(key)
-        @method_of(self, "set")
-        @axe.chop
-        @axe.arg("key", axe.AnyValue())
-        @axe.arg("value", axe.AnyValue())
-        @transform_immutable(self)
-        def _set(self: Map, compiler, key: AcaciaExpr, value: AcaciaExpr):
-            self.set(key, value)
-            return self
         @method_of(self, "update")
         @axe.chop
         @axe.arg("other", MapDataType)
-        @transform_immutable(self)
         def _update(self: Map, compiler, other: Map):
             self.dict.update(other.dict)
             self.py_key2key.update(other.py_key2key)
-            return self
         @method_of(self, "delete")
         @axe.chop
         @axe.arg("key", axe.AnyValue())
-        @transform_immutable(self)
         def _delete(self: Map, compiler, key: AcaciaExpr):
             self.delete(key)
-            return self
-
-    def copy(self) -> "Map":
-        res = Map([], [], self.compiler)
-        res.dict = self.dict.copy()
-        res.py_key2key = self.py_key2key.copy()
-        return res
+        @method_of(self, "copy")
+        @axe.chop
+        def _copy(self: Map, compiler):
+            res = Map([], [], self.compiler)
+            res.dict = self.dict.copy()
+            res.py_key2key = self.py_key2key.copy()
+            return res
 
     def iterate(self) -> ITERLIST_T:
         return list(self.py_key2key.values())
+
+    def _handle_subscript(self, subscripts: Tuple[AcaciaExpr]) -> AcaciaExpr:
+        if len(subscripts) != 1:
+            raise Error(ErrorType.SUBSCRIPT_TOO_MANY_ARGS)
+        return subscripts[0]
+
+    def getitem(self, subscripts: Tuple[AcaciaExpr]) -> CALLRET_T:
+        key = self._handle_subscript(subscripts)
+        return self.get(key)
+
+    def setitem(self, subscripts: Tuple[AcaciaExpr], value: AcaciaExpr):
+        key = self._handle_subscript(subscripts)
+        self.set(key, value)
 
     def _get_key(self, key: AcaciaExpr):
         try:
