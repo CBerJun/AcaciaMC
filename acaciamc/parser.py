@@ -201,6 +201,7 @@ class Parser:
         level 1 expression := expr_l0 (
           (POINT IDENTIFIER)
           | call_table
+          | (LBRACKET expr (COMMA expr)* COMMA? RBRACKET)
           | (AT expr_l0)
         )*
         """
@@ -218,6 +219,20 @@ class Parser:
                 lineno=node.lineno, col=node.col
             )
 
+        def _subscript(node: Expression):
+            self.eat(TokenType.lbracket)
+            subscripts = []
+            while self.current_token.type is not TokenType.rbracket:
+                subscripts.append(self.expr())
+                if self.current_token.type is TokenType.comma:
+                    self.eat()  # eat COMMA
+                else:
+                    break
+            self.eat(TokenType.rbracket)
+            return Subscript(
+                node, subscripts, lineno=node.lineno, col=node.col
+            )
+
         def _entity_cast(node: Expression):
             self.eat(TokenType.at)
             object_ = self.expr_l0()
@@ -230,6 +245,8 @@ class Parser:
                 node = _attribute(node)
             elif self.current_token.type is TokenType.lparen:
                 node = _call(node)
+            elif self.current_token.type is TokenType.lbracket:
+                node = _subscript(node)
             elif self.current_token.type is TokenType.at:
                 node = _entity_cast(node)
             else:
@@ -678,37 +695,40 @@ class Parser:
             TokenType.divide_equal: Operator.divide,
             TokenType.mod_equal: Operator.mod
         }
-        def _check_assign_target(node):
-            # check if the assign target is valid
-            if not isinstance(node, (Attribute, Identifier, RawScore, Result)):
-                self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
+        BINDABLE = (Attribute, Identifier, Result, Subscript)
+        ASSIGNABLE = BINDABLE + (RawScore,)
+        VARDEFABLE = (Identifier, Result)
 
-        # assignable := attribute | identifier | raw_score | result
+        # assignable := expr
+        # that is Attribute, Identifier, RawScore, Subscript or Result
         if self.current_token.type is TokenType.equal:
             # assign_stmt := assignable EQUAL expr
             self.eat()  # eat equal
-            _check_assign_target(expr)
+            if not isinstance(expr, ASSIGNABLE):
+                self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
             node = Assign(expr, self.expr(), **pos)
         elif self.current_token.type in AUG_ASSIGN:
             # aug_assign_stmt := assignable (PLUS_EQUAL |
             #   MINUS_EQUAL | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
             operator = AUG_ASSIGN[self.current_token.type]
             self.eat()  # eat operator
-            _check_assign_target(expr)
+            if not isinstance(expr, ASSIGNABLE):
+                self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
             node = AugmentedAssign(expr, operator, self.expr(), **pos)
         elif self.current_token.type is TokenType.arrow:
-            # bind_stmt := (attribute | identifier | result) ARROW expr
+            # bind_stmt := bindable ARROW expr
+            #   where bindable is assignable that is not RawScore
             self.eat()  # eat arrow
-            if not isinstance(expr, (Attribute, Identifier, Result)):
-                self.error(ErrorType.INVALID_BIND_TARGET)
+            if not isinstance(expr, BINDABLE):
+                self.error(ErrorType.INVALID_BIND_TARGET, **pos)
             right = self.expr()  # get assign value
             node = Binding(expr, right, **pos)
         elif self.current_token.type is TokenType.colon:
             # var_def_stmt := (identifier | result) COLON type_spec
             #   ((EQUAL expr) | (BAR call_table)))?
             self.eat()  # eat colon
-            if not isinstance(expr, (Identifier, Result)):
-                self.error(ErrorType.INVALID_VARDEF_STMT)
+            if not isinstance(expr, VARDEFABLE):
+                self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
             type_ = self.type_spec()
             if self.current_token.type is TokenType.equal:
                 self.eat()  # eat equal
@@ -723,8 +743,8 @@ class Parser:
         elif self.current_token.type is TokenType.walrus:
             # auto_var_def_stmt := (identifier | result) WALRUS expr
             self.eat()  # eat walrus
-            if not isinstance(expr, (Identifier, Result)):
-                self.error(ErrorType.INVALID_VARDEF_STMT)
+            if not isinstance(expr, VARDEFABLE):
+                self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
             node = VarDef(expr, type_=None, value=self.expr(),
                           args=None, **pos)
         else:  # just an expr

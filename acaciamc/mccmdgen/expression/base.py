@@ -2,7 +2,8 @@
 
 __all__ = [
     # Base classes
-    'AcaciaExpr', 'VarValue', 'AcaciaCallable',
+    'AcaciaExpr', 'VarValue', 'AcaciaCallable', 'SupportsGetItem',
+    'SupportsSetItem',
     # Utils
     'ArgumentHandler', 'export_need_tmp',
     'ImmutableMixin', 'transform_immutable',
@@ -258,6 +259,22 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
          1st element: Result of this call
          2nd element: Commands to run
         """
+        pass
+
+class SupportsGetItem(AcaciaExpr, metaclass=ABCMeta):
+    """Acacia expressions that can be subscripted and be a rvalue."""
+    @abstractmethod
+    def getitem(self, subscripts: Tuple[AcaciaExpr]) \
+            -> Union[CALLRET_T, AcaciaExpr]:
+        """Implements subscripting. Return value is same as `call`."""
+        pass
+
+class SupportsSetItem(AcaciaExpr, metaclass=ABCMeta):
+    """Acacia expressions that can be subscripted and be a lvalue."""
+    @abstractmethod
+    def setitem(self, subscripts: Tuple[AcaciaExpr],
+                value: AcaciaExpr) -> Optional[CMDLIST_T]:
+        """Implements assignment. Return value is commands to run."""
         pass
 
 class ImmutableMixin:

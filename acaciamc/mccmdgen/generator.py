@@ -113,7 +113,7 @@ class Generator(ASTVisitor):
             self.error_c(ErrorType.INVALID_ASSIGN_TARGET)
 
     def register_symbol(
-            self, target_node: Union[Identifier, Attribute, Result],
+            self, target_node: Union[Identifier, Attribute, Result, Subscript],
             target_value: AcaciaExpr
         ):
         """Register a value to a symbol table according to AST.
@@ -141,6 +141,15 @@ class Generator(ASTVisitor):
             else:
                 assert self.ctx.function_state == FUNC_NONE
                 self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
+        elif isinstance(target_node, Subscript):
+            object_ = self.visit(target_node.object)
+            subscripts = tuple(map(self.visit, target_node.subscripts))
+            if not isinstance(object_, SupportsSetItem):
+                self.error_c(ErrorType.NO_SETITEM,
+                             type_=str(object_.data_type))
+            commands = object_.setitem(subscripts, target_value)
+            if commands is not None:
+                self.current_file.extend(commands)
         else:
             raise TypeError
 
@@ -937,6 +946,22 @@ class Generator(ASTVisitor):
             self.error_c(ErrorType.WRONG_RESULT_TYPE,
                          expect=str(expect), got=str(got))
         return result, file.commands
+
+    # subscript
+
+    def visit_Subscript(self, node: Subscript):
+        object_ = self.visit(node.object)
+        if not isinstance(object_, SupportsGetItem):
+            self.error_c(ErrorType.NO_GETITEM,
+                         type_=str(object_.data_type))
+        subscripts = tuple(map(self.visit, node.subscripts))
+        res = object_.getitem(subscripts)
+        if isinstance(res, AcaciaExpr):
+            expr = res
+        else:
+            expr, commands = res
+            self.current_file.extend(commands)
+        return expr
 
     # entity cast
 

@@ -30,6 +30,8 @@ class TokenType(enum.Enum):
     new_line = 'NEW_LINE'
     lparen = '('
     rparen = ')'
+    lbracket = '['
+    rbracket = ']'
     lbrace = '{'
     rbrace = '}'
     bar = '|'
@@ -195,6 +197,7 @@ class Tokenizer:
         self.position = 0  # string pointer
         self.buffer_tokens: List[Token] = []
         self.parens = 0
+        self.brackets = 0
         self.braces = 0
         self.dollar_lbrace = False
         self.prespaces = 0
@@ -240,7 +243,7 @@ class Tokenizer:
         return self.buffer_tokens.pop(0)
 
     def is_in_bracket(self) -> bool:
-        return self.parens > 0 or self.braces > 0
+        return self.parens > 0 or self.brackets > 0 or self.braces > 0
 
     def parse_line(self) -> List[Token]:
         """Parse a line."""
@@ -344,12 +347,18 @@ class Tokenizer:
                     else:
                         if token_type is TokenType.lparen:
                             self.parens += 1
+                        elif token_type is TokenType.lbracket:
+                            self.brackets += 1
                         elif token_type is TokenType.lbrace:
                             self.braces += 1
                         elif token_type is TokenType.rparen:
                             self.parens -= 1
                             if self.parens < 0:
                                 self.error(ErrorType.UNMATCHED_PAREN)
+                        elif token_type is TokenType.rbracket:
+                            self.brackets -= 1
+                            if self.brackets < 0:
+                                self.error(ErrorType.UNMATCHED_BRACKET)
                         elif token_type is TokenType.rbrace:
                             if self.dollar_lbrace:
                                 self.dollar_lbrace = False

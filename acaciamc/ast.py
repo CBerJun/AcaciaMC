@@ -300,6 +300,13 @@ class Attribute(Expression):  # attr of an expr
         self.object = object_
         self.attr = attr
 
+class Subscript(Expression):  # value[v1, v2]
+    def __init__(self, object_: Expression, subscripts: _List[Expression],
+                 lineno, col):
+        super().__init__(lineno, col)
+        self.object = object_
+        self.subscripts = subscripts
+
 class EntityCast(Expression):  # Template@some_entity
     def __init__(self, object_: Expression, template: Expression, lineno, col):
         super().__init__(lineno, col)
