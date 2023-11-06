@@ -152,8 +152,8 @@ shape_type: int
 shape_rotation: int
 running: bool = False
 score: int = 0
-player_group: Engroup
-dummy_group: Engroup(PosDummy)
+player_group: Engroup[Entity]
+dummy_group: Engroup[PosDummy]
 
 def get_dummy() -> PosDummy:
     #*

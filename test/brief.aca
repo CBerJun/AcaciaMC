@@ -153,7 +153,7 @@ import print
 print.tell("Hello world!")
 # Show title "Chapter I" on a random player's screen, for 10 seconds
 # (We'll talk about Engroup later.)
-group: Engroup
+group: Engroup[Entity]
 group.select(Enfilter().random("player", limit=1))
 print.title("Chapter I", group, stay_time=200)
 # Show everyone the value of `x` in the form "Value of X: ..." above actionbar
@@ -239,13 +239,13 @@ entity Player:
             print.format("Your score: %0", self.score),
             self, mode=print.ACTIONBAR
         )
-# As mentioned above, entity only represents one single entity, While
+# As mentioned above, entity only represents one single entity, while
 # entity group represents a group of entity and there can be zero or
 # hundreds of entities inside this group. Entity groups also have their
 # template, which is the template that entities inside this group use.
 # Create a group of Player:
-player_group: Engroup(Player)
-# Engroup(Template) means a group of entities of Template template.
+player_group: Engroup[Player]
+# Engroup[Template] means a group of entities of Template template.
 # You can select some existing entities using entity filter:
 player_group.select(Enfilter()
     .is_type("player")
@@ -268,7 +268,6 @@ for player in player_group:
 # Most of functions in `world` module accepts both single entity and an
 # entity group. This moves entities in `player_group` 2 blocks lower:
 world.move(player_group, y=-2)
-# A bare `Engroup` is equivalent to `Engroup(Entity)`.
 
 ## Position and rotation
 # Position and rotation are pretty simple.

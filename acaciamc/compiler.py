@@ -110,7 +110,7 @@ class Compiler:
             ('Pos', PosType),
             ('Rot', RotType),
             ('Offset', PosOffsetType),
-            ('Engroup', EGroupType),
+            ('Engroup', EGroupGeneric),
             ('Enfilter', EFilterType),
             ('array', ArrayType),
             ('map', MapType),

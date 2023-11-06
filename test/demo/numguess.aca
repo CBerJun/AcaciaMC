@@ -11,7 +11,7 @@ import schedule
 MAX_ANSWER -> 999  # the last digit should be 9
 answer: int
 guess: int
-player: Engroup
+player: Engroup[Entity]
 
 interface input:
     # Input 1 digit

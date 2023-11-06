@@ -1,16 +1,12 @@
 """Entity group -- a group of entities."""
 
-__all__ = [
-    "EGroupType", "EGroupDataType", "EntityGroup",
-    # Special value returned by Engroup(Template)
-    "GenericEGroup", "GenericEGroupDataType"
-]
+__all__ = ["EGroupGeneric", "EGroupDataType", "EntityGroup"]
 
 from typing import TYPE_CHECKING, List
 
 from acaciamc.tools import axe, resultlib, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector
-from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
+from acaciamc.mccmdgen.datatype import Storable
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
@@ -20,6 +16,7 @@ from .entity import EntityDataType, EntityReference
 from .boolean import AndGroup
 from .integer import IntOpGroup
 from .functions import BinaryFunction
+from .generic import BinaryGeneric
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -27,18 +24,6 @@ if TYPE_CHECKING:
     from .entity_template import EntityTemplate
     from .entity_filter import EntityFilter
     from .entity import _EntityBase
-
-class GenericEGroupDataType(DefaultDataType):
-    name = "Engroup(T)"
-
-class GenericEGroup(AcaciaExpr):
-    """Thing that is returned by Engroup(Template)."""
-    def __init__(self, data_type: "DataType", compiler: "Compiler"):
-        super().__init__(GenericEGroupDataType(), compiler)
-        self.dt = data_type
-
-    def datatype_hook(self) -> "DataType":
-        return self.dt
 
 class EGroupDataType(Storable):
     name = "Engroup"
@@ -48,7 +33,7 @@ class EGroupDataType(Storable):
         self.template = template
 
     def __str__(self) -> str:
-        return "Engroup(%s)" % self.template.name
+        return "Engroup[%s]" % self.template.name
 
     @classmethod
     def name_no_generic(cls) -> str:
@@ -67,9 +52,8 @@ class EGroupDataType(Storable):
         def _new(compiler, all_entities: bool):
             """
             Create an empty entity group (unless all_entities is True).
-            o: Engroup  # A group of entities of template `Entity`
-            o: Engroup(T)  # A group of entities of template T
-            o: Engroup | (all_entities=True)  # Include all entities
+            o: Engroup[E]  # A group of entities of template E
+            o: Engroup[E] | (all_entities=True)  # Include all entities
             """
             # Remove all existsing entities on initialization
             if not all_entities:
@@ -79,22 +63,20 @@ class EGroupDataType(Storable):
             return resultlib.commands(commands, compiler)
         return BinaryFunction(_new, self.compiler)
 
+class EGroupGeneric(BinaryGeneric):
+    @axe.chop_getitem
+    @axe.arg("E", ETemplateDataType, rename="template")
+    def getitem(self, template: "EntityTemplate"):
+        template = self.compiler.base_template
+        return EGroupType(template, self.compiler)
+
 class EGroupType(Type):
-    def do_init(self):
-        @axe.chop
-        @axe.arg("template", ETemplateDataType)
-        def _call_me(compiler: "Compiler", template: "EntityTemplate"):
-            return GenericEGroup(EGroupDataType(template), compiler)
-        self.call_me = BinaryFunction(_call_me, self.compiler)
+    def __init__(self, template: "EntityTemplate", compiler):
+        self.template = template
+        super().__init__(compiler)
 
-    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
-        return self.call_me.call(args, keywords)
-
-    def datatype_hook(self) -> "DataType":
-        """When "Engroup" is used as a type specifier, it's an alias to
-        "Engroup(Entity)".
-        """
-        return EGroupDataType(self.compiler.base_template)
+    def datatype_hook(self):
+        return EGroupDataType(self.template)
 
 class EntityGroup(VarValue):
     def __init__(self, template: "EntityTemplate", compiler):
