@@ -5,6 +5,8 @@ __all__ = [
     "chop", "arg", "slash", "star", "star_arg", "kwds",
     # Overload interfaces
     "OverloadChopped", "overload", "overload_versioned",
+    # Subscript interfaces
+    "chop_getitem", "chop_setitem",
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
@@ -50,6 +52,9 @@ class ArgumentError(Exception):
         super().__init__(arg, message)
         self.arg = arg
         self.message = message
+
+class _WrongArgTypeError(Exception):
+    pass
 
 ### Building Stage
 
@@ -118,15 +123,18 @@ _ARG_TYPE = Union[_TYPED_TYPE, "Converter"]
 
 _NO_DEFAULT = object()
 
+def _converter(type_: _ARG_TYPE):
+    if isinstance(type_, Converter):
+        return type_
+    else:
+        return Typed(type_)
+
 def arg(name: str, type_: _ARG_TYPE, rename: Optional[str] = None,
         default: Any = _NO_DEFAULT):
     """Return a decorator for adding an argument"""
     if rename is None:
         rename = name
-    if isinstance(type_, Converter):
-        converter = type_
-    else:
-        converter = Typed(type_)
+    converter = _converter(type_)
     definition = _Argument(name, rename, converter)
     if default is not _NO_DEFAULT:
         definition.set_default(default)
@@ -149,10 +157,7 @@ def _arg_list(bd_type: int, name: str, type_: _ARG_TYPE,
               rename: Optional[str] = None):
     if rename is None:
         rename = name
-    if isinstance(type_, Converter):
-        converter = type_
-    else:
-        converter = Typed(type_)
+    converter = _converter(type_)
     @_parser_component
     def _decorator(building: _BuildingParser):
         building.push_component(
@@ -171,11 +176,9 @@ def kwds(name: str, type_: _ARG_TYPE, rename: Optional[str] = None):
 ### Argument converter
 
 class Converter:
-    def wrong_argument(self, origin: acacia.AcaciaExpr):
+    def wrong_argument(self):
         """Used by `convert` method to raise an error."""
-        raise AcaciaError(ErrorType.WRONG_ARG_TYPE,
-                          expect=self.get_show_name(),
-                          arg="?", got=str(origin.data_type))
+        raise _WrongArgTypeError
 
     def get_show_name(self) -> str:
         """Get show name."""
@@ -219,7 +222,7 @@ class Typed(Converter):
 
     def convert(self, origin: acacia.AcaciaExpr):
         if not _type_checker(origin, self.type):
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return origin
 
 class Multityped(Converter):
@@ -233,7 +236,7 @@ class Multityped(Converter):
 
     def convert(self, origin: acacia.AcaciaExpr):
         if not any(map(partial(_type_checker, origin), self.types)):
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return origin
 
 class LiteralInt(Typed):
@@ -250,7 +253,7 @@ class LiteralInt(Typed):
         origin = super().convert(origin)
         if isinstance(origin, acacia.IntLiteral):
             return origin.value
-        self.wrong_argument(origin)
+        self.wrong_argument()
 
 class LiteralFloat(Multityped):
     """Accepts float and integer literal and converts it to Python
@@ -268,7 +271,7 @@ class LiteralFloat(Multityped):
             return float(origin.value)
         elif isinstance(origin, acacia.Float):
             return origin.value
-        self.wrong_argument(origin)
+        self.wrong_argument()
 
 class LiteralString(Typed):
     """Accepts a string literal and converts it to Python `str`.
@@ -296,7 +299,7 @@ class LiteralBool(Typed):
         origin = super().convert(origin)
         if isinstance(origin, acacia.BoolLiteral):
             return origin.value
-        self.wrong_argument(origin)
+        self.wrong_argument()
 
 class Nullable(Converter):
     """Accepts "None" value and convert it to Python "None".
@@ -312,10 +315,7 @@ class Nullable(Converter):
     def convert(self, origin: acacia.AcaciaExpr):
         if origin.data_type.matches_cls(acacia.NoneDataType):
             return None
-        try:
-            return self.converter.convert(origin)
-        except AcaciaError:
-            self.wrong_argument(origin)
+        return self.converter.convert(origin)
 
 class AnyOf(Converter):
     """Accepts arguments of several kinds."""
@@ -340,12 +340,12 @@ class AnyOf(Converter):
         for converter in self.converters:
             try:
                 res = converter.convert(origin)
-            except AcaciaError:
+            except _WrongArgTypeError:
                 pass
             else:
                 return res
         else:
-            self.wrong_argument(origin)
+            self.wrong_argument()
 
 class Iterator(Converter):
     """Accepts an Acacia iterable and converts it to Python list."""
@@ -356,7 +356,7 @@ class Iterator(Converter):
         try:
             res = origin.iterate()
         except NotImplementedError:
-            self.wrong_argument(origin)
+            self.wrong_argument()
         else:
             return res
 
@@ -385,7 +385,7 @@ class LiteralIntEnum(LiteralInt):
     def convert(self, origin: acacia.AcaciaExpr) -> int:
         origin_int = super().convert(origin)
         if origin_int not in self.accepts:
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return origin_int
 
 class LiteralStringEnum(LiteralString):
@@ -403,7 +403,7 @@ class LiteralStringEnum(LiteralString):
     def convert(self, origin: acacia.AcaciaExpr) -> str:
         origin_str = super().convert(origin)
         if origin_str not in self.accepts:
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return origin_str
 
 class ArrayOf(Typed):
@@ -420,15 +420,7 @@ class ArrayOf(Typed):
     def convert(self, origin: acacia.AcaciaExpr) -> list:
         origin = super().convert(origin)
         assert isinstance(origin, acacia.Array)
-        try:
-            res = list(map(self.converter.convert, origin.items))
-        except AcaciaError as err:
-            if err.type is ErrorType.WRONG_ARG_TYPE:
-                self.wrong_argument(origin)
-            else:
-                raise
-        else:
-            return res
+        return list(map(self.converter.convert, origin.items))
 
 class MapOf(Typed):
     """Accepts a map of specified data type as key and value and
@@ -447,17 +439,10 @@ class MapOf(Typed):
         origin = super().convert(origin)
         assert isinstance(origin, acacia.Map)
         res = {}
-        try:
-            for py_key, key in origin.py_key2key.items():
-                res[self.key.convert(key)] = \
-                    self.value.convert(origin.dict[py_key])
-        except AcaciaError as err:
-            if err.type is ErrorType.WRONG_ARG_TYPE:
-                self.wrong_argument(origin)
-            else:
-                raise
-        else:
-            return res
+        for py_key, key in origin.py_key2key.items():
+            res[self.key.convert(key)] = \
+                self.value.convert(origin.dict[py_key])
+        return res
 
 class PlayerSelector(Selector):
     """Accepts an entity or Engroup with player type and converts it
@@ -471,7 +456,7 @@ class PlayerSelector(Selector):
         try:
             selector.player_type()
         except ValueError:
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return selector
 
 class RangedLiteralInt(LiteralInt):
@@ -493,7 +478,7 @@ class RangedLiteralInt(LiteralInt):
     def convert(self, origin: acacia.AcaciaExpr) -> int:
         num = super().convert(origin)
         if not self.min <= num <= self.max:
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return num
 
 class Callable(Converter):
@@ -503,7 +488,7 @@ class Callable(Converter):
 
     def convert(self, origin: acacia.AcaciaExpr) -> acacia.AcaciaCallable:
         if not isinstance(origin, acacia.AcaciaCallable):
-            self.wrong_argument(origin)
+            self.wrong_argument()
         return origin
 
 class PosXZ(LiteralFloat):
@@ -532,6 +517,17 @@ def _check_repeat(names: List[str], renames: List[str]):
         if name in got:
             raise ChopError("repeated argument rename %r" % name)
         got.add(name)
+
+def _call_impl(implementation, all_args: List[str], *args, **kwds):
+    try:
+        return implementation(*args, **kwds)
+    except ArgumentError as err:
+        if err.arg not in all_args:
+            # Make sure `err.arg` is a valid argument name
+            raise ChopError("unknown argument %r" % err.arg)
+        else:
+            raise AcaciaError(ErrorType.INVALID_BIN_FUNC_ARG,
+                              arg=err.arg, message=err.message)
 
 class _Chopper:
     def __init__(self, building: _BuildingParser):
@@ -607,9 +603,12 @@ class _Chopper:
                  arg_name: str):
         try:
             return converter.convert(origin)
-        except AcaciaError as err:
-            err.error_args["arg"] = arg_name
-            raise
+        except _WrongArgTypeError:
+            raise AcaciaError(
+                ErrorType.WRONG_ARG_TYPE,
+                expect=converter.get_show_name(),
+                arg=arg_name, got=str(origin.data_type)
+            )
 
     def __call__(self, compiler: "Compiler", args: acacia.ARGS_T,
                  kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":
@@ -684,15 +683,7 @@ class _Chopper:
         if self.kwds and self.kwds.name not in arg_got:
             res[self.kwds.rename] = {}
             arg_got.append(self.kwds.name)
-        try:
-            return self.implementation(compiler, **res)
-        except ArgumentError as err:
-            if err.arg not in arg_got:
-                # Make sure `err.arg` is a valid argument name
-                raise ChopError("unknown argument %r" % err.arg)
-            else:
-                raise AcaciaError(ErrorType.INVALID_BIN_FUNC_ARG,
-                                  arg=err.arg, message=err.message)
+        return _call_impl(self.implementation, arg_got, compiler, **res)
 
 def _create_signature(arg_defs: List[_Argument]) -> str:
     return "(%s)" % ", ".join(
@@ -822,14 +813,18 @@ class OverloadChopped(type):
             for arg_def, arg in zip(arg_defs, args):
                 try:
                     converted = arg_def.converter.convert(arg)
-                except AcaciaError:
+                except _WrongArgTypeError:
                     break
                 else:
                     res[arg_def.rename] = converted
             else:
                 version = implementation.version
                 if not version or version.validate(Config.mc_version):
-                    return implementation(compiler, **res)
+                    return _call_impl(
+                        implementation,
+                        [arg_def.name for arg_def in arg_defs],
+                        compiler, **res
+                    )
                 else:
                     raise AcaciaError(
                         ErrorType.ANY,
@@ -873,4 +868,108 @@ def overload_versioned(version: "VersionRequirement"):
     @_parser_component
     def _decorator(building: _BuildingParser):
         return _OverloadMethod(building, version)
+    return _decorator
+
+class _SubscriptChopper:
+    def __init__(self, building: _BuildingParser, is_setter: bool,
+                 value_name: Optional[str],
+                 value_converter: Optional[Converter]):
+        self.is_setter = is_setter
+        self.value_name = value_name
+        self.value_converter = value_converter
+        self.implementation = building.get_target()
+        if any(type_ != _BP_ARG for type_, _ in building):
+            raise ChopError("only arguments are allowed in subscript "
+                            "definitions")
+        arg_defs: List[_Argument] = [arg_def for _, arg_def in building]
+        self.arg_defs = arg_defs
+        self.arg_names = [arg_def.name for arg_def in arg_defs]
+        self.arg_num = len(arg_defs)
+        default_sep = -1
+        for i, arg_def in enumerate(arg_defs):
+            if arg_def.has_default():
+                if default_sep == -1:
+                    default_sep = i
+            elif default_sep != -1:
+                raise ChopError("non-default argument follows "
+                                "default argument")
+        if default_sep == -1:
+            default_sep = self.arg_num
+        _check_repeat(self.arg_names,
+                      [arg_def.rename for arg_def in arg_defs])
+        if is_setter and any(
+            arg_def.rename == value_name for arg_def in arg_defs
+        ):
+            raise ChopError("subscript argument name is same as value name")
+        self.default_sep = default_sep
+        self.defaults = [
+            arg_def.get_default()
+            for arg_def in arg_defs[default_sep:]
+        ]
+
+    def __get__(self, instance, owner: Optional[type] = None) -> PyCallable:
+        return partial(self.call, instance)
+
+    def _fmt_range(self, min_: int, max_: int) -> str:
+        if min_ == max_:
+            return "exactly %d" % min_
+        return "%d to %d" % (min_, max_)
+
+    def call(self, instance, subscripts: Tuple[acacia.AcaciaExpr], *extra):
+        if self.is_setter:
+            if len(extra) != 1:
+                raise ChopError("expecting 1 extra argument, got {!r}"
+                                .format(extra))
+            value = extra[0]
+        elif extra:
+            raise ChopError("extra arguments are not allowed for getitem")
+        res = {}
+        if self.is_setter:
+            try:
+                res[self.value_name] = self.value_converter.convert(value)
+            except _WrongArgTypeError:
+                raise AcaciaError(
+                    ErrorType.SETITEM_VALUE_TYPE,
+                    expect=self.value_converter.get_show_name(),
+                    got=str(value.data_type)
+                )
+        ARG_LEN = len(subscripts)
+        if ARG_LEN < self.default_sep or ARG_LEN > self.arg_num:
+            raise AcaciaError(
+                ErrorType.SUBSCRIPT_ARG_LEN, got=ARG_LEN,
+                expect=self._fmt_range(self.default_sep, self.arg_num)
+            )
+        for arg_def, arg in zip(self.arg_defs, subscripts):
+            try:
+                res[arg_def.rename] = arg_def.converter.convert(arg)
+            except _WrongArgTypeError:
+                raise AcaciaError(
+                    ErrorType.SUBSCRIPT_ARG_TYPE,
+                    expect=arg_def.converter.get_show_name(),
+                    arg=arg_def.name, got=str(arg.data_type)
+                )
+        for arg_def, default in zip(
+            self.arg_defs[ARG_LEN:],
+            self.defaults[ARG_LEN - self.default_sep:]
+        ):
+            res[arg_def.rename] = default
+        return _call_impl(
+            self.implementation, self.arg_names,
+            instance, **res
+        )
+
+@_parser_component
+def chop_getitem(building: _BuildingParser):
+    """Decorator for `SupportsGetItem.getitem` method."""
+    return _SubscriptChopper(building, False, None, None)
+
+def chop_setitem(value_type: _ARG_TYPE, value_name: str = "value"):
+    """
+    Return a decorator for `SupportsSetItem.setitem` method.
+    The value can also be converted by specifying `value_type`.
+    """
+    value_type = _converter(value_type)
+    @_parser_component
+    def _decorator(building: _BuildingParser):
+        return _SubscriptChopper(building, True, value_name, value_type)
     return _decorator

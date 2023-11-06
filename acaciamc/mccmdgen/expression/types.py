@@ -7,12 +7,6 @@ __all__ = ['TypeDataType', 'Type']
 from typing import TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
-try:  # Python 3.8+
-    from typing import final
-except ImportError:
-    def final(func):
-        return func
-
 from .base import *
 from .none import NoneDataType
 from acaciamc.error import *
@@ -29,17 +23,13 @@ class Type(AcaciaCallable, metaclass=ABCMeta):
     """Base class for type of a variable that represents a type.
     (e.g. type of builtin "int" is `IntType`).
     """
-    @final
     def __init__(self, compiler: "Compiler"):
-        """Override `do_init` instead of this."""
         super().__init__(TypeDataType(), compiler)
         self.func_repr = str(self.datatype_hook())
         self.do_init()
 
     def do_init(self):
-        """Initialzer for `Type`s -- override it instead of `__init__`.
-        This exists due to history reason.
-        """
+        """Initialzer for `Type`s. This exists due to historical reason."""
         pass
 
     def call(self, args, keywords):

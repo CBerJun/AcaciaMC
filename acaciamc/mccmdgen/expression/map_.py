@@ -4,7 +4,7 @@ Only a few literal values are supported as keys.
 
 __all__ = ["MapType", "MapDataType", "Map"]
 
-from typing import Dict, Hashable, Iterable, Tuple
+from typing import Dict, Hashable, Iterable
 from itertools import repeat
 
 from .base import *
@@ -66,17 +66,14 @@ class Map(SupportsGetItem, SupportsSetItem):
     def iterate(self) -> ITERLIST_T:
         return list(self.py_key2key.values())
 
-    def _handle_subscript(self, subscripts: Tuple[AcaciaExpr]) -> AcaciaExpr:
-        if len(subscripts) != 1:
-            raise Error(ErrorType.SUBSCRIPT_TOO_MANY_ARGS)
-        return subscripts[0]
-
-    def getitem(self, subscripts: Tuple[AcaciaExpr]) -> CALLRET_T:
-        key = self._handle_subscript(subscripts)
+    @axe.chop_getitem
+    @axe.arg("key", axe.AnyValue())
+    def getitem(self, key: AcaciaExpr) -> AcaciaExpr:
         return self.get(key)
 
-    def setitem(self, subscripts: Tuple[AcaciaExpr], value: AcaciaExpr):
-        key = self._handle_subscript(subscripts)
+    @axe.chop_setitem(value_type=axe.AnyValue())
+    @axe.arg("key", axe.AnyValue())
+    def setitem(self, key: AcaciaExpr, value: AcaciaExpr):
         self.set(key, value)
 
     def _get_key(self, key: AcaciaExpr):

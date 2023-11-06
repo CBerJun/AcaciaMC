@@ -10,7 +10,7 @@ expressions that can be calculated in compile time.
 
 __all__ = ["ArrayType", "ArrayDataType", "Array"]
 
-from typing import List, Union, Tuple
+from typing import List, Union
 from itertools import repeat, chain
 
 from .base import *
@@ -149,21 +149,16 @@ class Array(SupportsGetItem, SupportsSetItem):
             raise Error(ErrorType.ARRAY_INDEX_OUT_OF_BOUNDS,
                         length=length, index=index)
 
-    def _handle_subscript(self, subscripts: Tuple[AcaciaExpr]) -> int:
-        if len(subscripts) != 1:
-            raise Error(ErrorType.SUBSCRIPT_TOO_MANY_ARGS)
-        index = subscripts[0]
-        if not isinstance(index, IntLiteral):
-            raise Error(ErrorType.ARRAY_INDEX_NON_LITERAL)
-        self._validate_index(index.value)
-        return index.value
-
-    def getitem(self, subscripts: Tuple[AcaciaExpr]) -> CALLRET_T:
-        index = self._handle_subscript(subscripts)
+    @axe.chop_getitem
+    @axe.arg("index", axe.LiteralInt())
+    def getitem(self, index: int) -> AcaciaExpr:
+        self._validate_index(index)
         return self.items[index]
 
-    def setitem(self, subscripts: Tuple[AcaciaExpr], value: AcaciaExpr):
-        index = self._handle_subscript(subscripts)
+    @axe.chop_setitem(value_type=axe.AnyValue())
+    @axe.arg("index", axe.LiteralInt())
+    def setitem(self, index: int, value: AcaciaExpr):
+        self._validate_index(index)
         self.items[index] = value
 
     def iterate(self) -> ITERLIST_T:
