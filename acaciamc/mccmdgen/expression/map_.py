@@ -4,12 +4,13 @@ Only a few literal values are supported as keys.
 
 __all__ = ["MapType", "MapDataType", "Map"]
 
-from typing import Dict, Hashable, Iterable
+from typing import Dict, Hashable, Iterable, Optional
 from itertools import repeat
 
 from .base import *
 from .types import Type
 from .none import NoneLiteral
+from .array import Array
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
@@ -62,6 +63,38 @@ class Map(SupportsGetItem, SupportsSetItem):
             res.dict = self.dict.copy()
             res.py_key2key = self.py_key2key.copy()
             return res
+        @method_of(self, "clear")
+        @axe.chop
+        def _clear(compiler):
+            self.dict.clear()
+            self.py_key2key.clear()
+        @method_of(self, "keys")
+        @axe.chop
+        def _keys(compiler):
+            return Array(self.iterate(), compiler)
+        @method_of(self, "values")
+        @axe.chop
+        def _values(compiler):
+            return Array(list(self.dict.values()), compiler)
+        @method_of(self, "get")
+        @axe.chop
+        @axe.arg("key", axe.AnyValue())
+        @axe.arg("default", axe.AnyValue(), default=NoneLiteral(self.compiler))
+        def _get(compiler, key: AcaciaExpr, default: AcaciaExpr):
+            res = self.get(key)
+            if res is None:
+                res = default
+            return res
+        @method_of(self, "set_default")
+        @axe.chop
+        @axe.arg("key", axe.AnyValue())
+        @axe.arg("default", axe.AnyValue(), default=NoneLiteral(self.compiler))
+        def _set_default(compiler, key: AcaciaExpr, default: AcaciaExpr):
+            res = self.get(key)
+            if res is None:
+                self.set(key, default)
+                res = default
+            return res
 
     def iterate(self) -> ITERLIST_T:
         return list(self.py_key2key.values())
@@ -69,7 +102,10 @@ class Map(SupportsGetItem, SupportsSetItem):
     @axe.chop_getitem
     @axe.arg("key", axe.AnyValue())
     def getitem(self, key: AcaciaExpr) -> AcaciaExpr:
-        return self.get(key)
+        res = self.get(key)
+        if res is None:
+            raise Error(ErrorType.MAP_KEY_NOT_FOUND)
+        return res
 
     @axe.chop_setitem(value_type=axe.AnyValue())
     @axe.arg("key", axe.AnyValue())
@@ -89,11 +125,11 @@ class Map(SupportsGetItem, SupportsSetItem):
         self.dict[py_key] = value
         self.py_key2key[py_key] = key
 
-    def get(self, key: AcaciaExpr) -> AcaciaExpr:
+    def get(self, key: AcaciaExpr) -> Optional[AcaciaExpr]:
         py_key = self._get_key(key)
         if py_key in self.dict:
             return self.dict[py_key]
-        raise Error(ErrorType.MAP_KEY_NOT_FOUND)
+        return None
 
     def delete(self, key: AcaciaExpr):
         py_key = self._get_key(key)
