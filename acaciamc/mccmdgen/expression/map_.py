@@ -47,17 +47,17 @@ class Map(SupportsGetItem, SupportsSetItem):
         @method_of(self, "update")
         @axe.chop
         @axe.arg("other", MapDataType)
-        def _update(self: Map, compiler, other: Map):
+        def _update(compiler, other: Map):
             self.dict.update(other.dict)
             self.py_key2key.update(other.py_key2key)
         @method_of(self, "delete")
         @axe.chop
         @axe.arg("key", axe.AnyValue())
-        def _delete(self: Map, compiler, key: AcaciaExpr):
+        def _delete(compiler, key: AcaciaExpr):
             self.delete(key)
         @method_of(self, "copy")
         @axe.chop
-        def _copy(self: Map, compiler):
+        def _copy(compiler):
             res = Map([], [], self.compiler)
             res.dict = self.dict.copy()
             res.py_key2key = self.py_key2key.copy()

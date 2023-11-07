@@ -107,7 +107,7 @@ class Array(SupportsGetItem, SupportsSetItem):
         @method_of(self, "pop")
         @axe.chop
         @axe.arg("index", axe.LiteralInt())
-        def _pop(self: Array, compiler, index: int):
+        def _pop(compiler, index: int):
             self._validate_index(index)
             self.items.pop(index)
         @method_of(self, "copy")
