@@ -51,11 +51,18 @@ class Map(SupportsGetItem, SupportsSetItem):
         def _update(compiler, other: Map):
             self.dict.update(other.dict)
             self.py_key2key.update(other.py_key2key)
-        @method_of(self, "delete")
+        @method_of(self, "pop")
         @axe.chop
         @axe.arg("key", axe.AnyValue())
-        def _delete(compiler, key: AcaciaExpr):
-            self.delete(key)
+        @axe.arg("default", axe.AnyValue(), default=None)
+        def _pop(compiler, key: AcaciaExpr, default: Optional[AcaciaExpr]):
+            res = self.pop(key)
+            if res is None:
+                if default is None:
+                    raise Error(ErrorType.MAP_KEY_NOT_FOUND)
+                else:
+                    res = default
+            return res
         @method_of(self, "copy")
         @axe.chop
         def _copy(compiler):
@@ -131,10 +138,8 @@ class Map(SupportsGetItem, SupportsSetItem):
             return self.dict[py_key]
         return None
 
-    def delete(self, key: AcaciaExpr):
+    def pop(self, key: AcaciaExpr) -> Optional[AcaciaExpr]:
         py_key = self._get_key(key)
         if py_key in self.dict:
-            del self.dict[py_key]
             del self.py_key2key[py_key]
-        else:
-            raise Error(ErrorType.MAP_KEY_NOT_FOUND)
+        return self.dict.pop(py_key, None)
