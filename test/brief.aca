@@ -295,20 +295,19 @@ world.setblock(pos, world.Block("concrete", {"color": "yellow"}))
 # Therefore, the real `world.fill` accepts an `Offset` as pos2, it is
 # an offset related to pos1.
 # This fills 10, 10, 10 to 20, 20, 20 with air:
-world.fill(Pos(10, 10, 10), Offset().abs(20, 20, 20), world.Block("air"))
+world.fill(Pos(10, 10, 10), Offset().abs(20, 20, 20), "air")
 # This does the same thing:
-world.fill(Pos(10, 10, 10), Offset().offset(+10, +10, +10), world.Block("air"))
+world.fill(Pos(10, 10, 10), Offset().offset(+10, +10, +10), "air")
 # Absolute position and relative offset can mix in `Offset`:
-world.fill(Pos(10, 10, 10), Offset().offset(x=+10, z=+10).abs(y=20),
-           world.Block("air"))
+world.fill(Pos(10, 10, 10), Offset().offset(x=+10, z=+10).abs(y=20), "air")
 
 ## `AbsPos`
 # An absolute position can be either a `Pos` or an `Offset`. `AbsPos`
 # is compatible with both of them and represents an absolute position.
 pos1 -> AbsPos(10, 10, 10)
 pos2 -> AbsPos(20, 20, 20)
-world.fill(pos1, pos2, world.Block("diamond_block"))
-world.fill(pos2, pos1, world.Block("air"), replacement="destroy")
+world.fill(pos1, pos2, "diamond_block")
+world.fill(pos2, pos1, "air", replacement="destroy")
 
 #* Functions *#
 # Type of argument or its default value must be specified

@@ -2,8 +2,8 @@
 world - Interact with the Minecraft world.
 
 Types:
-Item: item id + data + components
-Block: block id + block states
+Item: str (item id) or Item object (id + data + components)
+Block: str (block id) or Block object (id + block states)
 Selector: entity or Engroup
 PlayerSelector: player type selector
 
@@ -350,6 +350,26 @@ class Block(AcaciaExpr):
             for key, value in self.states.items()
         ))
 
+class ArgBlock(axe.AnyOf):
+    def __init__(self):
+        super().__init__(axe.Typed(BlockDataType), axe.LiteralString())
+
+    def convert(self, origin: AcaciaExpr) -> Block:
+        res = super().convert(origin)
+        if isinstance(res, str):
+            res = Block(res, {}, origin.compiler)
+        return res
+
+class ArgItem(axe.AnyOf):
+    def __init__(self):
+        super().__init__(axe.Typed(ItemDataType), axe.LiteralString())
+
+    def convert(self, origin: AcaciaExpr) -> Item:
+        res = super().convert(origin)
+        if isinstance(res, str):
+            res = Item(res, 0, {}, origin.compiler)
+        return res
+
 ##### Block related #####
 
 @_register("clone")
@@ -377,7 +397,7 @@ def clone(compiler: "Compiler", origin: Position, offset: PosOffset,
 @axe.arg("origin", PosDataType)
 @axe.arg("offset", PosOffsetDataType)
 @axe.arg("dest", PosOffsetDataType)
-@axe.arg("block", BlockDataType)
+@axe.arg("block", ArgBlock())
 @axe.arg("mode", axe.Nullable(
     axe.LiteralStringEnum("move", "force")
 ), default=None)
@@ -396,7 +416,7 @@ def clone_only(compiler, origin: Position, offset: PosOffset, dest: PosOffset,
 @axe.chop
 @axe.arg("origin", PosDataType)
 @axe.arg("offset", PosOffsetDataType)
-@axe.arg("block", BlockDataType)
+@axe.arg("block", ArgBlock())
 @axe.arg("replacement", axe.LiteralStringEnum(
     "destroy", "hollow", "outline", "aironly", "all"
 ), default="all")
@@ -417,8 +437,8 @@ def fill(compiler, origin: Position, offset: PosOffset, block: Block,
 @axe.chop
 @axe.arg("origin", PosDataType)
 @axe.arg("offset", PosOffsetDataType)
-@axe.arg("block", BlockDataType)
-@axe.arg("replaces", BlockDataType)
+@axe.arg("block", ArgBlock())
+@axe.arg("replaces", ArgBlock())
 def fill_replace(compiler, origin: Position, offset: PosOffset, block: Block,
          replaces: Block):
     cmd = cmds.Execute(
@@ -431,7 +451,7 @@ def fill_replace(compiler, origin: Position, offset: PosOffset, block: Block,
 @_register("setblock")
 @axe.chop
 @axe.arg("pos", PosDataType)
-@axe.arg("block", BlockDataType)
+@axe.arg("block", ArgBlock())
 @axe.arg("replacement", axe.LiteralStringEnum(
     "aironly", "destroy", "all"
 ), default="all")
@@ -529,7 +549,7 @@ def msg_me(compiler, sender: "_EntityBase", message: str):
 @axe.chop
 @axe.arg("pos", PosDataType)
 @axe.arg("slot", axe.LiteralInt())
-@axe.arg("item", ItemDataType)
+@axe.arg("item", ArgItem())
 @axe.arg("amount", axe.RangedLiteralInt(1, None), default=1)
 @axe.arg("keep_old", axe.LiteralBool(), default=False)
 def replaceitem_block(compiler, pos: Position, slot: int, item: Item,
@@ -548,7 +568,7 @@ def replaceitem_block(compiler, pos: Position, slot: int, item: Item,
 @axe.arg("target", axe.Selector())
 @axe.arg("location", axe.LiteralString())
 @axe.arg("slot", axe.LiteralInt())
-@axe.arg("item", ItemDataType)
+@axe.arg("item", ArgItem())
 @axe.arg("amount", axe.RangedLiteralInt(1, None), default=1)
 @axe.arg("keep_old", axe.LiteralBool(), default=False)
 def replaceitem_entity(compiler, target: "MCSelector", location: str,
@@ -825,7 +845,7 @@ def move_local(compiler, target: "MCSelector", left: float, up: float,
 @_register("is_block")
 @axe.chop
 @axe.arg("pos", PosDataType)
-@axe.arg("block", BlockDataType)
+@axe.arg("block", ArgBlock())
 def is_block(compiler, pos: Position, block: Block):
     res = AndGroup((), compiler)
     res.main.extend(pos.context)

@@ -145,14 +145,15 @@ for c in COLORS:
 import world
 
 ORIGIN -> AbsPos(0, -50, 0)
-world.fill(ORIGIN, Offset().offset(x=5, z=5), world.Block("air"))
+world.fill(ORIGIN, Offset().offset(x=5, z=5),
+           world.Block("concrete", {"color": "red"}))
 
 entity Test:
     @type: "armor_stand"
     @position: ORIGIN
 
     def __init__():
-        world.setblock(Pos(self), world.Block("diamond_block"))
+        world.setblock(Pos(self), "diamond_block")
         world.effect_give(self, "invisibility", duration=1000)
 
     def foo():
