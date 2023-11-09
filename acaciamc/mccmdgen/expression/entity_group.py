@@ -67,7 +67,6 @@ class EGroupGeneric(BinaryGeneric):
     @axe.chop_getitem
     @axe.arg("E", ETemplateDataType, rename="template")
     def getitem(self, template: "EntityTemplate"):
-        template = self.compiler.base_template
         return EGroupType(template, self.compiler)
 
 class EGroupType(Type):
