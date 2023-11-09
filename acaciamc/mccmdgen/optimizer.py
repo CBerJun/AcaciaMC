@@ -141,13 +141,14 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                         # optimized...
                         if no_execute:
                             can_opt = False
-                        # Environment other than if/unless score may
-                        # change during execution of commands, so we
-                        # can't inline it.
+                        # Environments other than if/unless may change
+                        # during execution of commands, so we can't
+                        # inline it.
                         for subcmd in runs.subcmds:
                             if not isinstance(
                                 subcmd, (cmds.ExecuteScoreComp,
-                                        cmds.ExecuteScoreMatch)
+                                        cmds.ExecuteScoreMatch,
+                                        cmds.ExecuteCond)
                             ):
                                 can_opt = False
                                 break
@@ -167,6 +168,24 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
         #         callee.get_path(), caller.get_path(), caller_index
         #     ))
         merged: Set[cmds.MCFunctionFile] = set()
+        def _need_tmp(subcmds, commands: List[cmds.Command]) -> bool:
+            for subcmd in subcmds:
+                if isinstance(subcmd, cmds.ExecuteCond):
+                    return True
+                slots = []
+                if isinstance(subcmd, cmds.ExecuteScoreComp):
+                    slots.append(subcmd.operand1)
+                    slots.append(subcmd.operand2)
+                elif isinstance(subcmd, cmds.ExecuteScoreMatch):
+                    slots.append(subcmd.operand)
+                else:
+                    raise TypeError
+                for command in commands:
+                    for slot in slots:
+                        if (command.scb_did_assign(slot)
+                            or command.scb_did_augassign(slot)):
+                            return True
+            return False
         def _merge(caller: cmds.MCFunctionFile):
             if caller in merged:
                 return
@@ -180,38 +199,23 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
             tasks.sort(key=lambda x: x[0], reverse=True)
             for index, callee in tasks:
                 runs = caller.commands[index]
+                callee_len = callee.cmd_length()
                 if isinstance(runs, cmds.Execute):
                     # Prefixing every command in a long file with
                     # /execute condition can reduce performance,
                     # so we don't inline it.
-                    if callee.cmd_length() > self.max_inline_file_size:
+                    if callee_len > self.max_inline_file_size:
                         continue
                 # print("Merging %s to %s:%d" % (
                 #     callee.get_path(), caller.get_path(), index
                 # ))
                 subcmds = []
-                need_tmp = False
                 while isinstance(runs, cmds.Execute):
                     subcmds.extend(runs.subcmds)
-                    if not need_tmp:
-                        for subcmd in runs.subcmds:
-                            slots = []
-                            if isinstance(subcmd, cmds.ExecuteScoreComp):
-                                slots.append(subcmd.operand1)
-                                slots.append(subcmd.operand2)
-                            elif isinstance(subcmd, cmds.ExecuteScoreMatch):
-                                slots.append(subcmd.operand)
-                            else:
-                                raise ValueError
-                            for command in callee.commands:
-                                for slot in slots:
-                                    if (command.scb_did_assign(slot)
-                                        or command.scb_did_augassign(slot)):
-                                        need_tmp = True
-                                        break
                     runs = runs.runs
                 inserts = []
-                if need_tmp:
+                # No need for tmp if callee has only 1 command
+                if callee_len != 1 and _need_tmp(subcmds, callee.commands):
                     tmp = self.allocate()
                     inserts.append(cmds.ScbSetConst(tmp, 0))
                     inserts.append(cmds.Execute(

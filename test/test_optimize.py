@@ -26,9 +26,11 @@ project = MyOpt(init_file_path="test/init")
 f1 = cmds.MCFunctionFile("test/path1")
 f2 = cmds.MCFunctionFile("test/path2")
 f3 = cmds.MCFunctionFile("test/path3")
+f4 = cmds.MCFunctionFile("test/path4")
 project.add_file(f1)
 project.add_file(f2)
 project.add_file(f3)
+project.add_file(f4)
 v1 = project.allocate()
 v2 = project.allocate()
 v3 = project.allocate()
@@ -45,6 +47,10 @@ c = cmds.Execute(
     cmds.InvokeFunction(f3)
 )
 f1.write(c)
+f1.write(cmds.Execute(
+    [cmds.ExecuteCond("block", "~~~ air")],
+    cmds.InvokeFunction(f4)
+))
 f1.write(cmds.RawtextOutput(
     "tellraw @a", [{"score": {"name": v2.target, "objective": v2.objective}}]
 ))
@@ -59,6 +65,8 @@ f3.write(cmds.Execute(
     cmds.Cmd("test arg")
 ))
 f3.write(cmds.ScbSetConst(v1, 20))
+
+f4.write("say f4 only has 1 command")
 
 project.generate_init_file()
 print(project.dump())
