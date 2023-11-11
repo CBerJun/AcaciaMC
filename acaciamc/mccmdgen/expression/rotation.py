@@ -34,7 +34,7 @@ class RotType(Type):
             Rot(int-literal, int-literal): absolute rotation
             """
             @axe.overload
-            @axe.arg("target", EntityDataType)
+            @axe.arg("entity", EntityDataType)
             def from_entity(cls, compiler, entity: "_EntityBase"):
                 inst = Rotation(compiler)
                 inst.context.append(cmds.ExecuteEnv(
