@@ -103,6 +103,11 @@ class Compiler:
             field_types={}, field_metas={}, methods={},
             method_qualifiers={}, parents=[], metas={}, compiler=self
         )
+        self.external_template = EntityTemplate(
+            "ExternalEntity",
+            field_types={}, field_metas={}, methods={},
+            method_qualifiers={}, parents=[], metas={}, compiler=self
+        )
         # builtin types
         for name, cls in (
             ('int', IntType),
@@ -115,6 +120,7 @@ class Compiler:
             ('array', ArrayType),
             ('map', MapType),
             ('AbsPos', AbsPosType),
+            ('ExternEngroup', ExternEGroupGeneric),
         ):
             self.builtins.set(name, cls(self))
         # builtin names

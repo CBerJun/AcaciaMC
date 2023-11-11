@@ -1,6 +1,6 @@
 """Entity group -- a group of entities."""
 
-__all__ = ["EGroupGeneric", "EGroupDataType", "EntityGroup"]
+__all__ = ["EGroupDataType", "EGroupGeneric", "EGroupType", "EntityGroup"]
 
 from typing import TYPE_CHECKING, List
 
@@ -44,7 +44,7 @@ class EGroupDataType(Storable):
                 other.template.is_subtemplate_of(self.template))
 
     def new_var(self):
-        return EntityGroup(self.template, self.compiler)
+        return EntityGroup.from_template(self.template, self.compiler)
 
     def get_var_initializer(self, var: "EntityGroup") -> AcaciaCallable:
         @axe.chop
@@ -78,13 +78,13 @@ class EGroupType(Type):
         return EGroupDataType(self.template)
 
 class EntityGroup(VarValue):
-    def __init__(self, template: "EntityTemplate", compiler):
-        super().__init__(EGroupDataType(template), compiler)
-        self.template = template
+    def __init__(self, data_type: EGroupDataType, compiler):
+        super().__init__(data_type, compiler)
+        self.template = data_type.template
         self.tag = self.compiler.allocate_entity_tag()
         SELF = self.get_selector().to_str()
-        MEMBER_TYPE = EntityDataType(template)
-        OPERAND_TYPE = EGroupDataType(template)
+        MEMBER_TYPE = EntityDataType(self.template)
+        OPERAND_TYPE = EGroupDataType(self.template)
 
         @method_of(self, "select")
         @axe.chop
@@ -148,7 +148,7 @@ class EntityGroup(VarValue):
         @method_of(self, "copy")
         @axe.chop
         def _copy(compiler):
-            res = EntityGroup(self.template, compiler)
+            res = EntityGroup.from_template(self.template, compiler)
             _, commands = (
                 self.data_type.get_var_initializer(res).call([], {})
             )
@@ -202,6 +202,10 @@ class EntityGroup(VarValue):
             selector.tag(self.tag)
             res.main.append(cmds.ExecuteCond("entity", selector.to_str()))
             return res
+
+    @classmethod
+    def from_template(cls, template: "EntityTemplate", compiler: "Compiler"):
+        return cls(EGroupDataType(template), compiler)
 
     def export(self, var: "EntityGroup") -> CMDLIST_T:
         cmds = var.clear()

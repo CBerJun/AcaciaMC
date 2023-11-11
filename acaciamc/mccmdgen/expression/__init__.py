@@ -21,3 +21,4 @@ from .struct_template import *
 from .struct import *
 from .position_absolute import *
 from .generic import *
+from .extern_egroup import *
