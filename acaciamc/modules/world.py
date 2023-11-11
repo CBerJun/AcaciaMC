@@ -70,7 +70,7 @@ tag_remove(target: Selector, tag: str)
 /tell
 msg_tell(sender: entity, receiver: Selector, message: str)
 /tp
-tp(target: Selector, dest: Pos | entity, check_for_blocks=False)
+tp(target: Selector, dest: Pos, check_for_blocks=False)
 rotate(target: Selector, rot: Rot)
 # Just for convenience:
 move(target: Selector, x=0.0, y=0.0, z=0.0, check_for_blocks=False)
@@ -763,21 +763,15 @@ def msg_tell(compiler, sender: "_EntityBase", receiver: "MCSelector",
 @_register("tp")
 @axe.chop
 @axe.arg("target", axe.Selector())
-@axe.arg("dest", axe.Multityped((EntityDataType, PosDataType)))
+@axe.arg("dest", PosDataType)
 @axe.arg("check_for_blocks", axe.LiteralBool(), default=False)
-def tp(compiler, target: "MCSelector", dest: Union["_EntityBase", Position],
-       check_for_blocks: bool):
-    context = []
-    if isinstance(dest, Position):
-        dest_str = "~ ~ ~"
-        context = dest.context
-    else:
-        assert EntityDataType.matches_cls(dest)
-        dest_str = dest.get_selector().to_str()
-    main = "tp %s %s ~ ~ %s" % (
-        target.to_str(), dest_str, _fmt_bool(check_for_blocks)
+def tp(compiler, target: "MCSelector", dest: Position, check_for_blocks: bool):
+    cmd = cmds.Execute(
+        dest.context,
+        "tp %s ~ ~ ~ %s" % (
+            target.to_str(), _fmt_bool(check_for_blocks)
+        )
     )
-    cmd = cmds.Execute(context, cmds.Cmd(main))
     return resultlib.commands([cmd], compiler)
 
 @_register("rotate")
