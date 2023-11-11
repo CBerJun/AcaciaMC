@@ -273,8 +273,8 @@ class ItemType(Type):
         @axe.arg("id", axe.LiteralString(), rename="id_")
         @axe.arg("data", axe.RangedLiteralInt(0, 32767), default=0)
         @axe.arg("keep_on_death", axe.LiteralBool(), default=False)
-        @axe.arg("can_destroy", axe.ArrayOf(axe.LiteralString()), default=[])
-        @axe.arg("can_place_on", axe.ArrayOf(axe.LiteralString()), default=[])
+        @axe.arg("can_destroy", axe.ListOf(axe.LiteralString()), default=[])
+        @axe.arg("can_place_on", axe.ListOf(axe.LiteralString()), default=[])
         @axe.arg("lock", axe.Nullable(
             axe.LiteralStringEnum("lock_in_slot", "lock_in_inventory")
         ), default=None)

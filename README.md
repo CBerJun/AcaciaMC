@@ -70,7 +70,7 @@ Detailed features:
 - No more scoreboards! Instead we have the variable system which is popular in computer programming.
 - No more repetitive commands; Acacia is good at generating repetitive commands.
 - You can define loops and use the "if" statement to run something conditionally.
-- Acacia provides various compile-time constants, including numbers, strings, arrays, maps and even world positions.
+- Acacia provides various compile-time constants, including numbers, strings, lists, maps and even world positions.
   This makes your map or addon more flexible.
 
 Check out [this file](test/brief.aca) for more information about Acacia's syntax.

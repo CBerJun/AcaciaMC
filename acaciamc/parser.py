@@ -119,19 +119,19 @@ class Parser:
         self.eat(TokenType.result)
         return Result(**pos)
 
-    def array_or_map(self):
+    def list_or_map(self):
         """
-        array := LBRACE (expr COMMA)* expr? RBRACE
+        list := LBRACE (expr COMMA)* expr? RBRACE
         map_item := expr COLON expr
         map := LBRACE ((map_item (COMMA map_item)* COMMA?) | COLON)
           RBRACE
         """
         pos = self.current_pos
         self.eat(TokenType.lbrace)
-        # Check for empty array or map
+        # Check for empty list or map
         if self.current_token.type is TokenType.rbrace:
             self.eat()
-            return ArrayDef(items=[], **pos)
+            return ListDef(items=[], **pos)
         elif self.current_token.type is TokenType.colon:
             self.eat()
             self.eat(TokenType.rbrace)
@@ -155,7 +155,7 @@ class Parser:
             self.eat(TokenType.rbrace)
             return MapDef(keys, values, **pos)
         else:
-            # Array
+            # List
             items = [first]
             if self.current_token.type is TokenType.comma:
                 self.eat()
@@ -166,12 +166,12 @@ class Parser:
                     else:
                         break
             self.eat(TokenType.rbrace)
-            return ArrayDef(items, **pos)
+            return ListDef(items, **pos)
 
     def expr_l0(self):
         """
         level 0 expression := (LPAREN expr RPAREN) | literal |
-          identifier | raw_score | self | array | map | result
+          identifier | raw_score | self | list | map | result
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -190,7 +190,7 @@ class Parser:
         elif self.current_token.type is TokenType.self:
             return self.self()
         elif self.current_token.type is TokenType.lbrace:
-            return self.array_or_map()
+            return self.list_or_map()
         elif self.current_token.type is TokenType.result:
             return self.result()
         else:
@@ -201,7 +201,7 @@ class Parser:
         level 1 expression := expr_l0 (
           (POINT IDENTIFIER)
           | call_table
-          | (LBRACKET expr (COMMA expr)* COMMA? RBRACKET)
+          | (LBRACKET (expr COMMA)* expr? RBRACKET)
           | (AT expr_l0)
         )*
         """

@@ -173,7 +173,7 @@ multiline_test = '''
         /*sss ${1}
   sss*/ 5'''
 
-array_map_test = '''
+list_map_test = '''
 {1, 2, 3}
 {1, 2,}
 {1: 2, 3: 4}

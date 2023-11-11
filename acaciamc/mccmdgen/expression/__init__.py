@@ -15,7 +15,7 @@ from .position_offset import *
 from .rotation import *
 from .entity_group import *
 from .entity_filter import *
-from .array import *
+from .list_ import *
 from .map_ import *
 from .struct_template import *
 from .struct import *

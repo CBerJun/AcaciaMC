@@ -67,43 +67,43 @@ while x > 0:
 # of commands. Minecraft limits the amount of commands that one
 # function could trigger to 10000. Be careful when using loops.
 
-## For-in structure & compile time array
+## For-in structure & compile time list
 # A for-in structure is a "compile time loop" that instructs the
 # compiler to *generate repetitive commands* for each iteration. This is
 # very different from a while loop (that's a "runtime loop" and is done
 # in Minecraft).
-# {1, 2, 3} creates a compile time array consisting of 1, 2 and 3.
+# {1, 2, 3} creates a compile time list consisting of 1, 2 and 3.
 for i in {1, 2, 3}:
     x += i
 # The above is equivalent to:
 x += 1
 x += 2
 x += 3
-# Arrays can contain variables, too:
+# Lists can contain variables, too:
 m := 10
 n := 20
 q := 30
-# Since arrays are compile time only, we use binding instead of
+# Since lists are compile time only, we use binding instead of
 # assignment to store them.
-arr -> {m, n, q}
+my_list -> {m, n, q}
 # Values from iterator are *bound* to variable so it's possible to do:
 # (This will increase `m`, `n` and `q` by 10.)
-for i in arr:
+for i in my_list:
     # `i` is local in the for-in scope and can't be accessed from
     # outside.
     i += 10
-# Set element 0 (first element) to `x`. Note that the array is compile
+# Set element 0 (first element) to `x`. Note that the list is compile
 # time object, so we still use binding to change its elements.
-arr[0] -> x
+my_list[0] -> x
 # But assignment works too if the object accessed is assignable (In this
-# case `arr[0]` is `x`, so this is valid and same as `x = 10`, which
-# assigns 10 to `x` (the array didn't change)).
-arr[0] = 10
-# Assign value of element 0 in `arr` (`x`) to `n`.
-n = arr[0]
+# case `my_list[0]` is `x`, so this is valid and same as `x = 10`, which
+# assigns 10 to `x` (the list didn't change)).
+my_list[0] = 10
+# Assign value of element 0 in `my_list` (`x`) to `n`.
+n = my_list[0]
 # Common bisection algorithm implemented with this feature:
 y_length := 23
-bisection_arr -> array.geometric(1, ratio=2, times=5)
+bisection_arr -> list.geometric(1, ratio=2, times=5)
 bisection_arr.reverse()
 for i in bisection_arr:
     if y_length >= i:
@@ -114,16 +114,16 @@ for i in bisection_arr:
         # use this command.)
         /execute as CBerJun at @s run tp @s ~ ~${i} ~
 # `slice` method works the same as Python's slice (start, stop, step)
-# and array.range(10) creates {0, 1, 2, ..., 8, 9}.
-for i in array.range(10).slice(2, None, 2):
+# and list.range(10) creates {0, 1, 2, ..., 8, 9}.
+for i in list.range(10).slice(2, None, 2):
     # `i` is bound to 2, 4, 6 and 8 in turn.
     x += i
 # This will increase `x` by 5 for 10 times.
-for i in array.repeat(x, 10):
+for i in list.repeat(x, 10):
     i += 5
 
 #* Compile time map *#
-# Map is similar to array since it is also compile time only.
+# Map is similar to list since it is also compile time only.
 # Its keys can only be several literal types (e.g. int literal or
 # string).
 mp -> {
@@ -259,7 +259,7 @@ for player in player_group:
     player.score += 1
 # Now all players inside the `player_group` got their score plus 1.
 # Note that this for-in works *completely* different from the for-in we
-# previously used to iterate over array or map, but they looked the
+# previously used to iterate over list or map, but they looked the
 # same. This structure is designed like this for readability.
 # This removes players whose score is lower than 10 out of group:
 for player in player_group:

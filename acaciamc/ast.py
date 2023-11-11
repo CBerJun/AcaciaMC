@@ -337,7 +337,7 @@ class RawScore(Expression):  # directly get the score on a scoreboard
         self.objective = objective
         self.selector = selector
 
-class ArrayDef(Expression):  # an array
+class ListDef(Expression):  # a literal compile time list
     def __init__(self, items: _List[Expression], lineno, col):
         super().__init__(lineno, col)
         self.items = items

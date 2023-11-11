@@ -133,11 +133,11 @@ class ErrorType(enum.Enum):
         'actually override a virtual method'
     POS_OFFSET_ALREADY_SET = '"{axis}" set already'
     INVALID_POS_ALIGN = 'Invalid position alignment "{align}"'
-    ARRAY_INDEX_OUT_OF_BOUNDS = 'Array with length {length} got out of ' \
+    LIST_INDEX_OUT_OF_BOUNDS = 'List with length {length} got out of ' \
         'bounds index {index}'
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
-    ARRAY_MULTIMES_NON_LITERAL = 'Array can only be multiplied by literal int'
+    LIST_MULTIMES_NON_LITERAL = 'List can only be multiplied by literal int'
     RESULT_UNDEFINED = '"result" accessed before it gets defined'
     RESULT_BIND_OUT_OF_SCOPE = "Can't bind to result when out of function " \
         "or inside non-inline function"

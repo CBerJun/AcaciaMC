@@ -10,7 +10,7 @@ __all__ = [
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
-    "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ArrayOf",
+    "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ListOf",
     "MapOf", "PlayerSelector", "RangedLiteralInt", "Callable", "PosXZ",
     # Exception
     "ChopError", "ArgumentError"
@@ -406,20 +406,20 @@ class LiteralStringEnum(LiteralString):
             self.wrong_argument()
         return origin_str
 
-class ArrayOf(Typed):
-    """Accepts an array of specified data type and converts it to Python
+class ListOf(Typed):
+    """Accepts a list of specified data type and converts it to Python
     `list`.
     """
     def __init__(self, converter: Converter):
-        super().__init__(acacia.ArrayDataType)
+        super().__init__(acacia.ListDataType)
         self.converter = converter
 
     def get_show_name(self) -> str:
-        return "array of " + self.converter.get_show_name()
+        return "list of " + self.converter.get_show_name()
 
     def convert(self, origin: acacia.AcaciaExpr) -> list:
         origin = super().convert(origin)
-        assert isinstance(origin, acacia.Array)
+        assert isinstance(origin, acacia.AcaciaList)
         return list(map(self.converter.convert, origin.items))
 
 class MapOf(Typed):
@@ -855,8 +855,8 @@ class OverloadChopped(type):
 @_parser_component
 def overload(building: _BuildingParser):
     """Start an overload implementation in a class decorated with
-    @chop_overload. The decorated implementation will be made a
-    `classmethod`.
+    metaclass `OverloadChopped`. The decorated implementation will be
+    made a `classmethod`.
     """
     return _OverloadMethod(building)
 

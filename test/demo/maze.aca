@@ -132,7 +132,7 @@ def choose(frontier: Frontier):
     world.kill(frontier)
 
 def tick():
-    if frontiers.size() == 0:
+    if frontiers.is_empty():
         if last_tick_run:
             # Finished!
             world.fill(ORIGIN, Offset().offset(x=2*SIZE, z=2*SIZE), BLOCK)
@@ -157,11 +157,11 @@ interface start:
     world.fill(ORIGIN.offset(x=1, z=1),
                Offset().offset(x=2*SIZE-2, z=2*SIZE-2),
                BLOCK_UNKNOWN)
-    for i in array.range(SIZE):
-        for j in array.range(SIZE):
+    for i in list.range(SIZE):
+        for j in list.range(SIZE):
             world.setblock(ORIGIN.offset(x=2*i+1, z=2*j+1), BLOCK_UNVISITED)
-    for i in array.range(SIZE-1):
-        for j in array.range(SIZE-1):
+    for i in list.range(SIZE-1):
+        for j in list.range(SIZE-1):
             pos -> ORIGIN.offset(x=2*i+2, z=2*j+2)
             world.fill(pos, Offset().offset(y=HEIGHT), BLOCK)
     e := Dummy(ORIGIN.offset(+1, +1, +1))

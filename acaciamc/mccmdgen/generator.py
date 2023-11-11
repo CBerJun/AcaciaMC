@@ -770,8 +770,8 @@ class Generator(ASTVisitor):
             self.error_c(ErrorType.SELF_OUT_OF_SCOPE)
         return v
 
-    def visit_ArrayDef(self, node: ArrayDef):
-        return Array(list(map(self.visit, node.items)), self.compiler)
+    def visit_ListDef(self, node: ListDef):
+        return AcaciaList(list(map(self.visit, node.items)), self.compiler)
 
     def visit_MapDef(self, node: MapDef):
         keys = list(map(self.visit, node.keys))

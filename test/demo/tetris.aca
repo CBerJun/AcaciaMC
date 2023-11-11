@@ -28,12 +28,7 @@ WIDTH -> 10
 HEIGHT -> 20
 ORIGIN_POS -> AbsPos(0, -50, 0)
 BLOCK_EMPTY -> world.Block("concrete", {"color": "black"})
-PLAYER_POS -> ORIGIN_POS.offset(
-    # +0.5 in X and Z because player should be in middle of a block
-    x = WIDTH / 2 + 0.5,
-    y = +20,
-    z = HEIGHT / 2 + 0.5
-)
+PLAYER_POS -> ORIGIN_POS.offset(x=WIDTH/2, y=+20, z=HEIGHT/2)
 
 SHAPE_I -> 0
 SHAPE_L -> 1
@@ -68,7 +63,7 @@ SHAPE_SIZES -> {
     SHAPE_J: {3, 2}
 }
 SHAPE_ROTATE_MOVE -> {
-    # (Shapes not in this array does not move when rotated)
+    # (Shapes not in this list does not move when rotated)
     {SHAPE_I}: {  # 1x4
         ROT_NONE: {+2, -1}, ROT_CLOCKWISE: {-2, +2},
         ROT_180: {+1, -2}, ROT_CCLOCKWISE: {-1, +1}
@@ -181,9 +176,9 @@ inline def traverse_shape(dummy: PosDummy, shape: int, rotation: int, action):
     Find all blocks in a shape (relative to `dummy`'s position) and
     execute function `action` with each position of block as argument.
     *#
-    inline def do_action(arr_of_arr):
-        for arr in arr_of_arr:
-            action(Pos(dummy).offset(x=arr[0], z=arr[1]))
+    inline def do_action(list2d):
+        for xz in list2d:
+            action(Pos(dummy).offset(x=xz[0], z=xz[1]))
     for s in SHAPE_PATTERNS_360:
         if shape == s:
             shape_def -> SHAPE_PATTERNS_360[s]
@@ -341,9 +336,9 @@ def rotate():
             rot_def -> SHAPE_ROTATE_MOVE[types]
             for rotation in rot_def:
                 if rotation == shape_rotation:
-                    arr -> rot_def[rotation]
-                    new_col += arr[0]
-                    new_row += arr[1]
+                    rowcol -> rot_def[rotation]
+                    new_col += rowcol[0]
+                    new_row += rowcol[1]
     # Make sure the shape is not out of game field after rotation
     # This is a simple alternative to Wall Kicks (see link above).
     new_size := get_shape_size(shape_type, new_rotation)

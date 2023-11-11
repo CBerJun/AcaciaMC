@@ -10,7 +10,7 @@ from itertools import repeat
 from .base import *
 from .types import Type
 from .none import NoneLiteral
-from .array import Array
+from .list_ import AcaciaList
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
@@ -78,11 +78,11 @@ class Map(SupportsGetItem, SupportsSetItem):
         @method_of(self, "keys")
         @axe.chop
         def _keys(compiler):
-            return Array(self.iterate(), compiler)
+            return AcaciaList(self.iterate(), compiler)
         @method_of(self, "values")
         @axe.chop
         def _values(compiler):
-            return Array(list(self.dict.values()), compiler)
+            return AcaciaList(list(self.dict.values()), compiler)
         @method_of(self, "get")
         @axe.chop
         @axe.arg("key", axe.AnyValue())

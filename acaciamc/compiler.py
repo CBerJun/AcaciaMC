@@ -117,7 +117,7 @@ class Compiler:
             ('Offset', PosOffsetType),
             ('Engroup', EGroupGeneric),
             ('Enfilter', EFilterType),
-            ('array', ArrayType),
+            ('list', ListType),
             ('map', MapType),
             ('AbsPos', AbsPosType),
             ('ExternEngroup', ExternEGroupGeneric),
