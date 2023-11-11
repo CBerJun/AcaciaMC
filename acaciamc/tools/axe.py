@@ -203,7 +203,7 @@ def _type_checker(value: acacia.AcaciaExpr, type_: _TYPED_TYPE):
         return type_.is_type_of(value)
     else:
         assert issubclass(type_, DataType)
-        return type_.matches_cls(type(value.data_type))
+        return value.data_type.matches_cls(type_)
 
 def _type_to_str(type_: _TYPED_TYPE):
     if isinstance(type_, DataType):

@@ -52,7 +52,8 @@ class DataType(metaclass=ABCMeta):
 
     @classmethod
     def matches_cls(cls, other: PythonType["DataType"]) -> bool:
-        return issubclass(other, cls)
+        """Return whether this class is of `other` type."""
+        return issubclass(cls, other)
 
 class Storable(DataType):
     """A "storable" data type. (See `AcaciaExpr`)."""
