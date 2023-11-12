@@ -44,10 +44,13 @@ class _EntityBase(AcaciaExpr):
         self.template.register_entity(self)
 
     def __str__(self) -> str:
-        return self.get_selector().to_str()
+        return self.to_str()
 
     def to_str(self) -> str:
-        return str(self)
+        return self.get_selector().to_str()
+
+    def cmdstr(self) -> str:
+        return self.to_str()
 
     def get_selector(self) -> MCSelector:
         res = self._get_selector()
@@ -72,9 +75,6 @@ class EntityReference(_EntityBase):
                  compiler, cast_to: Optional["EntityTemplate"] = None):
         self.selector = selector
         super().__init__(template, compiler, cast_to)
-
-    def cmdstr(self) -> str:
-        return str(self)
 
     def _get_selector(self) -> MCSelector:
         return self.selector.copy()
@@ -104,8 +104,10 @@ class TaggedEntity(_EntityBase, VarValue):
         )
 
     @classmethod
-    def summon_new(cls, template: "EntityTemplate", compiler: "Compiler") \
-            -> Tuple["TaggedEntity", CMDLIST_T]:
+    def summon_new(
+        cls, template: "EntityTemplate", compiler: "Compiler",
+        _instance: Optional["TaggedEntity"] = None
+    ) -> Tuple["TaggedEntity", CMDLIST_T]:
         """Summon an entity of given template.
         Return a 2-tuple.
         Element 0: the `TaggedEntity`
@@ -133,7 +135,10 @@ class TaggedEntity(_EntityBase, VarValue):
             SUMMON = "summon {type} {pos} 0 0 {event} {name}"
         else:
             SUMMON = "summon {type} {pos} {event} {name}"
-        inst = cls.new_tag(template, compiler)
+        if _instance is None:
+            inst = cls.new_tag(template, compiler)
+        else:
+            inst = _instance
         return inst, [
             cmds.Execute(e_pos[0], cmds.Cmd(SUMMON.format(
                 type=e_type, name=name, pos=e_pos[1], event=e_event
@@ -149,9 +154,6 @@ class TaggedEntity(_EntityBase, VarValue):
         res = MCSelector("e")
         res.tag(self.tag)
         return res
-
-    def cmdstr(self) -> str:
-        return str(self)
 
     def clear(self) -> List[str]:
         # Clear the reference to entity that the tag is pointing to.

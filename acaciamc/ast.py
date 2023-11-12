@@ -174,18 +174,23 @@ class EntityMeta(Statement):  # entity meta like @type
         self.name = name
         self.value = value
 
-class VarDef(Statement):  # define a variable
+class VarDef(Statement):  # x: y [= z] variable declaration
     def __init__(self, target: Expression,
-                 type_: _Optional[TypeSpec],
+                 type_: TypeSpec,
                  value: _Optional[Expression],
                  args: _Optional[CallTable], lineno, col):
         super().__init__(lineno, col)
-        assert not (type_ is None and value is None)
-        assert not (args is not None and value is not None)
+        assert args is None or value is None
         self.target = target
         self.type = type_
         self.value = value
         self.args = args
+
+class AutoVarDef(Statement):  # := short variable declaration
+    def __init__(self, target: Expression, value: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.target = target
+        self.value = value
 
 class Assign(Statement):  # normal assign
     def __init__(self, target: Expression, value: Expression, lineno, col):

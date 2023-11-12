@@ -239,25 +239,9 @@ class Generator(ASTVisitor):
     # --- STATEMENT VISITORS ---
 
     def visit_VarDef(self, node: VarDef):
-        dt: Optional[DataType] = None
-        value: Optional[AcaciaExpr] = None
         # Analyze data type
-        if node.type is not None:
-            dt = self.visit(node.type)
-        if node.value is not None:
-            value = self.visit(node.value)
-            if dt is None:
-                # Using x := z
-                dt = value.data_type
-            else:
-                # Using x: y = z
-                if not dt.is_type_of(value):
-                    self.error_c(
-                        ErrorType.WRONG_ASSIGN_TYPE,
-                        got=str(value.data_type), expect=str(dt)
-                    )
+        dt: DataType = self.visit(node.type)
         # Create variable
-        assert dt is not None
         if not isinstance(dt, Storable):
             self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE, var_type=str(dt))
         if node.args is None:
@@ -267,41 +251,100 @@ class Generator(ASTVisitor):
         is_result = isinstance(node.target, Result)
         if not (is_result and self.ctx.function_state == FUNC_NORMAL):
             var = dt.new_var()
+        else:  # Result var already defined for non-inline functions
+            assert isinstance(self.ctx.current_function, AcaciaFunction)
+            var = self.ctx.current_function.result_var
         if is_result:
-            if self.ctx.function_state == FUNC_NORMAL:
-                assert isinstance(self.ctx.current_function, AcaciaFunction)
-                var = self.ctx.current_function.result_var
-            else:
-                assert self.ctx.function_state == FUNC_INLINE
-                assert var is not None
             result_type = self.ctx.current_function.result_type
             if (result_type is not None) and (not result_type.matches(dt)):
                 self.error_c(ErrorType.WRONG_RESULT_TYPE,
                              expect=str(result_type), got=str(dt))
-        _, cmds = dt.get_var_initializer(var).call_withframe(
+        _, commands = dt.get_var_initializer(var).call_withframe(
             args, keywords, location=self.node_location(node)
         )
         self.register_symbol(node.target, var)
-        # Assign
-        if value is not None:
-            cmds.extend(value.export(var))
-        # Write commands
-        self.current_file.extend(cmds)
+        self.current_file.extend(commands)
+        if node.value is not None:
+            self._assign(var, node.value)
 
-    def visit_Assign(self, node: Assign):
-        # analyze expr first
-        value = self.visit(node.value)
-        # then analyze target
-        target = self.visit(node.target)
+    def visit_AutoVarDef(self, node: AutoVarDef):
+        is_bind: bool = False
+        # Analyze data type & handle rvalue
+        if isinstance(node.value, Call):
+            func, table = self._call_inspect(node.value)
+            value = self._call_invoke(node.value, func, table)
+            is_bind = isinstance(func, ConstructorFunction)
+        else:
+            value = self.visit(node.value)
+        # Create variable
+        dt = value.data_type
+        if not isinstance(dt, Storable):
+            self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE, var_type=str(dt))
+        is_result = isinstance(node.target, Result)
+        used_bind = False
+        if not (is_result and self.ctx.function_state == FUNC_NORMAL):
+            if not is_bind:
+                var = dt.new_var()
+            else:  # Bind, no new var
+                used_bind = True
+                var = value
+        else:  # Result var already defined for non-inline functions
+            assert isinstance(self.ctx.current_function, AcaciaFunction)
+            var = self.ctx.current_function.result_var
+        if is_result:
+            result_type = self.ctx.current_function.result_type
+            if (result_type is not None) and (not result_type.matches(dt)):
+                self.error_c(ErrorType.WRONG_RESULT_TYPE,
+                             expect=str(result_type), got=str(dt))
+        _, commands = dt.get_var_initializer(var).call_withframe(
+            [], {}, location=self.node_location(node)
+        )
+        self.register_symbol(node.target, var)
+        # Assign
+        if value is not None and not used_bind:
+            commands.extend(value.export(var))
+        # Write commands
+        self.current_file.extend(commands)
+
+    def _assign(self, target: AcaciaExpr, value_node: Expression):
         self.check_assignable(target)
+        value_type: Optional[DataType] = None
+        value: Optional[AcaciaExpr] = None
+        ctor_cb = None
+        # analyze rvalue
+        if isinstance(value_node, Call):
+            func, table = self._call_inspect(value_node)
+            if (isinstance(func, ConstructorFunction)
+                    and func.reconstruct is not None):
+                def ctor_cb():
+                    commands.extend(func.reconstruct(target, *table))
+                value_type = func.var_type
+            else:
+                value = self._call_invoke(value_node, func, table)
+        else:
+            value = self.visit(value_node)
         # check type
-        if not target.data_type.matches(value.data_type):
+        if value_type is None:
+            assert value is not None
+            value_type = value.data_type
+        if not target.data_type.matches(value_type):
             self.error_c(
                 ErrorType.WRONG_ASSIGN_TYPE,
-                expect=str(target.data_type), got=str(value.data_type)
+                expect=str(target.data_type), got=str(value_type)
             )
         # assign
-        self.current_file.extend(value.export(target))
+        commands = []
+        if value is not None:
+            commands.extend(value.export(target))
+        else:
+            assert ctor_cb is not None
+            ctor_cb()
+        # write commands
+        self.current_file.extend(commands)
+
+    def visit_Assign(self, node: Assign):
+        target = self.visit(node.target)
+        self._assign(target, node.value)
 
     def visit_AugmentedAssign(self, node: AugmentedAssign):
         # visit nodes
@@ -743,7 +786,8 @@ class Generator(ASTVisitor):
             else:
                 assert isinstance(decl, Pass)
         self.ctx.scope.set(node.name, StructTemplate(
-            node.name, fields, base_structs, self.compiler
+            node.name, fields, base_structs, self.compiler,
+            source=self.node_location(node)
         ))
 
     # --- EXPRESSION VISITORS ---
@@ -898,19 +942,28 @@ class Generator(ASTVisitor):
 
     # call
 
-    def visit_Call(self, node: Call):
-        # find called function
+    def _call_inspect(self, node: Call) -> \
+            Tuple[AcaciaCallable, Tuple[ARGS_T, KEYWORDS_T]]:
         func = self.visit(node.func)
         if not isinstance(func, AcaciaCallable):
             self.error_c(ErrorType.UNCALLABLE, expr_type=str(func.data_type))
+        table = self.visit(node.table)
+        return func, table
+
+    def _call_invoke(self, node: Call, func: AcaciaCallable,
+                     table: Tuple[ARGS_T, KEYWORDS_T]) -> AcaciaExpr:
         # call it
-        res, cmds = func.call_withframe(
-            *self.visit(node.table),
+        res, commands = func.call_withframe(
+            *table,
             location=self.node_location(node)
         )
         # write commands
-        self.current_file.extend(cmds)
+        self.current_file.extend(commands)
         return res
+
+    def visit_Call(self, node: Call):
+        func, table = self._call_inspect(node)
+        return self._call_invoke(node, func, table)
 
     def call_inline_func(self, func: InlineFunction,
                          args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:

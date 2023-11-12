@@ -10,7 +10,9 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from .base import *
 from .entity import TaggedEntity, EntityDataType
-from .functions import BoundVirtualMethod, BoundMethod, InlineFunction
+from .functions import (
+    BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction
+)
 from .string import String
 from .none import NoneDataType
 from .position import Position
@@ -94,7 +96,7 @@ def _check_override(implementation: "METHODDEF_T", method: str):
             raise Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
                         name=method, type_=str(res_type))
 
-class EntityTemplate(AcaciaCallable):
+class EntityTemplate(ConstructorFunction):
     def __init__(self, name: str,
                  field_types: Dict[str, "SupportsEntityField"],
                  field_metas: Dict[str, dict],
@@ -269,10 +271,10 @@ class EntityTemplate(AcaciaCallable):
                 name, type_.new_var_as_field(entity, **meta)
             )
 
-    def call(self, args, keywords):
+    def call(self, args, keywords, _instance=None):
         # Calling an entity template returns an entity, the arguments
         # are passed to __init__ if it exists
-        inst, cmds = TaggedEntity.summon_new(self, self.compiler)
+        inst, cmds = TaggedEntity.summon_new(self, self.compiler, _instance)
         # Call __init__ if it exists
         initializer = inst.attribute_table.lookup("__init__")
         if initializer:
@@ -293,10 +295,14 @@ class EntityTemplate(AcaciaCallable):
     def is_subtemplate_of(self, other: "EntityTemplate") -> bool:
         # Return whether `self` is a subtemplate of `other`. A
         # template itself is considered as a subtemplate of itself.
-        # other:EntityTemplate
         if self is other:
             return True
         for parent in self.parents:
             if parent.is_subtemplate_of(other):
                 return True
         return False
+
+    def reconstruct(self, var: TaggedEntity, args: "ARGS_T",
+                    keywords: "KEYWORDS_T") -> "CMDLIST_T":
+        _, commands = self.call(args, keywords, _instance=var)
+        return commands

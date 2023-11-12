@@ -1,6 +1,6 @@
 """Builtin callable objects.
 
-There are 5 types of functions:
+There are 6 types of functions:
 - AcaciaFunction: functions that are written in Acacia
 - InlineFunction: functions written in Acacia that are annotated with
   `inline`
@@ -23,6 +23,16 @@ There are 5 types of functions:
       a.foo()  # BoundMethod: must be foo in A
       A@a.bar()  # BoundMethod: must be bar in A
       a.bar()  # BoundVirtualMethod: bar in A or B?
+- ConstructorFunction: a function that produces a new object. This
+  exists only for optimization purposes.
+    # `Entity` is a constructor and this code:
+    x := Entity()
+    # would be equivalent to `x -> Entity()`, so that there is no
+    # temporary entity used during the construction.
+    # Additionally, this code:
+    x = Entity()
+    # may be optimized too, because `Entity` provides a "reconstructor"
+    # and it will reconstruct `x` to a new entity.
 """
 
 __all__ = [
@@ -30,7 +40,7 @@ __all__ = [
     'FunctionDataType',
     # Expressions
     'AcaciaFunction', 'InlineFunction', 'BinaryFunction',
-    'BoundMethod', 'BoundVirtualMethod'
+    'BoundMethod', 'BoundVirtualMethod', 'ConstructorFunction'
 ]
 
 from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
@@ -302,3 +312,18 @@ class BoundVirtualMethod(AcaciaCallable):
                         )
                         for cmd in commands
                     )
+
+class ConstructorFunction(AcaciaCallable):
+    # `call` should construct a var of `var_type` type.
+    # `reconstruct` should accept a var of `var_type` type and
+    # some arguments and return a list of commands
+    # `var_type` defaults to call `datatype_hook` if it is implemented,
+    # otherwise subclasses have to implement `var_type`.
+
+    @property
+    def var_type(self) -> Storable:
+        return self.datatype_hook()
+
+    reconstruct: Optional[Callable[
+        [VarValue, "ARGS_T", "KEYWORDS_T"], "CMDLIST_T"
+    ]] = None

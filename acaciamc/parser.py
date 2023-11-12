@@ -745,8 +745,7 @@ class Parser:
             self.eat()  # eat walrus
             if not isinstance(expr, VARDEFABLE):
                 self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
-            node = VarDef(expr, type_=None, value=self.expr(),
-                          args=None, **pos)
+            node = AutoVarDef(expr, self.expr(), **pos)
         else:  # just an expr
             # expr_stmt := expr
             node = ExprStatement(expr, **pos)
