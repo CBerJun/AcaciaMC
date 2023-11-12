@@ -31,9 +31,6 @@ class Context:
         # current_function: the current function we are visiting
         self.current_function: \
             Optional[Union[AcaciaFunction, InlineFunction]] = None
-        # result_var_declared: whether result var is declared by user
-        # only exists when visiting non-inline functions.
-        self.result_var_declared: Optional[bool] = None
         # inline_result: stores result expression of inline function
         # only exists when visiting inline functions.
         self.inline_result: Optional[AcaciaExpr] = None
@@ -47,7 +44,6 @@ class Context:
     def copy(self):
         res = Context(self.compiler, self.scope)
         res.current_function = self.current_function
-        res.result_var_declared = self.result_var_declared
         res.inline_result = self.inline_result
         res.function_state = self.function_state
         res.self_value = self.self_value
@@ -135,12 +131,8 @@ class Generator(ASTVisitor):
         elif isinstance(target_node, Result):
             if self.ctx.function_state == FUNC_INLINE:
                 self.ctx.inline_result = target_value
-            elif self.ctx.function_state == FUNC_NORMAL:
-                assert target_value is self.ctx.current_function.result_var
-                self.ctx.result_var_declared = True
             else:
-                assert self.ctx.function_state == FUNC_NONE
-                self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
+                self.error_c(ErrorType.RESULT_BIND_OUT_OF_SCOPE)
         elif isinstance(target_node, Subscript):
             object_ = self.visit(target_node.object)
             subscripts = tuple(map(self.visit, target_node.subscripts))
@@ -248,17 +240,7 @@ class Generator(ASTVisitor):
             args, keywords = [], {}
         else:
             args, keywords = self.visit(node.args)
-        is_result = isinstance(node.target, Result)
-        if not (is_result and self.ctx.function_state == FUNC_NORMAL):
-            var = dt.new_var()
-        else:  # Result var already defined for non-inline functions
-            assert isinstance(self.ctx.current_function, AcaciaFunction)
-            var = self.ctx.current_function.result_var
-        if is_result:
-            result_type = self.ctx.current_function.result_type
-            if (result_type is not None) and (not result_type.matches(dt)):
-                self.error_c(ErrorType.WRONG_RESULT_TYPE,
-                             expect=str(result_type), got=str(dt))
+        var = dt.new_var()
         _, commands = dt.get_var_initializer(var).call_withframe(
             args, keywords, location=self.node_location(node)
         )
@@ -280,28 +262,16 @@ class Generator(ASTVisitor):
         dt = value.data_type
         if not isinstance(dt, Storable):
             self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE, var_type=str(dt))
-        is_result = isinstance(node.target, Result)
-        used_bind = False
-        if not (is_result and self.ctx.function_state == FUNC_NORMAL):
-            if not is_bind:
-                var = dt.new_var()
-            else:  # Bind, no new var
-                used_bind = True
-                var = value
-        else:  # Result var already defined for non-inline functions
-            assert isinstance(self.ctx.current_function, AcaciaFunction)
-            var = self.ctx.current_function.result_var
-        if is_result:
-            result_type = self.ctx.current_function.result_type
-            if (result_type is not None) and (not result_type.matches(dt)):
-                self.error_c(ErrorType.WRONG_RESULT_TYPE,
-                             expect=str(result_type), got=str(dt))
+        if not is_bind:
+            var = dt.new_var()
+        else:  # Bind, no new var
+            var = value
         _, commands = dt.get_var_initializer(var).call_withframe(
             [], {}, location=self.node_location(node)
         )
         self.register_symbol(node.target, var)
         # Assign
-        if value is not None and not used_bind:
+        if value is not None and not is_bind:
             commands.extend(value.export(var))
         # Write commands
         self.current_file.extend(commands)
@@ -365,10 +335,6 @@ class Generator(ASTVisitor):
         ))
 
     def visit_Binding(self, node: Binding):
-        # special check for result
-        if isinstance(node.target, Result):
-            if self.ctx.function_state != FUNC_INLINE:
-                self.error_c(ErrorType.RESULT_BIND_OUT_OF_SCOPE)
         # analyze value
         value = self.visit(node.value)
         # register to symbol table
@@ -566,13 +532,8 @@ class Generator(ASTVisitor):
         with self.new_ctx():
             self.ctx.new_scope()
             self.ctx.current_function = func
-            self.ctx.result_var_declared = False
             self.ctx.function_state = FUNC_NORMAL
             yield
-            # Check result var
-            if (not self.ctx.result_var_declared
-                and not func.result_type.matches_cls(NoneDataType)):
-                self.error_c(ErrorType.NEVER_RESULT)
 
     def handle_inline_func(self, node: InlineFuncDef) -> InlineFunction:
         # Return the inline function object to a function definition
@@ -863,8 +824,6 @@ class Generator(ASTVisitor):
 
     def visit_Result(self, node: Result):
         if self.ctx.function_state == FUNC_NORMAL:
-            if not self.ctx.result_var_declared:
-                self.error_c(ErrorType.RESULT_UNDEFINED)
             return self.ctx.current_function.result_var
         elif self.ctx.function_state == FUNC_INLINE:
             if self.ctx.inline_result is None:

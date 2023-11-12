@@ -697,7 +697,7 @@ class Parser:
         }
         BINDABLE = (Attribute, Identifier, Result, Subscript)
         ASSIGNABLE = BINDABLE + (RawScore,)
-        VARDEFABLE = (Identifier, Result)
+        VARDEFABLE = (Identifier,)
 
         # assignable := expr
         # that is Attribute, Identifier, RawScore, Subscript or Result
@@ -724,7 +724,7 @@ class Parser:
             right = self.expr()  # get assign value
             node = Binding(expr, right, **pos)
         elif self.current_token.type is TokenType.colon:
-            # var_def_stmt := (identifier | result) COLON type_spec
+            # var_def_stmt := identifier COLON type_spec
             #   ((EQUAL expr) | (BAR call_table)))?
             self.eat()  # eat colon
             if not isinstance(expr, VARDEFABLE):
@@ -741,7 +741,7 @@ class Parser:
             else:
                 node = VarDef(expr, type_, value=None, args=None, **pos)
         elif self.current_token.type is TokenType.walrus:
-            # auto_var_def_stmt := (identifier | result) WALRUS expr
+            # auto_var_def_stmt := identifier WALRUS expr
             self.eat()  # eat walrus
             if not isinstance(expr, VARDEFABLE):
                 self.error(ErrorType.INVALID_VARDEF_STMT, **pos)

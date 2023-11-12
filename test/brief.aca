@@ -315,7 +315,6 @@ def max(a: int, b = int.MAX) -> int:
                     # int.MAX refers to 2147483647
     #* Return the larger one between a and b *#
     # Result of a function is specified by assigning to `result`.
-    result: int
     if a >= b:
         result = a
         # Unlike "return" in modern languages like Python,
@@ -325,7 +324,7 @@ def max(a: int, b = int.MAX) -> int:
 
 def is_larger(a: int, b: int) -> bool:
     #* Return whether a is larger than b *#
-    result := a > b
+    result = a > b
 
 if not is_larger(x, 4):
     x = 2
@@ -384,7 +383,8 @@ test_struct.b = test_struct.i < 5
 # This is useful when a function's result has multiple values:
 def result_struct(i: int) -> Struct:
     # You can specify initial values of struct members:
-    result: Struct | (i=i, b=i<5)
+    result = Struct(i=i)
+    result.b = i < 5
     # The barline "|" passes arguments when initializing variable.
     # Different data types accept different arguments.
 test_struct = result_struct(10)

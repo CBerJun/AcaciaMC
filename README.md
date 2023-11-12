@@ -19,7 +19,7 @@ def arithmetic(start: int, to: int, delta=1) -> int:
      * Return sum of arithmetic sequence that starts with `start`,
      * ends with `to` with common difference `delta`.
      *#
-    result := (start + to) * ((to - start) / delta + 1) / 2
+    result = (start + to) * ((to - start) / delta + 1) / 2
 res := arithmetic(-30, 14, delta=2)
 print.tell(print.format("Sum of arithmetic sequence (-30~14, d=2) is %0", res))
 ```
@@ -89,7 +89,7 @@ Function definitions:
 ```python
 def foo(x: int, y = True) -> int:
     # Here is function body code
-    result := x
+    result = x  # return value
     if y:
         result += 10
 z: int
@@ -103,7 +103,7 @@ Flow control statements (selections and loops):
 ```python
 def is_prime(x: int) -> bool:
     #* Test if `x` is a prime number *#
-    result: bool = True
+    result = True
     mod: int = 2
     while mod <= x / 2:
         if x % mod == 0:

@@ -8,7 +8,7 @@
 import print
 
 def test(x: int) -> bool:
-    result := x >= 0
+    result = x >= 0
 
 inline def get_inline_func():
     a: int = 0

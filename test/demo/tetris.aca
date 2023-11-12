@@ -155,11 +155,10 @@ def get_dummy() -> PosDummy:
     Get the dummy entity which only exists when game is running.
     We should have `dummy_group.size() == 1 and running`.
     *#
-    result := dummy_group.to_single()
+    result = dummy_group.to_single()
 
 def get_shape_size(shape: int, rotation: int) -> Size:
     #* Get real shape size, with rotation considered. *#
-    result: Size
     for s in SHAPE_SIZES:
         if shape == s:
             size_arr -> SHAPE_SIZES[s]
@@ -218,7 +217,7 @@ def will_collide(dummy: PosDummy, shape: int, rotation: int) -> bool:
     Whether the shape with given rotation will collide with other
     blocks at dummy.
     *#
-    result: bool = False
+    result = False
     res -> result
     inline def check(pos: Pos):
         res = res or not world.is_block(pos, BLOCK_EMPTY)

@@ -8,7 +8,7 @@ MAX -> 50
 def is_prime(x: int) -> bool:
     # Test if an integer is a prime number
     # `x` must >= 2
-    result := True
+    result = True
     mod := 2
     while mod <= x / 2:
         if x % mod == 0:

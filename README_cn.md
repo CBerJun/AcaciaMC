@@ -14,7 +14,7 @@ Acacia 代码最终会被编译为多个 `.mcfunction` 文件，也就是说 Aca
 import print
 def arithmetic(start: int, to: int, delta=1) -> int:
     #* 返回以`start`为首项，`to`为末项，`delta`为公差的等差数列的和 *#
-    result := (start + to) * ((to - start) / delta + 1) / 2
+    result = (start + to) * ((to - start) / delta + 1) / 2
 res := arithmetic(-30, 14, delta=2)
 print.tell(print.format("从-30到14，公差为2的等差数列和为%0", res))
 ```
@@ -83,7 +83,7 @@ b := (10 + a) * a - 5
 ```python
 def foo(x: int, y = True) -> int:
     # 这里是函数体代码
-    result := x
+    result = x  # 返回值
     if y:
         result += 10
 z: int
@@ -97,9 +97,8 @@ z = foo(x=3)
 ```python
 def is_prime(x: int) -> bool:
     #* 检测`x`是不是质数 *#
-    result: bool = True
-    mod: int = 2
     result = True
+    mod: int = 2
     while mod <= x / 2:
         if x % mod == 0:
             result = False
