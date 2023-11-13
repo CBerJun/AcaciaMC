@@ -5,16 +5,9 @@ __all__ = ['DataType', 'DefaultDataType', 'Storable', 'SupportsEntityField']
 from typing import TYPE_CHECKING, Type as PythonType
 from abc import ABCMeta, abstractmethod
 
-# `import acaciamc.mccmdgen.expression as acaciaexpr` won't work in 3.6
-# because of a Python bug (see https://bugs.python.org/issue23203)
-from acaciamc.mccmdgen import expression as acaciaexpr
-import acaciamc.tools as acaciatools
-
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.expression.entity import _EntityBase
-    from acaciamc.mccmdgen.expression.base import (
-        AcaciaExpr, VarValue, AcaciaCallable
-    )
+    from acaciamc.mccmdgen.expression.base import AcaciaExpr, VarValue
     from acaciamc.compiler import Compiler
 
 class DataType(metaclass=ABCMeta):
@@ -63,21 +56,8 @@ class Storable(DataType):
 
     @abstractmethod
     def new_var(self) -> "VarValue":
-        """New a `VarValue` of this type.
-        Only "storable" types need to implement this.
-        """
+        """Construct a `VarValue` of this type."""
         pass
-
-    def get_var_initializer(self, var: "VarValue") -> "AcaciaCallable":
-        """Return a callable `AcaciaExpr` that accepts user arguments
-        and initialize a `VarValue` of this type. Result of this
-        callable should be Acacia "None" and commands may be added.
-        `var` is the variable to initialize.
-        """
-        @acaciatools.axe.chop
-        def _init(compiler):
-            return None
-        return acaciaexpr.BinaryFunction(_init, self.compiler)
 
 class SupportsEntityField(DataType):
     """Data type that can be used as a field of an entity."""

@@ -2,13 +2,11 @@
 
 __all__ = ["StructDataType", "Struct"]
 
-from typing import TYPE_CHECKING, List, Dict, Tuple, Optional
+from typing import TYPE_CHECKING, List, Dict, Tuple
 
 from .base import *
-from .functions import BinaryFunction
 from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
 from acaciamc.error import *
-from acaciamc.tools import axe, resultlib
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
@@ -33,29 +31,6 @@ class StructDataType(Storable, SupportsEntityField):
 
     def new_var(self) -> "Struct":
         return Struct.from_template(self.template, self.compiler)
-
-    def get_var_initializer(self, var: "Struct") -> AcaciaCallable:
-        decorators = [axe.chop, axe.star]
-        for name, type_ in self.template.field_types.items():
-            decorators.append(axe.arg(name, type_, default=None))
-        def _new(compiler, **fields: Optional[AcaciaExpr]) -> CALLRET_T:
-            """
-            Only keyword arguments are allowed to give initial values
-            to fields. Example:
-            struct A:
-                a: int
-                b: int
-            x: A | (a=10)
-            """
-            commands = []
-            for name, value in fields.items():
-                if value is not None:
-                    commands.extend(value.export(var.vars[name]))
-            return resultlib.commands(commands, compiler)
-        decorators.reverse()
-        for decorator in decorators:
-            _new = decorator(_new)
-        return BinaryFunction(_new, self.compiler)
 
     def new_entity_field(self):
         field_info: Dict[str, Tuple[dict, SupportsEntityField]] = {}

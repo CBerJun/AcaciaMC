@@ -1,7 +1,6 @@
 """Abstarct Syntax Tree definitions for Acacia."""
 from typing import (
-    Union as _Union, List as _List, Tuple as _Tuple, Any as _Any,
-    Optional as _Optional, Dict as _Dict
+    Union as _Union, List as _List, Optional as _Optional, Dict as _Dict
 )
 import enum
 
@@ -178,13 +177,11 @@ class VarDef(Statement):  # x: y [= z] variable declaration
     def __init__(self, target: Expression,
                  type_: TypeSpec,
                  value: _Optional[Expression],
-                 args: _Optional[CallTable], lineno, col):
+                 lineno, col):
         super().__init__(lineno, col)
-        assert args is None or value is None
         self.target = target
         self.type = type_
         self.value = value
-        self.args = args
 
 class AutoVarDef(Statement):  # := short variable declaration
     def __init__(self, target: Expression, value: Expression, lineno, col):

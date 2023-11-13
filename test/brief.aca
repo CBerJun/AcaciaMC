@@ -153,7 +153,7 @@ import print
 print.tell("Hello world!")
 # Show title "Chapter I" on a random player's screen, for 10 seconds
 # (We'll talk about Engroup later.)
-group: Engroup[Entity]
+group := Engroup[Entity]()
 group.select(Enfilter().random("player", limit=1))
 print.title("Chapter I", group, stay_time=200)
 # Show everyone the value of `x` in the form "Value of X: ..." above actionbar
@@ -244,8 +244,10 @@ entity Player:
 # hundreds of entities inside this group. Entity groups also have their
 # template, which is the template that entities inside this group use.
 # Create a group of Player:
-player_group: Engroup[Player]
-# Engroup[Template] means a group of entities of Template template.
+player_group := Engroup[Player]()
+# Engroup[Template] is a type (like `int`) that means a group of
+# entities of Template template. Calling it will give you a new empty
+# entity group.
 # You can select some existing entities using entity filter:
 player_group.select(Enfilter()
     .is_type("player")

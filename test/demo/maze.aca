@@ -99,7 +99,7 @@ entity Dummy:
 entity Frontier extends Dummy:
     pass
 
-frontiers: Engroup[Frontier]
+frontiers := Engroup[Frontier]()
 last_tick_run: bool = False
 
 def visit(pos: Dummy):
@@ -108,7 +108,7 @@ def visit(pos: Dummy):
     for offset in OFFSET_TABLE:
         neighbor -> Pos(pos).offset(x=offset[0], z=offset[1])
         neighbor_block -> neighbor.offset(y=-1)
-        neighbor_frontier: Engroup[Frontier]
+        neighbor_frontier := Engroup[Frontier]()
         neighbor_frontier.select(Enfilter().distance_from(neighbor, max=0.1))
         # Only handle undetermined neighbors
         if world.is_block(neighbor_block, BLOCK_UNKNOWN):

@@ -42,9 +42,11 @@ __all__ = [
 
 from typing import TYPE_CHECKING
 
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe
+from .base import *
 from .entity_group import *
 from .entity_template import ETemplateDataType
+from .functions import ConstructorFunction, FunctionDataType, BinaryFunction
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -75,15 +77,39 @@ class ExternEGroupGeneric(EGroupGeneric):
     def getitem(self, template: "EntityTemplate"):
         return ExternEGroupType(template, self.compiler)
 
-class ExternEGroup(EntityGroup):
-    def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
-        super().__init__(ExternEGroupDataType(template), compiler)
-        SELF = self.get_selector().to_str()
-        @method_of(self, "resolve")
+class _ExternEGroupResolve(ConstructorFunction):
+    def __init__(self, owner: "ExternEGroup", compiler: "Compiler"):
+        super().__init__(FunctionDataType(), compiler)
+        self.owner = owner
+        self.func_repr = "<resolve of %s>" % str(self.owner.data_type)
+
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T", _instance=None) \
+            -> "CALLRET_T":
+        template = self.owner.extern_template
+        SELF = self.owner.get_selector().to_str()
+        RESOLVE_CTOR = EGroupType(template, self.compiler)
         @axe.chop
-        def _resolve(compiler: "Compiler"):
-            res = EntityGroup.from_template(template, compiler)
-            _, commands = res.data_type.get_var_initializer(res).call([], {})
+        def _call_me(compiler: "Compiler"):
+            res, commands = RESOLVE_CTOR.call([], {}, _instance)
+            assert isinstance(res, EntityGroup)
             commands.append("tag %s add %s" % (SELF, template.runtime_tag))
             commands.append("tag %s add %s" % (SELF, res.tag))
             return res, commands
+        return BinaryFunction(_call_me, self.compiler).call(args, keywords)
+
+    def reconstruct(self, var: "ExternEGroup", args: "ARGS_T",
+                    keywords: "KEYWORDS_T") -> "CALLRET_T":
+        _, commands = self.call(args, keywords, _instance=var)
+        return commands
+
+    @property
+    def var_type(self):
+        return EGroupDataType(self.owner.extern_template)
+
+class ExternEGroup(EntityGroup):
+    def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
+        super().__init__(ExternEGroupDataType(template), compiler)
+        self.attribute_table.set(
+            "resolve", _ExternEGroupResolve(self, compiler)
+        )
+        self.extern_template = template

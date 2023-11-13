@@ -4,18 +4,17 @@ __all__ = ["EGroupDataType", "EGroupGeneric", "EGroupType", "EntityGroup"]
 
 from typing import TYPE_CHECKING, List
 
-from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.tools import axe, method_of
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
-from .types import Type
 from .entity_template import ETemplateDataType
 from .entity_filter import EFilterDataType
 from .entity import EntityDataType, EntityReference
 from .boolean import AndGroup
 from .integer import IntOpGroup
-from .functions import BinaryFunction
+from .functions import BinaryFunction, ConstructorFunction
 from .generic import BinaryGeneric
 
 if TYPE_CHECKING:
@@ -46,36 +45,35 @@ class EGroupDataType(Storable):
     def new_var(self):
         return EntityGroup.from_template(self.template, self.compiler)
 
-    def get_var_initializer(self, var: "EntityGroup") -> AcaciaCallable:
-        @axe.chop
-        @axe.arg("all_entities", axe.LiteralBool(), default=False)
-        def _new(compiler, all_entities: bool):
-            """
-            Create an empty entity group (unless all_entities is True).
-            o: Engroup[E]  # A group of entities of template E
-            o: Engroup[E] | (all_entities=True)  # Include all entities
-            """
-            # Remove all existsing entities on initialization
-            if not all_entities:
-                commands = var.clear()
-            else:
-                commands = ["tag @e add %s" % var.tag]
-            return resultlib.commands(commands, compiler)
-        return BinaryFunction(_new, self.compiler)
-
 class EGroupGeneric(BinaryGeneric):
     @axe.chop_getitem
     @axe.arg("E", ETemplateDataType, rename="template")
     def getitem(self, template: "EntityTemplate"):
         return EGroupType(template, self.compiler)
 
-class EGroupType(Type):
+class EGroupType(ConstructorFunction):
     def __init__(self, template: "EntityTemplate", compiler):
+        super().__init__(EGroupDataType(template), compiler)
         self.template = template
-        super().__init__(compiler)
+
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T", _instance=None) \
+            -> "CALLRET_T":
+        @axe.chop
+        def _call_me(compiler: "Compiler"):
+            if _instance is None:
+                instance = EntityGroup.from_template(self.template, compiler)
+            else:
+                instance = _instance
+            return instance, instance.clear()
+        return BinaryFunction(_call_me, self.compiler).call(args, keywords)
 
     def datatype_hook(self):
         return EGroupDataType(self.template)
+
+    def reconstruct(self, var: "EntityGroup",
+                    args: "ARGS_T", keywords: "KEYWORDS_T"):
+        _, commands = self.call(args, keywords, _instance=var)
+        return commands
 
 class EntityGroup(VarValue):
     def __init__(self, data_type: EGroupDataType, compiler):
@@ -148,12 +146,8 @@ class EntityGroup(VarValue):
         @method_of(self, "copy")
         @axe.chop
         def _copy(compiler):
-            res = EntityGroup.from_template(self.template, compiler)
-            _, commands = (
-                self.data_type.get_var_initializer(res).call([], {})
-            )
-            commands.append("tag %s add %s" % (SELF, res.tag))
-            return res, commands
+            res = self.data_type.new_var()
+            return res, self.export(res)
         @method_of(self, "clear")
         @axe.chop
         def _clear(compiler):

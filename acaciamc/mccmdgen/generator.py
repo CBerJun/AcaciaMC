@@ -236,16 +236,8 @@ class Generator(ASTVisitor):
         # Create variable
         if not isinstance(dt, Storable):
             self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE, var_type=str(dt))
-        if node.args is None:
-            args, keywords = [], {}
-        else:
-            args, keywords = self.visit(node.args)
         var = dt.new_var()
-        _, commands = dt.get_var_initializer(var).call_withframe(
-            args, keywords, location=self.node_location(node)
-        )
         self.register_symbol(node.target, var)
-        self.current_file.extend(commands)
         if node.value is not None:
             self._assign(var, node.value)
 
@@ -266,15 +258,10 @@ class Generator(ASTVisitor):
             var = dt.new_var()
         else:  # Bind, no new var
             var = value
-        _, commands = dt.get_var_initializer(var).call_withframe(
-            [], {}, location=self.node_location(node)
-        )
         self.register_symbol(node.target, var)
         # Assign
         if value is not None and not is_bind:
-            commands.extend(value.export(var))
-        # Write commands
-        self.current_file.extend(commands)
+            self.current_file.extend(value.export(var))
 
     def _assign(self, target: AcaciaExpr, value_node: Expression):
         self.check_assignable(target)

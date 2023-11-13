@@ -724,22 +724,17 @@ class Parser:
             right = self.expr()  # get assign value
             node = Binding(expr, right, **pos)
         elif self.current_token.type is TokenType.colon:
-            # var_def_stmt := identifier COLON type_spec
-            #   ((EQUAL expr) | (BAR call_table)))?
+            # var_def_stmt := identifier COLON type_spec (EQUAL expr)?
             self.eat()  # eat colon
             if not isinstance(expr, VARDEFABLE):
                 self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
             type_ = self.type_spec()
             if self.current_token.type is TokenType.equal:
                 self.eat()  # eat equal
-                node = VarDef(expr, type_, value=self.expr(),
-                              args=None, **pos)
-            elif self.current_token.type is TokenType.bar:
-                self.eat()  # eat bar
-                node = VarDef(expr, type_, value=None,
-                              args=self.call_table(), **pos)
+                value = self.expr()
             else:
-                node = VarDef(expr, type_, value=None, args=None, **pos)
+                value = None
+            node = VarDef(expr, type_, value, **pos)
         elif self.current_token.type is TokenType.walrus:
             # auto_var_def_stmt := identifier WALRUS expr
             self.eat()  # eat walrus
