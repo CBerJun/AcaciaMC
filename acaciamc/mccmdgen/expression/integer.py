@@ -59,6 +59,18 @@ export_need_tmp_int = export_need_tmp(
     new_tmp=lambda c: IntVar.new(c, tmp=True)
 )
 
+def remainder(a: int, b: int) -> int:
+    """C-style % operator, which MC uses."""
+    res = abs(a) % abs(b)
+    return res if a >= 0 else -res
+
+def c_int_div(a: int, b: int) -> int:
+    """C-style / operator, which MC uses."""
+    if (a >= 0) != (b >= 0) and a % b:
+        return a // b + 1
+    else:
+        return a // b
+
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
 
@@ -161,9 +173,19 @@ class IntLiteral(AcaciaExpr):
     def __mul__(self, other):
         return self._bin_op(other, '__mul__')
     def __floordiv__(self, other):
-        return self._bin_op(other, '__floordiv__')
+        # MC uses C-style "integer division", not Python's "floor division".
+        if isinstance(other, IntLiteral):
+            return IntLiteral(
+                c_int_div(self.value, other.value), self.compiler
+            )
+        return NotImplemented
     def __mod__(self, other):
-        return self._bin_op(other, '__mod__')
+        # MC uses C-style "remainder", not Python's "modulo".
+        if isinstance(other, IntLiteral):
+            return IntLiteral(
+                remainder(self.value, other.value), self.compiler
+            )
+        return NotImplemented
 
 class IntVar(VarValue):
     """An integer variable."""
