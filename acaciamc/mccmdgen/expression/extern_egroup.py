@@ -42,7 +42,7 @@ __all__ = [
 
 from typing import TYPE_CHECKING
 
-from acaciamc.tools import axe
+from acaciamc.tools import axe, resultlib
 from .base import *
 from .entity_group import *
 from .entity_template import ETemplateDataType
@@ -83,27 +83,23 @@ class _ExternEGroupResolve(ConstructorFunction):
         self.owner = owner
         self.func_repr = "<resolve of %s>" % str(self.owner.data_type)
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T", _instance=None) \
-            -> "CALLRET_T":
+    def initialize(
+            self, instance: "EntityGroup",
+            args: "ARGS_T", keywords: "KEYWORDS_T"
+        ) -> "CALLRET_T":
         template = self.owner.extern_template
         SELF = self.owner.get_selector().to_str()
         RESOLVE_CTOR = EGroupType(template, self.compiler)
         @axe.chop
         def _call_me(compiler: "Compiler"):
-            res, commands = RESOLVE_CTOR.call([], {}, _instance)
-            assert isinstance(res, EntityGroup)
+            commands = RESOLVE_CTOR.initialize(instance, [], {})
             commands.append("tag %s add %s" % (SELF, template.runtime_tag))
-            commands.append("tag %s add %s" % (SELF, res.tag))
-            return res, commands
-        return BinaryFunction(_call_me, self.compiler).call(args, keywords)
+            commands.append("tag %s add %s" % (SELF, instance.tag))
+            return resultlib.commands(commands, compiler)
+        _, c = BinaryFunction(_call_me, self.compiler).call(args, keywords)
+        return c
 
-    def reconstruct(self, var: "ExternEGroup", args: "ARGS_T",
-                    keywords: "KEYWORDS_T") -> "CALLRET_T":
-        _, commands = self.call(args, keywords, _instance=var)
-        return commands
-
-    @property
-    def var_type(self):
+    def _var_type(self):
         return EGroupDataType(self.owner.extern_template)
 
 class ExternEGroup(EntityGroup):

@@ -4,7 +4,7 @@ __all__ = ["EGroupDataType", "EGroupGeneric", "EGroupType", "EntityGroup"]
 
 from typing import TYPE_CHECKING, List
 
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe, method_of, resultlib
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 import acaciamc.mccmdgen.cmds as cmds
@@ -56,24 +56,18 @@ class EGroupType(ConstructorFunction):
         super().__init__(EGroupDataType(template), compiler)
         self.template = template
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T", _instance=None) \
-            -> "CALLRET_T":
+    def initialize(
+            self, instance: "EntityGroup",
+            args: "ARGS_T", keywords: "KEYWORDS_T",
+        ) -> CMDLIST_T:
         @axe.chop
         def _call_me(compiler: "Compiler"):
-            if _instance is None:
-                instance = EntityGroup.from_template(self.template, compiler)
-            else:
-                instance = _instance
-            return instance, instance.clear()
-        return BinaryFunction(_call_me, self.compiler).call(args, keywords)
+            return resultlib.commands(instance.clear(), compiler)
+        _, c = BinaryFunction(_call_me, self.compiler).call(args, keywords)
+        return c
 
     def datatype_hook(self):
         return EGroupDataType(self.template)
-
-    def reconstruct(self, var: "EntityGroup",
-                    args: "ARGS_T", keywords: "KEYWORDS_T"):
-        _, commands = self.call(args, keywords, _instance=var)
-        return commands
 
 class EntityGroup(VarValue):
     def __init__(self, data_type: EGroupDataType, compiler):

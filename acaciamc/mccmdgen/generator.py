@@ -271,11 +271,10 @@ class Generator(ASTVisitor):
         # analyze rvalue
         if isinstance(value_node, Call):
             func, table = self._call_inspect(value_node)
-            if (isinstance(func, ConstructorFunction)
-                    and func.reconstruct is not None):
+            if isinstance(func, ConstructorFunction):
                 def ctor_cb():
-                    commands.extend(func.reconstruct(target, *table))
-                value_type = func.var_type
+                    commands.extend(func.initialize(target, *table))
+                value_type = func.get_var_type()
             else:
                 value = self._call_invoke(value_node, func, table)
         else:

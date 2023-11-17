@@ -271,26 +271,26 @@ class EntityTemplate(ConstructorFunction):
                 name, type_.new_var_as_field(entity, **meta)
             )
 
-    def call(self, args, keywords, _instance=None):
-        # Calling an entity template returns an entity, the arguments
+    def initialize(self, instance: "_EntityBase", args, keywords):
+        # Calling an entity template summons a new entity, the arguments
         # are passed to __init__ if it exists
-        inst, cmds = TaggedEntity.summon_new(self, self.compiler, _instance)
+        _, commands = TaggedEntity.summon_new(self, self.compiler, instance)
         # Call __init__ if it exists
-        initializer = inst.attribute_table.lookup("__init__")
+        initializer = instance.attribute_table.lookup("__init__")
         if initializer:
             if not isinstance(initializer, AcaciaCallable):
                 raise Error(ErrorType.INITIALIZER_NOT_CALLABLE,
                             got=str(initializer.data_type),
-                            type_=str(inst.data_type))
+                            type_=str(instance.data_type))
             res, _cmds = initializer.call_withframe(
                 args, keywords,
                 location="<entity initializer of %s>" % self.name
             )
-            cmds.extend(_cmds)
+            commands.extend(_cmds)
             if not res.data_type.matches_cls(NoneDataType):
                 raise Error(ErrorType.INITIALIZER_RESULT,
-                            type_=str(inst.data_type))
-        return inst, cmds
+                            type_=str(instance.data_type))
+        return commands
 
     def is_subtemplate_of(self, other: "EntityTemplate") -> bool:
         # Return whether `self` is a subtemplate of `other`. A
@@ -301,8 +301,3 @@ class EntityTemplate(ConstructorFunction):
             if parent.is_subtemplate_of(other):
                 return True
         return False
-
-    def reconstruct(self, var: TaggedEntity, args: "ARGS_T",
-                    keywords: "KEYWORDS_T") -> "CMDLIST_T":
-        _, commands = self.call(args, keywords, _instance=var)
-        return commands

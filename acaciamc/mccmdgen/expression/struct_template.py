@@ -8,7 +8,7 @@ from .base import *
 from .struct import StructDataType, Struct
 from .functions import ConstructorFunction, BinaryFunction
 from acaciamc.error import *
-from acaciamc.tools import axe
+from acaciamc.tools import axe, resultlib
 from acaciamc.mccmdgen.datatype import DefaultDataType
 
 if TYPE_CHECKING:
@@ -46,12 +46,9 @@ class StructTemplate(ConstructorFunction):
             return True
         return any(base.is_subtemplate_of(template) for base in self.bases)
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T",
-             _instance: "Struct" = None) -> "CALLRET_T":
-        if _instance is None:
-            inst = Struct.from_template(self, self.compiler)
-        else:
-            inst = _instance
+    def initialize(
+            self, instance: "Struct", args: "ARGS_T", keywords: "KEYWORDS_T"
+        ) -> "CALLRET_T":
         decorators = [axe.chop, axe.star]
         for name, type_ in self.field_types.items():
             decorators.append(axe.arg(name, type_, default=None))
@@ -60,13 +57,9 @@ class StructTemplate(ConstructorFunction):
             commands = []
             for name, value in fields.items():
                 if value is not None:
-                    commands.extend(value.export(inst.vars[name]))
-            return inst, commands
+                    commands.extend(value.export(instance.vars[name]))
+            return resultlib.commands(commands, compiler)
         for decorator in decorators:
             _call_me = decorator(_call_me)
-        return BinaryFunction(_call_me, self.compiler).call(args, keywords)
-
-    def reconstruct(self, var: "Struct", args: "ARGS_T", 
-                    keywords: "KEYWORDS_T") -> "CMDLIST_T":
-        _, commands = self.call(args, keywords, _instance=var)
-        return commands
+        _, c = BinaryFunction(_call_me, self.compiler).call(args, keywords)
+        return c

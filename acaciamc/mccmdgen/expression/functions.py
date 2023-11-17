@@ -31,8 +31,8 @@ There are 6 types of functions:
     # temporary entity used during the construction.
     # Additionally, this code:
     x = Entity()
-    # may be optimized too, because `Entity` provides a "reconstructor"
-    # and it will reconstruct `x` to a new entity.
+    # is optimized too, because `Entity` can reconstruct `x` and set it
+    # to a new entity.
 """
 
 __all__ = [
@@ -44,6 +44,7 @@ __all__ = [
 ]
 
 from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
+from abc import abstractmethod
 
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
@@ -314,16 +315,24 @@ class BoundVirtualMethod(AcaciaCallable):
                     )
 
 class ConstructorFunction(AcaciaCallable):
-    # `call` should construct a var of `var_type` type.
-    # `reconstruct` should accept a var of `var_type` type and
-    # some arguments and return a list of commands
+    # `initialize` should initialize a var of `var_type` type.
     # `var_type` defaults to call `datatype_hook` if it is implemented,
     # otherwise subclasses have to implement `var_type`.
 
-    @property
-    def var_type(self) -> Storable:
-        return self.datatype_hook()
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+        instance = self.get_var_type().new_var()
+        commands = self.initialize(instance, args, keywords)
+        return instance, commands
 
-    reconstruct: Optional[Callable[
-        [VarValue, "ARGS_T", "KEYWORDS_T"], "CMDLIST_T"
-    ]] = None
+    @abstractmethod
+    def initialize(self, instance, args: "ARGS_T",
+                   keywords: "KEYWORDS_T") -> CMDLIST_T:
+        pass
+
+    def get_var_type(self) -> Storable:
+        if not hasattr(self, "_ctor_var_type"):
+            self._ctor_var_type = self._var_type()
+        return self._ctor_var_type
+
+    def _var_type(self) -> Storable:
+        return self.datatype_hook()
