@@ -7,6 +7,12 @@ from acaciamc.ast import ModuleMeta
 from acaciamc.tools import axe
 import acaciamc.mccmdgen.cmds as cmds
 
+def internal(name: str) -> AcaciaExpr:
+    res = _math.attribute_table.lookup(name)
+    if res is None:
+        raise ValueError(name)
+    return res
+
 @axe.chop
 @axe.arg("min", axe.LiteralInt(), rename="min_")
 @axe.arg("max", axe.LiteralInt(), rename="max_")
@@ -27,7 +33,7 @@ def _pow(compiler, base, exp):
     """
     if not isinstance(exp, IntLiteral):
         # Fallback to `_math._pow`
-        return _math_pow.call(args=[base, exp], keywords={})
+        return internal("_pow").call(args=[base, exp], keywords={})
     if exp.value <= 0:
         raise axe.ArgumentError('exp', 'must be a positive integer')
     # Optimize when x is a literal
@@ -81,15 +87,23 @@ def _max(compiler, operands: List[AcaciaExpr]):
         _handle(operand)
     return res
 
+@axe.chop
+@axe.arg("x", IntDataType)
+@axe.arg("y", IntDataType)
+def _mod(compiler, x, y):
+    if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
+        return IntLiteral(x.value % y.value, compiler)
+    return internal("_mod").call(args=[x, y], keywords={})
+
 def acacia_build(compiler):
-    global _math_pow
+    global _math
     _math = compiler.get_module(ModuleMeta("_math"))
     attrs = {
         'randint': BinaryFunction(_randint, compiler),
         'pow': BinaryFunction(_pow, compiler),
         'min': BinaryFunction(_min, compiler),
-        'max': BinaryFunction(_max, compiler)
+        'max': BinaryFunction(_max, compiler),
+        'mod': BinaryFunction(_mod, compiler),
     }
     attrs.update(_math.attribute_table)
-    _math_pow = _math.attribute_table.lookup("_pow")
     return attrs

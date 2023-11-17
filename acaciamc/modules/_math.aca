@@ -1,8 +1,22 @@
 #* _math: Internal module used by builtin `math` module *#
 
+# Note that everything here is exported to `math`.
+
+def _mod(x: int, y: int) -> int:
+    #**
+     * Python-style modulo operator.
+     * 10 % 3 == mod(10, 3) == 1
+     * 10 % -3 == 1 while mod(10, -3) == -2
+     * -10 % 3 == -1 while mod(-10, 3) == 2
+     * -10 % -3 == mod(-10, -3) == -1
+     *#
+    result = (x % y + y) % y
+
 def _pow(x: int, y: int) -> int:
-    #* Return `x` to the power of `y`.
-    `y` is treated as 1 when smaller than 1. *#
+    #**
+     * Return `x` to the power of `y`.
+     * `y` is treated as 1 when smaller than 1.
+     *#
     while y > 1:
         x *= x
         y -= 1
