@@ -200,10 +200,9 @@ class Tokenizer:
         self.brackets = 0
         self.braces = 0
         self.dollar_lbrace = False
-        self.prespaces = 0
         self.indent_record: List[int] = [0]
         self.indent_len: int = 1  # always = len(self.indent_record)
-        self.last_token_newline = True  # whether last token is new_line
+        self.has_content = False  # if this logical line produced token
         self.last_line_continued = False
         self.inside_command: Optional[_CommandManager] = None
         self.continued_command = False
@@ -275,14 +274,15 @@ class Tokenizer:
                 or self.continued_comment
                 or self.last_line_continued
                 or self.is_in_bracket()):
-            # Continued lines' indent should be the same as the first
-            # line.
-            self.prespaces = 0
+            # Generate indent token if this is not a continued line
+            # (start of a new logical line).
+            self.has_content = False
+            prespaces = 0
             while self.current_char == ' ':
-                self.prespaces += 1
+                prespaces += 1
                 self.forward()
-        # continued token
         else:
+            prespaces = -1
             if self.continued_comment:
                 self.handle_long_comment()
         while True:
@@ -371,16 +371,15 @@ class Tokenizer:
         if self.dollar_lbrace and not self.continued_command:
             # Single line command can't use implicit line continuation.
             self.error(ErrorType.UNCLOSED_FEXPR)
-        has_content = bool(res)
+        backslash = False
+        if res:
+            self.has_content = True
         if self.current_char == '\n':
-            if has_content:
-                if not (
-                    self.continued_comment or self.continued_command
-                    or self.is_in_bracket()
-                ):
-                    res.append(_gen_token(TokenType.new_line))
-                if self.last_token_newline:
-                    res = self.handle_indent(self.prespaces) + res
+            if self.has_content and not (
+                self.continued_comment or self.continued_command
+                or self.is_in_bracket()
+            ):
+                res.append(_gen_token(TokenType.new_line))
             self.last_line_continued = False
         elif self.current_char is None:
             if self.continued_comment:
@@ -390,13 +389,10 @@ class Tokenizer:
                 self.error(ErrorType.UNCLOSED_LONG_COMMAND,
                            self.inside_command.lineno,
                            self.inside_command.col)
-            if self.last_line_continued:
-                self.error(ErrorType.EOF_AFTER_CONTINUATION)
             if self.is_in_bracket():
                 self.error(ErrorType.UNCLOSED_BRACKET)
-            if has_content:
+            if self.has_content:
                 res.append(_gen_token(TokenType.new_line))
-                res = self.handle_indent(self.prespaces) + res
             # Create a fake line for cleanup
             self.current_lineno += 1
             self.current_col = 0
@@ -404,15 +400,17 @@ class Tokenizer:
             res.append(_gen_token(TokenType.end_marker))
         elif self.current_char == '\\':
             self.forward()  # skip "\\"
-            while self.current_char not in ('\n', None):
+            while self.current_char != '\n':
+                if self.current_char is None:
+                    self.error(ErrorType.EOF_AFTER_CONTINUATION)
                 if not self.current_char.isspace():
                     self.error(ErrorType.CHAR_AFTER_CONTINUATION)
                 self.forward()
-            if has_content and self.last_token_newline:
-                res = self.handle_indent(self.prespaces) + res
-            self.last_line_continued = True
-        if has_content:
-            self.last_token_newline = res[-1].type is TokenType.new_line
+            backslash = self.last_line_continued = True
+        # Count indent: if this physical line is not a continued line,
+        # and (this physical line has content or ends with backslash)
+        if (res or backslash) and prespaces != -1:
+            res[:0] = self.handle_indent(prespaces)
         return res
 
     def skip_spaces(self):
