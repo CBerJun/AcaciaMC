@@ -195,7 +195,7 @@ f
     some_expr +
     # comment
     1 \\
-        + 2
+        + {"embedded"}
 }*/
 '''
 

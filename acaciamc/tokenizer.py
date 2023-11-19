@@ -118,6 +118,12 @@ def _kw_builder():
 _kw_builder()
 del _kw_builder
 
+BRACKETS = {
+    TokenType.rparen: TokenType.lparen,
+    TokenType.rbracket: TokenType.lbracket,
+    TokenType.rbrace: TokenType.lbrace
+}
+
 class Token:
     def __init__(self, token_type: TokenType,
                  lineno: int, col: int, value=None):
@@ -187,6 +193,16 @@ class _CommandManager:
             self.owner.current_col
         ))
 
+class _BracketFrame:
+    def __init__(self, type_: TokenType, pos: Tuple[int, int], **kwds) -> None:
+        # type must be in `BRACKETS` (either as a key or a value)
+        self.type = type_
+        self.pos = pos
+        self.kwds = kwds
+
+    def __getitem__(self, key: str):
+        return self.kwds.get(key)
+
 class Tokenizer:
     def __init__(self, src: TextIO):
         """src: source code"""
@@ -196,15 +212,13 @@ class Tokenizer:
         self.current_col = 0
         self.position = 0  # string pointer
         self.buffer_tokens: List[Token] = []
-        self.parens = 0
-        self.brackets = 0
-        self.braces = 0
-        self.dollar_lbrace = False
+        self.bracket_stack: List[_BracketFrame] = []
         self.indent_record: List[int] = [0]
         self.indent_len: int = 1  # always = len(self.indent_record)
         self.has_content = False  # if this logical line produced token
         self.last_line_continued = False
         self.inside_command: Optional[_CommandManager] = None
+        self.in_command_fexpr = False
         self.continued_command = False
         self.continued_comment = False
         self.continued_comment_pos: Union[None, Tuple[int, int]] = None
@@ -242,7 +256,7 @@ class Tokenizer:
         return self.buffer_tokens.pop(0)
 
     def is_in_bracket(self) -> bool:
-        return self.parens > 0 or self.brackets > 0 or self.braces > 0
+        return bool(self.bracket_stack)
 
     def parse_line(self) -> List[Token]:
         """Parse a line."""
@@ -286,10 +300,9 @@ class Tokenizer:
             if self.continued_comment:
                 self.handle_long_comment()
         while True:
-            if self.inside_command and not self.dollar_lbrace:
+            if self.inside_command and not self.in_command_fexpr:
                 if self.continued_command:
                     res.extend(self.handle_long_command())
-                    assert self.continued_command or not self.dollar_lbrace
                     # If dollar lbrace is not closed, then the long
                     # command should not have ended. Instead the
                     # tokenizer would keep tokenizing as normal.
@@ -314,6 +327,7 @@ class Tokenizer:
                     self.skip_comment()
                     break
             # start
+            ok = True
             ## special tokens
             if self.current_char.isdecimal():
                 res.append(self.handle_number())
@@ -329,46 +343,45 @@ class Tokenizer:
             elif self.current_char == '"':
                 res.append(self.handle_string())
             else:  ## 2-char token
-                peek = self.peek()
-                for pattern in (
-                    '==', '>=', '<=', '!=', '->',
-                    '+=', '-=', '*=', '/=', '%=', ':='
-                ):
-                    if self.current_char == pattern[0] and peek == pattern[1]:
-                        res.append(_gen_and_forward(TokenType(pattern), 2))
-                        break
-                else:  ## 1-char token
-                    try:
-                        token_type = TokenType(self.current_char)
-                    except ValueError:
-                        ## does not match any tokens
-                        self.error(ErrorType.INVALID_CHAR,
-                                   char=self.current_char)
-                    else:
-                        if token_type is TokenType.lparen:
-                            self.parens += 1
-                        elif token_type is TokenType.lbracket:
-                            self.brackets += 1
-                        elif token_type is TokenType.lbrace:
-                            self.braces += 1
-                        elif token_type is TokenType.rparen:
-                            self.parens -= 1
-                            if self.parens < 0:
-                                self.error(ErrorType.UNMATCHED_PAREN)
-                        elif token_type is TokenType.rbracket:
-                            self.brackets -= 1
-                            if self.brackets < 0:
-                                self.error(ErrorType.UNMATCHED_BRACKET)
-                        elif token_type is TokenType.rbrace:
-                            if self.dollar_lbrace:
-                                self.dollar_lbrace = False
-                            else:
-                                self.braces -= 1
-                                if self.braces < 0:
-                                    self.error(ErrorType.UNMATCHED_BRACE)
-                        res.append(_gen_and_forward(token_type, 1))
+                ok = False
+            if ok:
+                continue
+            peek = self.peek()
+            for pattern in (
+                '==', '>=', '<=', '!=', '->',
+                '+=', '-=', '*=', '/=', '%=', ':='
+            ):
+                if self.current_char == pattern[0] and peek == pattern[1]:
+                    res.append(_gen_and_forward(TokenType(pattern), 2))
+                    break
+            else:  ## 1-char token
+                try:
+                    token_type = TokenType(self.current_char)
+                except ValueError:
+                    ## does not match any tokens
+                    self.error(ErrorType.INVALID_CHAR,
+                                char=self.current_char)
+                else:
+                    if token_type in BRACKETS.values():
+                        self.bracket_stack.append(_BracketFrame(
+                            token_type,
+                            (self.current_lineno, self.current_col)
+                        ))
+                    elif token_type in BRACKETS.keys():
+                        if not self.bracket_stack:
+                            self.error(ErrorType.UNMATCHED_BRACKET,
+                                       char=self.current_char)
+                        expect = BRACKETS[token_type]
+                        got_f = self.bracket_stack.pop()
+                        got = got_f.type
+                        if got is not expect:
+                            self.error(ErrorType.UNMATCHED_BRACKET_PAIR,
+                                       open=got.value, close=token_type.value)
+                        if got is TokenType.lbrace and got_f["dollar"]:
+                            self.in_command_fexpr = False
+                    res.append(_gen_and_forward(token_type, 1))
         # Now self.current_char is either '\n', '\\' or None (EOF)
-        if self.dollar_lbrace and not self.continued_command:
+        if self.in_command_fexpr and not self.continued_command:
             # Single line command can't use implicit line continuation.
             self.error(ErrorType.UNCLOSED_FEXPR)
         backslash = False
@@ -390,7 +403,9 @@ class Tokenizer:
                            self.inside_command.lineno,
                            self.inside_command.col)
             if self.is_in_bracket():
-                self.error(ErrorType.UNCLOSED_BRACKET)
+                br = self.bracket_stack[-1]
+                self.error(ErrorType.UNCLOSED_BRACKET,
+                           *br.pos, char=br.type.value)
             if self.has_content:
                 res.append(_gen_token(TokenType.new_line))
             # Create a fake line for cleanup
@@ -627,7 +642,12 @@ class Tokenizer:
                 TokenType.dollar_lbrace, lineno=self.current_lineno,
                 col=self.current_col
             ))
-            self.dollar_lbrace = True
+            self.bracket_stack.append(_BracketFrame(
+                TokenType.lbrace,
+                (self.current_lineno, self.current_col),
+                dollar=True
+            ))
+            self.in_command_fexpr = True
             self.forward()
             self.forward()  # skip "${"
             do_break = True
