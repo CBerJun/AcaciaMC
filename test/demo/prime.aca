@@ -10,9 +10,8 @@ def is_prime(x: int) -> bool:
     # `x` must >= 2
     result = True
     mod := 2
-    while mod <= x / 2:
-        if x % mod == 0:
-            result = False
+    while mod <= x / 2 and result:
+        result = (x % mod == 0)
         mod += 1
 
 i := 2
