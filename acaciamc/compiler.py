@@ -152,8 +152,7 @@ class Compiler:
         self.output_mgr.generate_init_file()  # do this after optimize
         # Mcfunctions
         for file in self.output_mgr.files:
-            if file.has_content():
-                self._write_mcfunction(file, path)
+            self._write_mcfunction(file, path)
         # tick.json
         if self.file_tick.has_content():
             self._write_file(

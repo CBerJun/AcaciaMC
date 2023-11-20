@@ -11,6 +11,7 @@ from acaciamc.constants import Config
 class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
     def optimize(self):
         """Start optimizing."""
+        self.opt_empty_functions()
         self.opt_dead_functions()
         self.opt_execute_as_ats()
         self.opt_tmp_variables()
@@ -267,3 +268,18 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                         # /execute with only a run subcommand can get
                         # rid of the /execute.
                         file.commands[i] = command.runs
+
+    def opt_empty_functions(self):
+        """Remove definition and invoke of empty functions."""
+        removed = set()
+        for i, file in reversed(tuple(enumerate(self.files))):
+            if not file.has_content():
+                removed.add(file)
+                del self.files[i]
+        for file in self.files:
+            for i, command in enumerate(file.commands):
+                ref = command.func_ref()
+                if ref is not None and ref in removed:
+                    file.commands[i] = cmds.Comment(
+                        "## (Calling empty function) %s" % command.resolve()
+                    )
