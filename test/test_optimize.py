@@ -17,7 +17,7 @@ class MyOpt(optimizer.Optimizer):
     max_inline_file_size = 30
 
     def dump(self):
-        return ('\n'.join(
+        return ('\n\n'.join(
             str(file) + '\n' + file.to_str()
             for file in self.files
         ))
@@ -27,10 +27,12 @@ f1 = cmds.MCFunctionFile("test/path1")
 f2 = cmds.MCFunctionFile("test/path2")
 f3 = cmds.MCFunctionFile("test/path3")
 f4 = cmds.MCFunctionFile("test/path4")
+f5 = cmds.MCFunctionFile("test/path5")
 project.add_file(f1)
 project.add_file(f2)
 project.add_file(f3)
 project.add_file(f4)
+project.add_file(f5)
 v1 = project.allocate()
 v2 = project.allocate()
 v3 = project.allocate()
@@ -48,7 +50,8 @@ c = cmds.Execute(
 )
 f1.write(c)
 f1.write(cmds.Execute(
-    [cmds.ExecuteCond("block", "~~~ air")],
+    [cmds.ExecuteEnv("as", "@p")],
+    # [cmds.ExecuteCond("entity", "@p")],
     cmds.InvokeFunction(f4)
 ))
 f1.write(cmds.RawtextOutput(
@@ -66,10 +69,16 @@ f3.write(cmds.Execute(
 ))
 f3.write(cmds.ScbSetConst(v1, 20))
 
-f4.write("say f4 only has 1 command")
+f4.write(cmds.Execute(
+    [cmds.ExecuteCond("block", "~~~ air")],
+    cmds.InvokeFunction(f5)
+))
+
+f5.write(cmds.Cmd("say cmd5: 1"))
+f5.write(cmds.Cmd("say cmd5: 2"))
 
 project.generate_init_file()
 print(project.dump())
 project.optimize()
-print("==========================")
+print("\n==========================\n")
 print(project.dump())
