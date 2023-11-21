@@ -75,9 +75,9 @@ class Parser:
     ## Expression generator
 
     def literal(self):
-        """literal := INTEGER | STRING | TRUE | FALSE | NONE | FLOAT"""
+        """literal := INTEGER | TRUE | FALSE | NONE | FLOAT"""
         tok_type = self.current_token.type
-        if tok_type in (TokenType.integer, TokenType.string, TokenType.float_):
+        if tok_type in (TokenType.integer, TokenType.float_):
             value = self.current_token.value
             self.eat()
         elif tok_type in (TokenType.true, TokenType.false):
@@ -89,6 +89,14 @@ class Parser:
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
         return Literal(value, **self.current_pos)
+
+    def str_literal(self):
+        """str_literal := STRING_BEGIN formatted_str STRING_END"""
+        pos = self.current_pos
+        self.eat(TokenType.string_begin)
+        content = self.formatted_str()
+        self.eat(TokenType.string_end)
+        return StrLiteral(content, **pos)
 
     def identifier(self):
         """identifier := IDENTIFIER"""
@@ -170,16 +178,19 @@ class Parser:
 
     def expr_l0(self):
         """
-        level 0 expression := (LPAREN expr RPAREN) | literal |
-          identifier | raw_score | self | list | map | result
+        level 0 expression := (LPAREN expr RPAREN) | literal
+          | identifier | str_literal | raw_score | self | list | map
+          | result
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
-            TokenType.false, TokenType.string, TokenType.none
+            TokenType.false, TokenType.none
         ):
             return self.literal()
         elif self.current_token.type is TokenType.identifier:
             return self.identifier()
+        elif self.current_token.type is TokenType.string_begin:
+            return self.str_literal()
         elif self.current_token.type is TokenType.lparen:
             self.eat(TokenType.lparen)
             node = self.expr()
@@ -515,23 +526,29 @@ class Parser:
         body = self._block(self._entity_body)
         return EntityTemplateDef(name, parents, body, **pos)
 
-    def command_stmt(self):
-        """command_stmt := COMMAND_BEGIN
-          (COMMAND_STRING | (DOLLAR_LBRACE expr RBRACE))* COMMAND_END
-        """
+    def formatted_str(self):
+        """formatted_str := (STRING_BODY | (DOLLAR_LBRACE expr RBRACE))*"""
         pos = self.current_pos
         res = []
-        self.eat(TokenType.command_begin)
-        while self.current_token.type is not TokenType.command_end:
-            if self.current_token.type is TokenType.command_string:
+        while self.current_token.type in (
+            TokenType.text_body, TokenType.dollar_lbrace
+        ):
+            if self.current_token.type is TokenType.text_body:
                 res.append(self.current_token.value)
                 self.eat()
             else:
                 self.eat(TokenType.dollar_lbrace)
                 res.append(self.expr())
                 self.eat(TokenType.rbrace)
-        self.eat()  # eat COMMAND_END
-        return Command(res, **pos)
+        return FormattedStr(res, **pos)
+
+    def command_stmt(self):
+        """command_stmt := COMMAND_BEGIN formatted_str COMMAND_END"""
+        pos = self.current_pos
+        self.eat(TokenType.command_begin)
+        content = self.formatted_str()
+        self.eat(TokenType.command_end)
+        return Command(content, **pos)
 
     def module_meta(self):
         """module_meta := POINT* IDENTIFIER (POINT IDENTIFIER)*"""

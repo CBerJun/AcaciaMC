@@ -208,8 +208,7 @@ class Generator(ASTVisitor):
             old_tmp_scores = self.current_tmp_scores
             self.current_tmp_scores = []
         # write debug
-        if not isinstance(node, (Expression, ArgumentTable,
-                                 TypeSpec, CallTable)):
+        if node.show_debug:
             self.write_debug(type(node).__name__)
         # visit the node
         res = super().visit(node, **kwargs)
@@ -332,22 +331,25 @@ class Generator(ASTVisitor):
     def visit_Pass(self, node: Pass):
         pass
 
-    def visit_Command(self, node: Command):
-        cmd = ''
-        for section in node.values:
+    def visit_FormattedStr(self, node: FormattedStr) -> str:
+        res: List[str] = []
+        for section in node.content:
             # expressions in commands need to be parsed
             if isinstance(section, str):
-                cmd += section
+                res.append(section)
             else:
                 expr = self.visit(section)
                 try:
                     value = expr.cmdstr()
                 except NotImplementedError:
-                    err = Error(ErrorType.INVALID_CMD_FORMATTING)
+                    err = Error(ErrorType.INVALID_FEXPR)
                     err.location.linecol = (section.lineno, section.col)
                     self.error(err)
-                cmd += value
-        command = cmds.Cmd(cmd, suppress_special_cmd=True)
+                res.append(value)
+        return ''.join(res)
+
+    def visit_Command(self, node: Command):
+        command = cmds.Cmd(self.visit(node.content), suppress_special_cmd=True)
         self.current_file.write(command)
 
     def visit_If(self, node: If):
@@ -747,13 +749,14 @@ class Generator(ASTVisitor):
             return BoolLiteral(value, self.compiler)
         elif isinstance(value, int):
             return IntLiteral(value, self.compiler)
-        elif isinstance(value, str):
-            return String(value, self.compiler)
         elif value is None:
             return NoneLiteral(self.compiler)
         elif isinstance(value, float):
             return Float(value, self.compiler)
         raise TypeError
+
+    def visit_StrLiteral(self, node: StrLiteral):
+        return String(self.visit(node.content), self.compiler)
 
     def visit_Self(self, node: Self):
         v = self.ctx.self_value

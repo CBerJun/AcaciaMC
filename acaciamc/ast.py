@@ -55,14 +55,21 @@ class ModuleMeta:
 #################
 
 class AST:
+
+    show_debug = True  # show debug info when visited
+
     def __init__(self, lineno: int, col: int):
         # lineno & col: position where this node starts
         self.lineno = lineno
         self.col = col
 
 # these classes are for classifying
-class Statement(AST): pass
-class Expression(AST): pass
+
+class Statement(AST):
+    pass
+
+class Expression(AST):
+    show_debug = False
 
 # details
 
@@ -72,6 +79,8 @@ class Module(AST):  # a module
         self.body = body
 
 class ArgumentTable(AST):  # arguments used in function definition
+    show_debug = False
+
     def __init__(self, lineno, col):
         super().__init__(lineno, col)
         self.args: _List[str] = []  # names of arguments
@@ -84,6 +93,8 @@ class ArgumentTable(AST):  # arguments used in function definition
         self.default[name] = default
 
 class CallTable(AST):  # call table
+    show_debug = False
+
     def __init__(self, args: _List[Expression],
                  keywords: _Dict[str, Expression], lineno, col):
         super().__init__(lineno, col)
@@ -91,7 +102,16 @@ class CallTable(AST):  # call table
         self.keywords = keywords
 
 class TypeSpec(AST):  # specify type of value `int`
+    show_debug = False
+
     def __init__(self, content: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.content = content
+
+class FormattedStr(AST):  # a literal string with ${formatted exprs}
+    show_debug = False
+
+    def __init__(self, content: _List[_Union[Expression, str]], lineno, col):
         super().__init__(lineno, col)
         self.content = content
 
@@ -196,9 +216,9 @@ class Assign(Statement):  # normal assign
         self.value = value
 
 class Command(Statement):  # raw command
-    def __init__(self, values: _List[_Union[Expression, str]], lineno, col):
+    def __init__(self, content: FormattedStr, lineno, col):
         super().__init__(lineno, col)
-        self.values = values
+        self.content = content
 
 class AugmentedAssign(Statement):  # augmented assign
     def __init__(
@@ -265,6 +285,11 @@ class Literal(Expression):  # a literal constant
     def __init__(self, literal, lineno, col):
         super().__init__(lineno, col)
         self.value = literal
+
+class StrLiteral(Expression):  # a string literal
+    def __init__(self, content: FormattedStr, lineno, col):
+        super().__init__(lineno, col)
+        self.content = content
 
 class Self(Expression):  # "self" keyword
     pass

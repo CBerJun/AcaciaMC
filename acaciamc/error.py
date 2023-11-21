@@ -103,7 +103,7 @@ class ErrorType(enum.Enum):
     NOT_ITERABLE = '"{type_}" is not iterable'
     NO_GETITEM = '"{type_}" is not subscriptable'
     NO_SETITEM = '"{type_}" does not support item write access'
-    INVALID_CMD_FORMATTING = 'Invalid formatted expression'
+    INVALID_FEXPR = 'Invalid formatted expression'
     INVALID_RAWSCORE_SELECTOR = 'Invalid raw score selector of "{got}" type'
     INVALID_RAWSCORE_OBJECTIVE = 'Invalid raw score objective of "{got}" type'
     INVALID_CAST_ENTITY = 'Cast object should be an entity, not "{got}"'

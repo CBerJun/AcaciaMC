@@ -27,7 +27,8 @@ class ASTVisualizer(ASTVisitor):
             lambda name:
                 not name.startswith('_')
                 and name != 'lineno'
-                and name != 'col',
+                and name != 'col'
+                and name != 'show_debug',
             dir(node)
         )
 
@@ -197,6 +198,7 @@ f
     1 \\
         + {"embedded"}
 }*/
+/*${"xx\${xx${{xxx}[0] + "qqq${1}ppp"}ggg"}*/
 '''
 
 try:
