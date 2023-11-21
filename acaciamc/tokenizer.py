@@ -333,8 +333,8 @@ class Tokenizer:
                 res.append(self.handle_number())
             elif self.current_char.isalpha() or self.current_char == '_':
                 res.append(self.handle_name())
-            elif self.current_char == '/' and not res:
-                # Only read when "/" is first character of this line
+            elif self.current_char == '/' and not (self.has_content or res):
+                # Only read when "/" is first token of this logical line.
                 self.forward()  # skip "/"
                 self.inside_command = _CommandManager(self)
                 if self.current_char == '*':
