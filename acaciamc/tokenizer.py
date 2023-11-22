@@ -398,8 +398,12 @@ class Tokenizer:
                                 self.in_string_fexpr = False
                     res.append(_gen_and_forward(token_type, 1))
         # Now self.current_char is either '\n', '\\' or None (EOF)
-        if self.in_command_fexpr and not self.continued_command:
-            # Single line command can't use implicit line continuation.
+        if (
+            # ${} in single line command can't use implicit line continuation.
+            (self.in_command_fexpr and not self.continued_command)
+            # And so is ${} in string literal.
+            or self.in_string_fexpr
+        ):
             self.error(ErrorType.UNCLOSED_FEXPR)
         backslash = False
         if res:
