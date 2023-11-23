@@ -420,6 +420,8 @@ class Tokenizer:
                 self.error(ErrorType.UNCLOSED_LONG_COMMENT,
                            *self.continued_comment_pos)
             if self.continued_command:
+                if self.in_command_fexpr:
+                    self.error(ErrorType.UNCLOSED_FEXPR)
                 self.error(ErrorType.UNCLOSED_LONG_COMMAND,
                            self.inside_command.lineno,
                            self.inside_command.col)
