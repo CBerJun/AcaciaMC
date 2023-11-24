@@ -406,6 +406,7 @@ class Tokenizer:
         ):
             self.error(ErrorType.UNCLOSED_FEXPR)
         backslash = False
+        eof = False
         if res:
             self.has_content = True
         if self.current_char == '\n':
@@ -431,11 +432,7 @@ class Tokenizer:
                            *br.pos, char=br.type.value)
             if self.has_content:
                 res.append(_gen_token(TokenType.new_line))
-            # Create a fake line for cleanup
-            self.current_lineno += 1
-            self.current_col = 0
-            res.extend(self.handle_indent(0))  # dump DEDENTs
-            res.append(_gen_token(TokenType.end_marker))
+            eof = True
         elif self.current_char == '\\':
             self.forward()  # skip "\\"
             while self.current_char != '\n':
@@ -449,6 +446,12 @@ class Tokenizer:
         # and (this physical line has content or ends with backslash)
         if (res or backslash) and prespaces != -1:
             res[:0] = self.handle_indent(prespaces)
+        # Add a fake line to clean up if we reach end of file
+        if eof:
+            self.current_lineno += 1
+            self.current_col = 0
+            res.extend(self.handle_indent(0))  # dump DEDENTs
+            res.append(_gen_token(TokenType.end_marker))
         return res
 
     def skip_spaces(self):
