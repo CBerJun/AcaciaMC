@@ -882,9 +882,22 @@ class Generator(ASTVisitor):
 
     def visit_BoolOp(self, node: BoolOp):
         operands = [self.visit(operand) for operand in node.operands]
-        if node.operator is Operator.and_:
+        operator = node.operator
+        # Make sure operands are all boolean
+        for i, operand in enumerate(operands):
+            if not operand.data_type.matches_cls(BoolDataType):
+                err = Error(
+                    ErrorType.INVALID_BOOLOP_OPERAND,
+                    operator="and" if operator is Operator.and_ else "or",
+                    operand=str(operand.data_type)
+                )
+                err_node = node.operands[i]
+                err.location.linecol = (err_node.lineno, err_node.col)
+                self.error(err)
+        # Go
+        if operator is Operator.and_:
             return new_and_group(operands, self.compiler)
-        elif node.operator is Operator.or_:
+        elif operator is Operator.or_:
             return new_or_expression(operands, self.compiler)
         raise TypeError
 

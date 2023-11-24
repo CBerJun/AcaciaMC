@@ -415,18 +415,7 @@ class AndGroup(AcaciaExpr):
 
 def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Creates a boolean value connected with "and"."""
-    ## Purpose 1. check whether operands are valid
-    # make sure there is at least 1 operand
-    if not operands:
-        raise ValueError
-    # make sure all operands are booleans
-    for operand in operands:
-        if not operand.data_type.matches_cls(BoolDataType):
-            raise Error(
-                ErrorType.INVALID_BOOLOP_OPERAND, operator='and',
-                operand=str(operand.data_type)
-            )
-    ## Purpose 2. to do these optimizations:
+    # The purpose is to do these optimizations:
     literals = [operand for operand in operands
                 if isinstance(operand, BoolLiteral)]
     new_operands = operands.copy()
@@ -450,14 +439,7 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
 def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Create a boolean value connected with "or"."""
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
-    def _map(operand: AcaciaExpr):
-        if not operand.data_type.matches_cls(BoolDataType):
-            raise Error(
-                ErrorType.INVALID_BOOLOP_OPERAND, operator='or',
-                operand=str(operand.data_type)
-            )
-        return operand.not_()
-    inverted_operands = list(map(_map, operands))
+    inverted_operands = [operand.not_() for operand in operands]
     # connect them with `and` (-> `not a and not b and not c`)
     res = new_and_group(operands=inverted_operands, compiler=compiler)
     # invert result (-> `not (not a and not b and not c)`)
