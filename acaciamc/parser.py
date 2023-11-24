@@ -76,6 +76,7 @@ class Parser:
 
     def literal(self):
         """literal := INTEGER | TRUE | FALSE | NONE | FLOAT"""
+        pos = self.current_pos
         tok_type = self.current_token.type
         if tok_type in (TokenType.integer, TokenType.float_):
             value = self.current_token.value
@@ -88,7 +89,7 @@ class Parser:
             self.eat()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
-        return Literal(value, **self.current_pos)
+        return Literal(value, **pos)
 
     def str_literal(self):
         """str_literal := (STRING_BEGIN formatted_str STRING_END)+"""
@@ -396,13 +397,14 @@ class Parser:
                 self.eat(TokenType.colon)
                 return self.statement_block()
             elif self.current_token.type is TokenType.elif_:
+                elif_pos = self.current_pos
                 self.eat()
                 condition = self.expr()
                 self.eat(TokenType.colon)
                 stmts = self.statement_block()
                 # See if there are more "elif" or "else"
                 else_stmts = _if_extra()
-                return [If(condition, stmts, else_stmts, **self.current_pos)]
+                return [If(condition, stmts, else_stmts, **elif_pos)]
             else:
                 return []
         # if_stmt := IF expr COLON statement_block if_extra?
@@ -828,6 +830,7 @@ class Parser:
         arg := (IDENTIFIER EQUAL)? expr
         call_table := LPAREN (arg COMMA)* arg? RPAREN
         """
+        pos = self.current_pos
         args, keywords = [], {}
         self.eat(TokenType.lparen)
         # Keywords are always after positioned args, so use this flag to
@@ -857,4 +860,4 @@ class Parser:
             else:
                 break
         self.eat(TokenType.rparen)
-        return CallTable(args, keywords, **self.current_pos)
+        return CallTable(args, keywords, **pos)
