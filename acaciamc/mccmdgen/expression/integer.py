@@ -149,20 +149,17 @@ class IntLiteral(AcaciaExpr):
         return self
 
     def __neg__(self):
-        res = self.copy()
-        res.value = -res.value
-        return res
+        return IntLiteral(-self.value, self.compiler)
 
     ## BINARY OPERATORS
 
     def _bin_op(self, other, func: Callable[[int, int], int]):
         if isinstance(other, IntLiteral):
-            res = self.copy()
             try:
-                res.value = func(res.value, other.value)
+                v = func(self.value, other.value)
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
-            return res
+            return IntLiteral(v, self.compiler)
         return NotImplemented
 
     def __add__(self, other):
