@@ -415,6 +415,7 @@ class AndGroup(AcaciaExpr):
 
 def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Creates a boolean value connected with "and"."""
+    assert operands
     # The purpose is to do these optimizations:
     literals = [operand for operand in operands
                 if isinstance(operand, BoolLiteral)]
@@ -434,7 +435,7 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     if len(new_operands) == 1:
         return new_operands[0]
     # Final fallback
-    return AndGroup(operands, compiler)
+    return AndGroup(new_operands, compiler)
 
 def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Create a boolean value connected with "or"."""
