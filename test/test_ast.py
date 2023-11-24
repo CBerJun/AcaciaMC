@@ -32,9 +32,11 @@ class ASTVisualizer(ASTVisitor):
             dir(node)
         )
 
-    def general_visit(self, node: AST, indent = 0):
-        # indent:int the indent spaces to add (for recursion)
-        res = '%s(\n' % node.__class__.__name__
+    def general_visit(self, node: AST, indent: int = 0):
+        res = '@%d:%d %s(\n' % (
+            node.lineno, node.col,
+            node.__class__.__name__
+        )
         for field in self.get_fields(node):
             # get sub value
             value = getattr(node, field)
