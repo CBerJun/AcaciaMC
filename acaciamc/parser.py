@@ -2,7 +2,7 @@
 
 __all__ = ['Parser']
 
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from acaciamc.error import *
 from acaciamc.tokenizer import *
@@ -91,12 +91,14 @@ class Parser:
         return Literal(value, **self.current_pos)
 
     def str_literal(self):
-        """str_literal := STRING_BEGIN formatted_str STRING_END"""
+        """str_literal := (STRING_BEGIN formatted_str STRING_END)+"""
         pos = self.current_pos
-        self.eat(TokenType.string_begin)
-        content = self.formatted_str()
-        self.eat(TokenType.string_end)
-        return StrLiteral(content, **pos)
+        content: List[str] = []
+        while self.current_token.type is TokenType.string_begin:
+            self.eat()  # eat STRING_BEGIN
+            content.extend(self.formatted_str().content)
+            self.eat(TokenType.string_end)
+        return StrLiteral(FormattedStr(content, **pos), **pos)
 
     def identifier(self):
         """identifier := IDENTIFIER"""
