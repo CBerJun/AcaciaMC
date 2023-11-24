@@ -155,37 +155,28 @@ class IntLiteral(AcaciaExpr):
 
     ## BINARY OPERATORS
 
-    def _bin_op(self, other, name):
+    def _bin_op(self, other, func: Callable[[int, int], int]):
         if isinstance(other, IntLiteral):
-            # just calculate `self.value` and `other.value`
             res = self.copy()
             try:
-                res.value = getattr(res.value, name)(other.value)
+                res.value = func(res.value, other.value)
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return res
         return NotImplemented
 
     def __add__(self, other):
-        return self._bin_op(other, '__add__')
+        return self._bin_op(other, int.__add__)
     def __sub__(self, other):
-        return self._bin_op(other, '__sub__')
+        return self._bin_op(other, int.__sub__)
     def __mul__(self, other):
-        return self._bin_op(other, '__mul__')
+        return self._bin_op(other, int.__mul__)
     def __floordiv__(self, other):
         # MC uses C-style "integer division", not Python's "floor division".
-        if isinstance(other, IntLiteral):
-            return IntLiteral(
-                c_int_div(self.value, other.value), self.compiler
-            )
-        return NotImplemented
+        return self._bin_op(other, c_int_div)
     def __mod__(self, other):
         # MC uses C-style "remainder", not Python's "modulo".
-        if isinstance(other, IntLiteral):
-            return IntLiteral(
-                remainder(self.value, other.value), self.compiler
-            )
-        return NotImplemented
+        return self._bin_op(other, remainder)
 
 class IntVar(VarValue):
     """An integer variable."""
