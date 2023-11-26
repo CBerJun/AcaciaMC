@@ -117,9 +117,8 @@ class Task(AcaciaExpr):
             Whether a schedule created by `after` is in progress.
             """
             # Just return whether timer >= 0
-            return BoolCompare(
-                self.timer, Operator.greater_equal, IntLiteral(0, compiler),
-                compiler
+            return self.timer.compare(
+                Operator.greater_equal, IntLiteral(0, compiler)
             )
         @method_of(self, "on_area_loaded")
         @axe.chop

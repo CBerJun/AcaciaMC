@@ -2,35 +2,62 @@
 from typing import (
     Union as _Union, List as _List, Optional as _Optional, Dict as _Dict
 )
-import enum
+import enum as _enum
+import operator as _operator
 
 ####################
 ### AST CONTENTS ###
 ####################
 
-class Operator(enum.Enum):
+class Operator(_enum.Enum):
+    # NOTE these values are shown in error messages.
     # unary
-    positive = 0x00
-    negative = 0x01
-    not_ = 0x02
+    positive = "unary +"
+    negative = "unary -"
+    not_ = "not"
     # binary
-    multiply = 0x10
-    divide = 0x11
-    mod = 0x12
-    add = 0x13
-    minus = 0x14
+    multiply = "*"
+    divide = "/"
+    mod = "%"
+    add = "+"
+    minus = "-"
     # compare
-    equal_to = 0x20
-    unequal_to = 0x21
-    greater = 0x22
-    less = 0x23
-    greater_equal = 0x24
-    less_equal = 0x25
+    equal_to = "=="
+    unequal_to = "!="
+    greater = ">"
+    less = "<"
+    greater_equal = ">="
+    less_equal = "<="
     # boolean
-    and_ = 0x30
-    or_ = 0x31
+    and_ = "and"
+    or_ = "or"
 
-class MethodQualifier(enum.Enum):
+OP2PYOP = {
+    Operator.positive: _operator.pos,
+    Operator.negative: _operator.neg,
+    Operator.multiply: _operator.mul,
+    Operator.divide: _operator.floordiv,
+    Operator.mod: _operator.mod,
+    Operator.add: _operator.add,
+    Operator.minus: _operator.sub,
+    Operator.equal_to: _operator.eq,
+    Operator.unequal_to: _operator.ne,
+    Operator.greater: _operator.gt,
+    Operator.less: _operator.lt,
+    Operator.greater_equal: _operator.ge,
+    Operator.less_equal: _operator.le
+}
+COMPOP_INVERT = {
+    # Used to invert ("not") a comparison
+    Operator.greater: Operator.less_equal,
+    Operator.greater_equal: Operator.less,
+    Operator.less: Operator.greater_equal,
+    Operator.less_equal: Operator.greater,
+    Operator.equal_to: Operator.unequal_to,
+    Operator.unequal_to: Operator.equal_to
+}
+
+class MethodQualifier(_enum.Enum):
     """Entity method qualifiers."""
     # These values are shown in error messages
     none = "(none)"
@@ -342,8 +369,8 @@ class EntityCast(Expression):  # Template@some_entity
 
 class CompareOp(Expression):  # ==, !=, >, <, >=, <=
     def __init__(
-        self, left: Expression,
-        operators: list, operands: list, lineno, col
+        self, left: Expression, operators: _List[Operator],
+        operands: _List[Expression], lineno, col
     ):
         super().__init__(lineno, col)
         self.left = left
@@ -351,7 +378,8 @@ class CompareOp(Expression):  # ==, !=, >, <, >=, <=
         self.operands = operands
 
 class BoolOp(Expression):  # and, or
-    def __init__(self, operator: Operator, operands: list, lineno, col):
+    def __init__(self, operator: Operator,
+                 operands: _List[Expression], lineno, col):
         super().__init__(lineno, col)
         self.operator = operator
         self.operands = operands

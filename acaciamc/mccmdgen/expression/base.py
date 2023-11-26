@@ -14,6 +14,7 @@ __all__ = [
 from typing import (
     List, Union, Dict, Tuple, Callable, Hashable, Optional, TYPE_CHECKING
 )
+from types import NotImplementedType
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.mccmdgen.datatype import Storable
@@ -21,9 +22,11 @@ from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *
 
 if TYPE_CHECKING:
+    from acaciamc.ast import Operator
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import Command
+    from .boolean import CompareBase
 
 ### --- UTILS --- ###
 
@@ -150,6 +153,15 @@ class AcaciaExpr:
         is called to obtain the hash value.
         """
         raise NotImplementedError
+
+    def compare(self, op: "Operator", other: "AcaciaExpr") \
+            -> Union["CompareBase", NotImplementedType]:
+        """
+        Implement comparison operators for this expression.
+        Return value should either be `NotImplemented` or an
+        `AcaciaExpr` with boolean type.
+        """
+        return NotImplemented
 
 class ArgumentHandler:
     """A tool to match function arguments against a given definition."""

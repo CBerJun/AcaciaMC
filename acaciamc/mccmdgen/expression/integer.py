@@ -31,14 +31,17 @@ __all__ = [
 ]
 
 from typing import List, Tuple, TYPE_CHECKING, Callable, Union
-import operator as builtin_op
+import operator as stdop
 
 from .base import *
 from .types import Type
-from . import boolean
+from .boolean import (
+    CompareBase, BoolDataType, BoolLiteral, ScbMatchesCompare, to_BoolVar
+)
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
 from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.ast import Operator, OP2PYOP, COMPOP_INVERT
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
@@ -46,6 +49,7 @@ import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
 STR2SCBOP = {
     "+": cmds.ScbOp.ADD_EQ,
@@ -53,6 +57,17 @@ STR2SCBOP = {
     "*": cmds.ScbOp.MUL_EQ,
     "/": cmds.ScbOp.DIV_EQ,
     "%": cmds.ScbOp.MOD_EQ,
+}
+STR2PYOP = {
+    '+': stdop.add, '-': stdop.sub,
+    '*': stdop.mul, '/': stdop.floordiv, '%': stdop.mod
+}
+COMPOP2SCBOP = {
+    Operator.greater: cmds.ScbCompareOp.GT,
+    Operator.greater_equal: cmds.ScbCompareOp.GTE,
+    Operator.less: cmds.ScbCompareOp.LT,
+    Operator.less_equal: cmds.ScbCompareOp.LTE,
+    Operator.equal_to: cmds.ScbCompareOp.EQ
 }
 
 export_need_tmp_int = export_need_tmp(
@@ -105,18 +120,61 @@ class IntType(Type):
                 return x
 
             @axe.overload
-            @axe.arg("b", boolean.BoolDataType)
+            @axe.arg("b", BoolDataType)
             def from_bool(cls, compiler, b):
-                if isinstance(b, boolean.BoolLiteral):
+                if isinstance(b, BoolLiteral):
                     return resultlib.literal(int(b.value), compiler)
                 # Fallback: convert `b` to `BoolVar`,
                 # Since 0 is used to store False, 1 is for True, just
                 # "cast" it to `IntVar`.
-                dependencies, bool_var = boolean.to_BoolVar(b)
+                dependencies, bool_var = to_BoolVar(b)
                 return IntVar(bool_var.slot, self.compiler), dependencies
 
     def datatype_hook(self):
         return IntDataType(self.compiler)
+
+class IntCompare(CompareBase):
+    """
+    A boolean that stores comparison between 2 integer expressions.
+    This only stores one comparison, unlike the AST node `CompareOp`,
+    so "a > b > 1" is stored in two `IntCompare`s.
+    """
+    def __init__(
+        self, left: AcaciaExpr, operator: Operator,
+        right: AcaciaExpr, compiler
+    ):
+        super().__init__(compiler)
+        self.left = left
+        self.operator = operator
+        self.right = right
+
+    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
+        res_dependencies = []  # return[0]
+        res_main = []  # return[1]
+        dependency, var_left = to_IntVar(self.left)
+        res_dependencies.extend(dependency)
+        dependency, var_right = to_IntVar(self.right)
+        res_dependencies.extend(dependency)
+        # != is special handled, because Minecraft does not provide
+        # such syntax like 'if score ... != ...' while other 5
+        # operators are OK.
+        if self.operator is Operator.unequal_to:
+            res_main.append(cmds.ExecuteScoreComp(
+                var_left.slot, var_right.slot,
+                cmds.ScbCompareOp.EQ, invert=True
+            ))
+        else:  # for other 5 operators
+            compare_op = COMPOP2SCBOP[self.operator]
+            res_main.append(cmds.ExecuteScoreComp(
+                var_left.slot, var_right.slot, compare_op
+            ))
+        return res_dependencies, res_main
+
+    # Unary operator
+    def not_(self):
+        return IntCompare(
+            self.left, COMPOP_INVERT[self.operator], self.right, self.compiler
+        )
 
 class IntLiteral(AcaciaExpr):
     """Represents a literal integer.
@@ -142,6 +200,12 @@ class IntLiteral(AcaciaExpr):
 
     def copy(self):
         return IntLiteral(self.value, self.compiler)
+
+    def compare(self, op, other):
+        if isinstance(other, IntLiteral):
+            b = OP2PYOP[op](self.value, other.value)
+            return BoolLiteral(b, self.compiler)
+        return NotImplemented
 
     ## UNARY OPERATORS
 
@@ -188,6 +252,15 @@ class IntVar(VarValue):
 
     def export(self, var: "IntVar"):
         return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
+
+    def compare(self, op, other):
+        if not other.data_type.matches_cls(IntDataType):
+            return NotImplemented
+        if isinstance(other, IntLiteral):
+            return ScbMatchesCompare(
+                [], self.slot, op, other.value, self.compiler
+            )
+        return IntCompare(self, op, other, self.compiler)
 
     ## UNARY OPERATORS
 
@@ -273,10 +346,7 @@ class IntVar(VarValue):
         """
         # In this condition, we convert a (op)= b to a = a (op) b
         ## Calculate
-        value = {
-            '+': builtin_op.add, '-': builtin_op.sub,
-            '*': builtin_op.mul, '/': builtin_op.floordiv, '%': builtin_op.mod
-        }[operator](self, other)
+        value = STR2PYOP[operator](self, other)
         ## Export
         tmp = IntVar.new(self.compiler, tmp=True)
         res = value.export(tmp)
@@ -315,7 +385,7 @@ class IntOpGroup(AcaciaExpr):
     def __init__(self, init, compiler):
         super().__init__(IntDataType(compiler), compiler)
         self.main: List[PARTIALCMD_T] = []
-        self.libs: List[IntOpGroup]= []
+        self.libs: List[IntOpGroup] = []
         self._current_lib_index = 0  # always equals to `len(self.libs)`
         # Initial value
         if isinstance(init, IntLiteral):
@@ -363,6 +433,16 @@ class IntOpGroup(AcaciaExpr):
         res.libs.extend(self.libs)
         res._current_lib_index = self._current_lib_index
         return res
+
+    def compare(self, op, other):
+        if not other.data_type.matches_cls(IntDataType):
+            return NotImplemented
+        if isinstance(other, IntLiteral):
+            commands, var = to_IntVar(self)
+            return ScbMatchesCompare(
+                commands, var.slot, op, other.value, self.compiler
+            )
+        return IntCompare(self, op, other, self.compiler)
 
     ## UNARY OPERATORS
 

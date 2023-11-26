@@ -4,7 +4,6 @@ __all__ = ['Generator', 'Context']
 
 from typing import Union, TYPE_CHECKING, Optional, List, Tuple, Callable, Dict
 import contextlib
-import operator as builtin_op
 
 from acaciamc.ast import *
 from acaciamc.error import *
@@ -21,6 +20,16 @@ if TYPE_CHECKING:
 FUNC_NONE = "none"
 FUNC_INLINE = "inline"
 FUNC_NORMAL = "normal"
+
+COMPOP_SWAP = {
+    # Used when swapping 2 operands in a comparison
+    Operator.greater: Operator.less,
+    Operator.greater_equal: Operator.less_equal,
+    Operator.less: Operator.greater,
+    Operator.less_equal: Operator.greater_equal,
+    Operator.equal_to: Operator.equal_to,
+    Operator.unequal_to: Operator.unequal_to
+}
 
 class Context:
     def __init__(self, compiler: "Compiler", scope: ScopedSymbolTable = None):
@@ -848,27 +857,20 @@ class Generator(ASTVisitor):
 
     def visit_UnaryOp(self, node: UnaryOp):
         operand = self.visit(node.operand)
-        if node.operator is Operator.positive:
-            return self._wrap_op("unary +", builtin_op.pos, operand)
-        elif node.operator is Operator.negative:
-            return self._wrap_op("unary -", builtin_op.neg, operand)
-        elif node.operator is Operator.not_:
-            return self._wrap_method_op("not", "not_", operand)
+        operator = node.operator
+        if operator in (Operator.positive, Operator.negative):
+            return self._wrap_op(operator.value, OP2PYOP[operator], operand)
+        elif operator is Operator.not_:
+            return self._wrap_method_op(operator.value, "not_", operand)
         raise TypeError
 
     def visit_BinOp(self, node: BinOp):
         left, right = self.visit(node.left), self.visit(node.right)
-        if node.operator is Operator.add:
-            return self._wrap_op("+", builtin_op.add, left, right)
-        elif node.operator is Operator.minus:
-            return self._wrap_op("-", builtin_op.sub, left, right)
-        elif node.operator is Operator.multiply:
-            return self._wrap_op("*", builtin_op.mul, left, right)
-        elif node.operator is Operator.divide:
-            return self._wrap_op("/", builtin_op.floordiv, left, right)
-        elif node.operator is Operator.mod:
-            return self._wrap_op("%", builtin_op.mod, left, right)
-        raise TypeError
+        return self._wrap_op(
+            node.operator.value,
+            OP2PYOP[node.operator],
+            left, right
+        )
 
     def visit_CompareOp(self, node: CompareOp):
         compares = []
@@ -877,7 +879,17 @@ class Generator(ASTVisitor):
         # `e0 o1 e1 and ... and e(n-1) o(n) e(n)`
         for operand, operator in zip(node.operands, node.operators):
             left, right = right, self.visit(operand)
-            compares.append(new_compare(left, operator, right, self.compiler))
+            res = left.compare(operator, right)
+            if res is NotImplemented:
+                res = right.compare(COMPOP_SWAP[operator], left)
+                if res is NotImplemented:
+                    raise Error(
+                        ErrorType.INVALID_OPERAND,
+                        operator=operator.value,
+                        operand='"%s", "%s"'
+                                % (left.data_type, right.data_type)
+                    )
+            compares.append(res)
         return new_and_group(compares, self.compiler)
 
     def visit_BoolOp(self, node: BoolOp):

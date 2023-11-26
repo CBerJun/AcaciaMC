@@ -5,10 +5,8 @@ There are several classes that are used to represent bool expressions:
 - BoolVar: boolean variable. We use a score to store a boolean.
   When a score == 1, it's True; when score == 0, it's False.
 - NotBoolVar: inverted (`not var`) form of `BoolVar`.
-- BoolCompare: store comparison between 2 integer expressions.
-  This only store ONE comparison, unlike the AST node `CompareOp`,
-  so "a > b > 1" is stored in 2 `BoolCompare`s. Always use factory
-  `new_compare`.
+- CompareBase: abstract class that should be returned by
+  `AcaciaExpr.compare` to implement comparison operators. 
 - AndGroup: store several bool expressions that are connected with
   "and". Always use factory `new_and_group`.
 
@@ -21,20 +19,19 @@ __all__ = [
     # Type
     'BoolType', 'BoolDataType',
     # Expressions
-    'BoolLiteral', 'BoolVar', 'NotBoolVar', 'BoolCompare', 'AndGroup',
+    'BoolLiteral', 'BoolVar', 'NotBoolVar', 'CompareBase', 'AndGroup',
     # Factory functions
-    'new_compare', 'new_and_group', 'new_or_expression',
+    'new_and_group', 'new_or_expression',
     # Utils
     'to_BoolVar'
 ]
 
-from typing import Iterable, List, Tuple, Set, TYPE_CHECKING
-import operator as builtin_op
+from typing import Iterable, List, Tuple, Set, Dict, TYPE_CHECKING
+from abc import ABCMeta, abstractmethod
 
 from .base import *
-from .integer import IntDataType, IntLiteral, to_IntVar
 from .types import Type
-from acaciamc.ast import Operator
+from acaciamc.ast import Operator, COMPOP_INVERT
 from acaciamc.error import *
 from acaciamc.constants import INT_MAX, INT_MIN
 from acaciamc.mccmdgen.datatype import (
@@ -106,7 +103,6 @@ class BoolVar(VarValue):
         alloc = compiler.allocate_tmp if tmp else compiler.allocate
         return cls(alloc(), compiler)
 
-
     def __str__(self):
         return self.slot.to_str()
 
@@ -137,44 +133,18 @@ class NotBoolVar(AcaciaExpr):
     def not_(self):
         return BoolVar(self.slot, self.compiler)
 
-class BoolCompare(AcaciaExpr):
-    def __init__(
-        self, left: AcaciaExpr, operator: Operator,
-        right: AcaciaExpr, compiler
-    ):
-        """Use factory method `new_compare` below."""
+class CompareBase(AcaciaExpr, metaclass=ABCMeta):
+    def __init__(self, compiler: "Compiler"):
         super().__init__(BoolDataType(compiler), compiler)
-        self.left = left
-        self.operator = operator
-        self.right = right
-        # Make sure operands are available
-        lt, rt = left.data_type, right.data_type
-        if not (lt.matches_cls(IntDataType) and rt.matches_cls(IntDataType)):
-            raise Error(
-                ErrorType.INVALID_OPERAND,
-                operator={
-                    Operator.greater: '>',
-                    Operator.greater_equal: '>=',
-                    Operator.less: '<',
-                    Operator.less_equal: '<=',
-                    Operator.equal_to: '==',
-                    Operator.unequal_to: '!='
-                }[operator],
-                operand='"%s", "%s"' % (lt, rt)
-            )
-        # NOTE if one of `self.left` and `self.right` is `IntLiteral`,
-        # always make sure that `IntLiteral` on the right
-        # e.g. `0 < a` -> `a > 0`
-        if isinstance(self.left, IntLiteral):
-            self.left, self.right = self.right, self.left
-            self.operator = {
-                Operator.greater: Operator.less,
-                Operator.greater_equal: Operator.less_equal,
-                Operator.less: Operator.greater,
-                Operator.less_equal: Operator.greater_equal,
-                Operator.equal_to: Operator.equal_to,
-                Operator.unequal_to: Operator.unequal_to
-            }[self.operator]
+
+    @abstractmethod
+    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
+        """
+        Convert this compare to some dependency commands and subcommands
+        of /execute. The compare will be True if the subcommands
+        executed successfully.
+        """
+        pass
 
     @export_need_tmp_bool
     def export(self, var: BoolVar):
@@ -186,109 +156,50 @@ class BoolCompare(AcaciaExpr):
         res.append(cmds.Execute(subcmds, cmds.ScbSetConst(var.slot, 1)))
         return res
 
-    def copy(self):
-        return BoolCompare(self.left, self.operator, self.right, self.compiler)
+    @abstractmethod
+    def not_(self):
+        # Boolean expressions should implement "not".
+        pass
+
+class ScbMatchesCompare(CompareBase):
+    def __init__(
+        self, dependencies: CMDLIST_T, slot: cmds.ScbSlot,
+        operator: Operator, literal: int, compiler
+    ):
+        super().__init__(compiler)
+        self.dependencies = dependencies
+        self.slot = slot
+        self.operator = operator
+        self.literal = literal
 
     def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
-        """Convert this compare to some dependency commands
-        (return[0]) and subcommands of /execute (return[1]).
-        """
-        res_dependencies = []  # return[0]
-        res_main = []  # return[1]
-        # Remember that if one of left and right is `IntLiteral`
-        # it will be put on the right (in self.__init__)?
-        if isinstance(self.right, IntLiteral):  # there is literal
-            literal = self.right.value
-            # parse the other operand (that is not IntLiteral)
-            dependency, var = to_IntVar(self.left)
-            # and write dependency
-            res_dependencies.extend(dependency)
-            # then write main (according to operator)
-            # != is special: it needs 'unless ...' rather than 'if ...'
-            if self.operator is Operator.unequal_to:
-                res_main.append(cmds.ExecuteScoreMatch(
-                    var.slot, str(literal), invert=True
-                ))
-            else:  # for other 5 operators
-                match_range = {
-                    Operator.greater: '%d..' % (literal + 1),
-                    Operator.greater_equal: '%d..' % literal,
-                    Operator.less: '..%d' % (literal - 1),
-                    Operator.less_equal: '..%d' % literal,
-                    Operator.equal_to: str(literal)
-                }[self.operator]
-                res_main.append(cmds.ExecuteScoreMatch(var.slot, match_range))
-        else:  # not `if score ... matches` optimization
-            # then both operands should be processed
-            dependency, var_left = to_IntVar(self.left)
-            res_dependencies.extend(dependency)
-            dependency, var_right = to_IntVar(self.right)
-            res_dependencies.extend(dependency)
-            # != is special handled, because Minecraft does not provide
-            # such syntax like 'if score ... != ...' while other 5
-            # operators are OK.
-            if self.operator is Operator.unequal_to:
-                res_main.append(cmds.ExecuteScoreComp(
-                    var_left.slot, var_right.slot,
-                    cmds.ScbCompareOp.EQ, invert=True
-                ))
-            else:  # for other 5 operators
-                compare_op = {
-                    Operator.greater: cmds.ScbCompareOp.GT,
-                    Operator.greater_equal: cmds.ScbCompareOp.GTE,
-                    Operator.less: cmds.ScbCompareOp.LT,
-                    Operator.less_equal: cmds.ScbCompareOp.LTE,
-                    Operator.equal_to: cmds.ScbCompareOp.EQ
-                }[self.operator]
-                res_main.append(cmds.ExecuteScoreComp(
-                    var_left.slot, var_right.slot, compare_op
-                ))
-        return res_dependencies, res_main
+        res = []
+        match_range = {
+            Operator.greater: '%d..' % (self.literal + 1),
+            Operator.greater_equal: '%d..' % self.literal,
+            Operator.less: '..%d' % (self.literal - 1),
+            Operator.less_equal: '..%d' % self.literal,
+            Operator.equal_to: str(self.literal),
+            Operator.unequal_to: '!%d' % self.literal
+        }[self.operator]
+        res.append(cmds.ExecuteScoreMatch(self.slot, match_range))
+        return self.dependencies.copy(), res
 
     # Unary operator
     def not_(self):
-        res = self.copy()
-        res.operator = {
-            Operator.greater: Operator.less_equal,
-            Operator.greater_equal: Operator.less,
-            Operator.less: Operator.greater_equal,
-            Operator.less_equal: Operator.greater,
-            Operator.equal_to: Operator.unequal_to,
-            Operator.unequal_to: Operator.equal_to
-        }[res.operator]
-        return res
-
-def new_compare(left: AcaciaExpr, operator: Operator,
-                right: AcaciaExpr, compiler) -> AcaciaExpr:
-    """Return an `AcaciaExpr` that compares `left` and `right`
-    with `operator`.
-    """
-    # The purpose of this factory is to do this optimization:
-    # when both left and right are IntLiteral
-    if isinstance(left, IntLiteral) and isinstance(right, IntLiteral):
-        return BoolLiteral(
-            {
-                Operator.greater: builtin_op.gt,
-                Operator.greater_equal: builtin_op.ge,
-                Operator.less: builtin_op.lt,
-                Operator.less_equal: builtin_op.le,
-                Operator.equal_to: builtin_op.eq,
-                Operator.unequal_to: builtin_op.ne
-            }[operator](left.value, right.value),
-            compiler
+        return ScbMatchesCompare(
+            self.dependencies.copy(), self.slot, COMPOP_INVERT[self.operator],
+            self.literal, self.compiler
         )
-    # Fallback to BoolCompare
-    return BoolCompare(left, operator, right, compiler)
 
 class AndGroup(AcaciaExpr):
     def __init__(self, operands: Iterable[AcaciaExpr], compiler):
         super().__init__(BoolDataType(compiler), compiler)
         self.main: List["_ExecuteSubcmd"] = []
         self.dependencies: CMDLIST_T = []  # commands before `self.main`
-        # `compare_operands` stores `BoolCompare` operands -- they are
-        # converted to commands when `export`ed since there may be
-        # optimizations.
-        self.compare_operands: Set[BoolCompare] = set()
+        # `optimizable_operands` are converted to commands when
+        # `export`ed since there may be optimizations.
+        self.optimizable_operands: Set[ScbMatchesCompare] = set()
         self.inverted = False  # if this is "not"ed
         for operand in operands:
             self._add_operand(operand)
@@ -301,45 +212,35 @@ class AndGroup(AcaciaExpr):
         SET_FALSE = cmds.ScbSetConst(var.slot, FALSE)
         res_dependencies = []  # dependencies part of result
         res_main = []  # main part of result (/execute subcommands)
-        # -- Now convert self.compare_operands into commands --
+        # -- Now convert self.optimizable_operands into commands --
         # Optimization: When the same expr is compared by 2 or more
         # IntLiterals, redundant ones can be removed and commands can be merged
         # e.g. `1 <= x <= 5 and x <= 3` can be merged
         # into a single /execute if score ... matches 1..3
-        # 1st Pass: Throw BoolCompares that don't have an IntLiteral as operand
-        # In: [a > 3, b < 5, a < 8, a > c, c > 0]
-        # Out: [a > 3, b < 5, a < 8, c > 0]
-        optimizable = set(
-            cp for cp in self.compare_operands
-            # 1. Remember that in BoolCompare.__init__, if one of left and
-            # right is an IntLiteral, it must be on the right?
-            # 2. != is not optimizable by `if score ... matches`
-            if isinstance(cp.right, IntLiteral)
-               and cp.operator is not Operator.unequal_to
-        )
-        no_optimize = self.compare_operands - optimizable
-        # 2nd Pass: Find BoolCompares which has an IntLiteral as operand
+        # 1st Pass: Find IntCompares which has an IntLiteral as operand
         # and which the other operands are the same
         # In: [a > 3, b < 5, a < 8, c > 0]
         # Out: {a: [a > 3, a < 8], b: [b < 5], c: [c > 0]}
-        opt_groups = {}
-        for compare in optimizable:
-            group = opt_groups.get(compare.left, None)
+        opt_groups: Dict[cmds.ScbSlot, List[ScbMatchesCompare]] = {}
+        for compare in self.optimizable_operands:
+            group = opt_groups.get(compare.slot, None)
             if group is None:
                 group = []
-                opt_groups[compare.left] = group
+                opt_groups[compare.slot] = group
             group.append(compare)
-        # 3rd Pass: Generate Commands
-        for left, group in opt_groups.items():
+        # 2nd Pass: Generate Commands
+        for slot, group in opt_groups.items():
             # Get max and min value of this group
             min_, max_ = INT_MIN, INT_MAX
+            dependencies = []
             for compare in group:
-                literal = compare.right.value
+                dependencies.extend(compare.dependencies)
+                literal = compare.literal
                 if compare.operator is Operator.equal_to:
                     min_ = max(literal, min_)
                     max_ = min(literal, max_)
-                # in 1st Pass Operator.unequal_to is filtered
-                # so there's no need to consider it
+                # Operator.unequal_to is filtered in `_add_operand`
+                # because it can't be optimized.
                 elif compare.operator is Operator.greater:
                     min_ = max(literal + 1, min_)
                 elif compare.operator is Operator.greater_equal:
@@ -357,14 +258,8 @@ class AndGroup(AcaciaExpr):
                 max_str = '' if max_ == INT_MAX else str(max_)
                 int_range = '%s..%s' % (min_str, max_str)
             # Calculate left (non-Literal one)
-            dependency, left_var = to_IntVar(left)
-            res_dependencies.extend(dependency)
-            res_main.append(cmds.ExecuteScoreMatch(left_var.slot, int_range))
-        # Finally, handle unoptimizable `BoolCompare`s
-        for compare in no_optimize:
-            dependency, main = compare.as_execute()
-            res_dependencies.extend(dependency)
-            res_main.extend(main)
+            res_dependencies.extend(dependencies)
+            res_main.append(cmds.ExecuteScoreMatch(slot, int_range))
         # Convert dependencies and `res_main` to real commands
         res_main.extend(self.main)
         res_dependencies.extend(self.dependencies)
@@ -379,8 +274,13 @@ class AndGroup(AcaciaExpr):
             self.main.append(cmds.ExecuteScoreMatch(operand.slot, '1'))
         elif isinstance(operand, NotBoolVar):
             self.main.append(cmds.ExecuteScoreMatch(operand.slot, '0'))
-        elif isinstance(operand, BoolCompare):
-            self.compare_operands.add(operand)
+        elif (isinstance(operand, ScbMatchesCompare)
+                and operand.operator is not Operator.unequal_to):
+            self.optimizable_operands.add(operand)
+        elif isinstance(operand, CompareBase):
+            commands, subcmds = operand.as_execute()
+            self.dependencies.extend(commands)
+            self.main.extend(subcmds)
         elif isinstance(operand, AndGroup):
             # Combine AndGroups
             if operand.inverted:
@@ -392,7 +292,7 @@ class AndGroup(AcaciaExpr):
             else:
                 self.main.extend(operand.main)
                 self.dependencies.extend(operand.dependencies)
-                self.compare_operands.update(operand.compare_operands)
+                self.optimizable_operands.update(operand.optimizable_operands)
         else:
             # `BoolLiteral`s should have been optimized by
             # `new_and_group`. `AcaciaExpr`s which are not boolean type
@@ -404,7 +304,7 @@ class AndGroup(AcaciaExpr):
         res.main.extend(self.main)
         res.dependencies.extend(self.dependencies)
         res.inverted = self.inverted
-        res.compare_operands.update(self.compare_operands)
+        res.optimizable_operands.update(self.optimizable_operands)
         return res
 
     # Unary operator
@@ -421,7 +321,7 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
                 if isinstance(operand, BoolLiteral)]
     new_operands = operands.copy()
     for literal in literals:
-        if literal.value is True:
+        if literal.value:
             # throw away operands that are always true
             new_operands.remove(literal)
         else:
