@@ -12,6 +12,16 @@ def _mod(x: int, y: int) -> int:
      *#
     result = (x % y + y) % y
 
+def _floordiv(x: int, y: int) -> int:
+    #**
+     * Return largest integer less than or equal to `x` divided by `y`.
+     * This is Python-style floor division, while `/` operator is
+     * C-style integer division (which rounds towards zero).
+     *#
+    result = x / y
+    if (x >= 0) != (y >= 0) and x % y != 0:
+        result -= 1
+
 def _pow(x: int, y: int) -> int:
     #**
      * Return `x` to the power of `y`.

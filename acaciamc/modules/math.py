@@ -95,6 +95,16 @@ def _mod(compiler, x, y):
         return IntLiteral(x.value % y.value, compiler)
     return internal("_mod").call(args=[x, y], keywords={})
 
+@axe.chop
+@axe.arg("x", IntDataType)
+@axe.arg("y", IntDataType)
+def _floordiv(compiler, x, y):
+    if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
+        if y.value == 0:
+            raise axe.ArgumentError('y', 'cannot divide by 0')
+        return IntLiteral(x.value // y.value, compiler)
+    return internal("_floordiv").call(args=[x, y], keywords={})
+
 def acacia_build(compiler):
     global _math
     _math = compiler.get_module(ModuleMeta("_math"))
@@ -104,6 +114,7 @@ def acacia_build(compiler):
         'min': BinaryFunction(_min, compiler),
         'max': BinaryFunction(_max, compiler),
         'mod': BinaryFunction(_mod, compiler),
+        'floordiv': BinaryFunction(_floordiv, compiler),
     }
     attrs.update(_math.attribute_table)
     return attrs
