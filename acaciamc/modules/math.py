@@ -92,6 +92,8 @@ def _max(compiler, operands: List[AcaciaExpr]):
 @axe.arg("y", IntDataType)
 def _mod(compiler, x, y):
     if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
+        if y.value == 0:
+            raise axe.ArgumentError('y', 'modulo by 0')
         return IntLiteral(x.value % y.value, compiler)
     return internal("_mod").call(args=[x, y], keywords={})
 
