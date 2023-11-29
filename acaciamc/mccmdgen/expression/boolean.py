@@ -26,7 +26,7 @@ __all__ = [
     'to_BoolVar'
 ]
 
-from typing import Iterable, List, Tuple, Set, Dict, TYPE_CHECKING
+from typing import Iterable, List, Tuple, Set, Dict, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
 from .base import *
@@ -46,6 +46,29 @@ if TYPE_CHECKING:
 export_need_tmp_bool = export_need_tmp(
     new_tmp=lambda c: BoolVar.new(c, tmp=True)
 )
+
+def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
+    """Wildcard `compare` method to compare a bool with a bool."""
+    if not (op is Operator.equal_to or op is Operator.unequal_to):
+        return NotImplemented
+    dep = []
+    invert = op is Operator.unequal_to
+    if isinstance(other, BoolVar):
+        slot2 = other.slot
+    elif isinstance(other, NotBoolVar):
+        slot2 = other.slot
+        invert = not invert
+    elif isinstance(other, (CompareBase, AndGroup)):
+        _dep, other_var = to_BoolVar(other)
+        dep.extend(_dep)
+        slot2 = other_var.slot
+    else:
+        return NotImplemented
+    _dep, self_var = to_BoolVar(self)
+    dep.extend(_dep)
+    return ScbEqualCompare(
+        self_var.slot, slot2, self.compiler, invert, dep
+    )
 
 class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "bool"
@@ -82,6 +105,16 @@ class BoolLiteral(AcaciaExpr):
     def copy(self) -> "BoolLiteral":
         return BoolLiteral(value=self.value, compiler=self.compiler)
 
+    def compare(self, op, other):
+        if not (op is Operator.equal_to or op is Operator.unequal_to):
+            return NotImplemented
+        # For a boolean expression b, b == True is equivalent to "b"
+        # b == False is equivalent to "not b"; != is the opposite
+        if self.value == (op is Operator.equal_to):
+            return other
+        else:
+            return other.not_()
+
     def __str__(self):
         """Return 1 if True, 0 if False."""
         return str(int(self.value))
@@ -109,6 +142,14 @@ class BoolVar(VarValue):
     def export(self, var: "BoolVar"):
         return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
 
+    def compare(self, op, other):
+        if not (op is Operator.equal_to or op is Operator.unequal_to):
+            return NotImplemented
+        if not isinstance(other, BoolVar):
+            return NotImplemented
+        invert = op is Operator.unequal_to
+        return ScbEqualCompare(self.slot, other.slot, self.compiler, invert)
+
     # Unary operator
     def not_(self):
         return NotBoolVar(self.slot, self.compiler)
@@ -128,6 +169,14 @@ class NotBoolVar(AcaciaExpr):
             cmds.Execute([cmds.ExecuteScoreMatch(self.slot, "0")],
                          cmds.ScbSetConst(var.slot, 1))
         ]
+
+    def compare(self, op, other):
+        if not (op is Operator.equal_to or op is Operator.unequal_to):
+            return NotImplemented
+        if not isinstance(other, (BoolVar, NotBoolVar)):
+            return NotImplemented
+        invert = (op is Operator.equal_to) == (isinstance(other, BoolVar))
+        return ScbEqualCompare(self.slot, other.slot, self.compiler, invert)
 
     # Unary operator
     def not_(self):
@@ -155,6 +204,8 @@ class CompareBase(AcaciaExpr, metaclass=ABCMeta):
         # check condition and change it to 1 (True)
         res.append(cmds.Execute(subcmds, cmds.ScbSetConst(var.slot, 1)))
         return res
+
+    compare = _bool_compare
 
     @abstractmethod
     def not_(self):
@@ -190,6 +241,32 @@ class ScbMatchesCompare(CompareBase):
         return ScbMatchesCompare(
             self.dependencies.copy(), self.slot, COMPOP_INVERT[self.operator],
             self.literal, self.compiler
+        )
+
+class ScbEqualCompare(CompareBase):
+    def __init__(self, left: cmds.ScbSlot, right: cmds.ScbSlot,
+                 compiler, invert=False,
+                 dependencies: Optional[CMDLIST_T] = None):
+        super().__init__(compiler)
+        self.left = left
+        self.right = right
+        self.invert = invert
+        if dependencies is None:
+            self.dependencies = []
+        else:
+            self.dependencies = dependencies
+
+    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
+        return (
+            self.dependencies.copy(),
+            [cmds.ExecuteScoreComp(
+                self.left, self.right, cmds.ScbCompareOp.EQ, self.invert
+            )]
+        )
+
+    def not_(self):
+        return ScbEqualCompare(
+            self.left, self.right, self.compiler, not self.invert
         )
 
 class AndGroup(AcaciaExpr):
@@ -306,6 +383,8 @@ class AndGroup(AcaciaExpr):
         res.inverted = self.inverted
         res.optimizable_operands.update(self.optimizable_operands)
         return res
+
+    compare = _bool_compare
 
     # Unary operator
     def not_(self):
