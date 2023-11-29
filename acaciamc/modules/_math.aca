@@ -25,9 +25,10 @@ def _floordiv(x: int, y: int) -> int:
 def _pow(x: int, y: int) -> int:
     #**
      * Return `x` to the power of `y`.
-     * `y` is treated as 1 when smaller than 1.
+     * `y` is treated as 0 when smaller than 0.
+     * 0 to the power of 0 returns 1.
      *#
-    while y > 1:
-        x *= x
+    result = 1
+    while y > 0:
+        result *= x
         y -= 1
-    result = x
