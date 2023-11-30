@@ -3,7 +3,7 @@ music - Generate redstone music from MIDI file
 NOTE Python package `mido` is required.
 """
 
-from typing import TYPE_CHECKING
+from typing import Dict, TYPE_CHECKING
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
@@ -14,6 +14,156 @@ import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.mcselector import MCSelector
+
+ID2INSTRUMENT = {
+    # Piano
+    0: 'note.harp',
+    1: 'note.harp',
+    2: 'note.pling',
+    3: 'note.pling',
+    4: 'note.pling',
+    5: 'note.pling',
+    6: 'note.harp',
+    7: 'note.pling',
+    # Chromatic Percussion
+    8: 'note.harp',
+    9: 'note.bell',
+    10: 'note.chime',
+    11: 'note.iron_xylophone',
+    12: 'note.xylophone',
+    13: 'note.xylophone',
+    14: 'note.chime',
+    15: 'note.bell',
+    # Organ
+    # Organ sounds like flute somehow...
+    16: 'note.flute',
+    17: 'note.flute',
+    18: 'note.flute',
+    19: 'note.flute',
+    20: 'note.flute',
+    21: 'note.flute',
+    22: 'note.flute',
+    23: 'note.flute',
+    # Guitar
+    24: 'note.guitar',
+    25: 'note.guitar',
+    26: 'note.guitar',
+    27: 'note.guitar',
+    28: 'note.guitar',
+    29: 'note.guitar',
+    30: 'note.guitar',
+    31: 'note.bass',
+    # Bass
+    32: 'note.bass',
+    33: 'note.bass',
+    34: 'note.bass',
+    35: 'note.bass',
+    36: 'note.bass',
+    37: 'note.bass',
+    38: 'note.bass',
+    39: 'note.bass',
+    # Solo String
+    # Strings like violin sounds like flute somehow...
+    40: 'note.flute',
+    41: 'note.flute',
+    42: 'note.flute',
+    43: 'note.flute',
+    44: 'note.guitar',
+    45: 'note.guitar',
+    46: 'note.harp',
+    47: 'note.snare',
+    # Ensemble
+    48: 'note.flute',
+    49: 'note.flute',
+    50: 'note.flute',
+    51: 'note.flute',
+    52: 'note.flute',
+    53: 'note.flute',
+    # Brass
+    54: 'note.flute',
+    55: 'note.snare',
+    56: 'note.chime',
+    57: 'note.chime',
+    58: 'note.chime',
+    59: 'note.chime',
+    60: 'note.chime',
+    61: 'note.chime',
+    62: 'note.chime',
+    63: 'note.chime',
+    # Reed
+    # note.bit sounds like Sax somehow...
+    64: 'note.bit',
+    65: 'note.bit',
+    66: 'note.bit',
+    67: 'note.bit',
+    68: 'note.flute',
+    69: 'note.flute',
+    70: 'note.flute',
+    71: 'note.flute',
+    # Pipe
+    72: 'note.flute',
+    73: 'note.flute',
+    74: 'note.flute',
+    75: 'note.flute',
+    76: 'note.flute',
+    77: 'note.flute',
+    78: 'note.bell',
+    79: 'note.flute',
+    # Synth Lead
+    80: 'note.bit',
+    81: 'note.bit',
+    82: 'note.flute',
+    83: 'note.flute',
+    84: 'note.guitar',
+    85: 'note.bit',
+    86: 'note.bit',
+    87: 'note.bit',
+    # Synth Pad
+    88: 'note.bit',
+    89: 'note.bit',
+    90: 'note.bit',
+    91: 'note.bit',
+    92: 'note.guitar',
+    93: 'note.bit',
+    94: 'note.bit',
+    95: 'note.guitar',
+    # Synth Effect
+    96: 'note.bit',
+    97: 'note.bit',
+    98: 'note.bit',
+    99: 'note.bit',
+    100: 'note.bit',
+    101: 'note.bit',
+    102: 'note.bit',
+    103: 'note.bit',
+    # Ethnic
+    104: 'note.guitar',
+    105: 'note.banjo',
+    106: 'note.guitar',
+    107: 'note.guitar',
+    108: 'note.bell',
+    109: 'note.flute',
+    110: 'note.guitar',
+    111: 'note.flute',
+    # Percussive
+    112: 'note.bell',
+    113: 'note.bell',
+    114: 'note.drum',
+    115: 'note.cow_bell',
+    116: 'note.drum',
+    117: 'note.drum',
+    118: 'note.drum',
+    119: 'note.bit',
+    # Sound Effects
+    120: 'note.hat',
+    121: 'note.hat',
+    122: 'note.hat',
+    123: 'note.hat',
+    124: 'note.hat',
+    125: 'note.hat',
+    126: 'note.hat',
+    127: 'note.snare'
+}
 
 class MusicDataType(DefaultDataType):
     name = "Music"
@@ -28,7 +178,9 @@ class MusicType(Type):
         note_offset: int-literal = 0,
         chunk_size: int-literal = 500,
         speed: float = 1.0,
-        volume: float = 1.0
+        volume: float = 1.0,
+        channel_volume: map[int-literal, float] = {:},
+        instrument: map[int-literal, str] = {:},
     )
 
     A music to generate from MIDI file `path`.
@@ -42,7 +194,12 @@ class MusicType(Type):
     every tick. `chunk_size` determines how many commands there will be
     in 1 file.
     `speed` sets the speed of music.
-    `volume` sets the volume factor of music.
+    `volume` sets the overall volume of music.
+    `channel_volume` sets the volume factor of each MIDI channel (0-15).
+    By default, all channels have the same volume factor (1.0).
+    `instrument` sets the corresponding Minecraft sound of each MIDI
+    instrument (0-127). The default mapping is in `ID2INSTRUMENT`. An
+    example: {127: "note.hat"}.
     """
     def do_init(self):
         @method_of(self, "__new__")
@@ -55,9 +212,16 @@ class MusicType(Type):
         @axe.arg("chunk_size", axe.RangedLiteralInt(1, None), default=500)
         @axe.arg("speed", axe.LiteralFloat(), default=1.0)
         @axe.arg("volume", axe.LiteralFloat(), default=1.0)
+        @axe.arg("channel_volume", axe.MapOf(
+            axe.RangedLiteralInt(0, 15), axe.LiteralFloat()
+        ), default={})
+        @axe.arg("instrument", axe.MapOf(
+            axe.RangedLiteralInt(0, 127), axe.LiteralString()
+        ), default={})
         def _new(compiler, path: str, looping: bool, loop_interval: int,
                  listener: "MCSelector", note_offset: int,
-                 chunk_size: int, speed: float, volume: float):
+                 chunk_size: int, speed: float, volume: float,
+                 channel_volume: Dict[int, float], instrument: Dict[int, str]):
             try:
                 midi = mido.MidiFile(path)
             except Exception as err:
@@ -66,6 +230,10 @@ class MusicType(Type):
                 raise axe.ArgumentError("speed", "must be positive")
             if volume <= 0:
                 raise axe.ArgumentError("volume", "must be positive")
+            if any([v < 0 for v in channel_volume.values()]):
+                raise axe.ArgumentError(
+                    "channel_volume", "values must be positive"
+                )
             looping_info = loop_interval if looping else -1
             if listener is None:
                 listener_str = "@a"
@@ -73,7 +241,8 @@ class MusicType(Type):
                 listener_str = listener.to_str()
             return Music(
                 midi, listener_str, looping_info, note_offset,
-                chunk_size, speed, volume, compiler
+                chunk_size, speed, volume, channel_volume, instrument,
+                compiler
             )
 
     def datatype_hook(self):
@@ -82,168 +251,17 @@ class MusicType(Type):
 class Music(AcaciaExpr):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
     # tick.
-    # CONFIGS
-    ID2INSTRUMENT = {
-        # Piano
-        0: 'note.harp',
-        1: 'note.harp',
-        2: 'note.pling',
-        3: 'note.pling',
-        4: 'note.pling',
-        5: 'note.pling',
-        6: 'note.harp',
-        7: 'note.pling',
-        # Chromatic Percussion
-        8: 'note.harp',
-        9: 'note.bell',
-        10: 'note.chime',
-        11: 'note.iron_xylophone',
-        12: 'note.xylophone',
-        13: 'note.xylophone',
-        14: 'note.chime',
-        15: 'note.bell',
-        # Organ
-        # Organ sounds like flute somehow...
-        16: 'note.flute',
-        17: 'note.flute',
-        18: 'note.flute',
-        19: 'note.flute',
-        20: 'note.flute',
-        21: 'note.flute',
-        22: 'note.flute',
-        23: 'note.flute',
-        # Guitar
-        24: 'note.guitar',
-        25: 'note.guitar',
-        26: 'note.guitar',
-        27: 'note.guitar',
-        28: 'note.guitar',
-        29: 'note.guitar',
-        30: 'note.guitar',
-        31: 'note.bass',
-        # Bass
-        32: 'note.bass',
-        33: 'note.bass',
-        34: 'note.bass',
-        35: 'note.bass',
-        36: 'note.bass',
-        37: 'note.bass',
-        38: 'note.bass',
-        39: 'note.bass',
-        # Solo String
-        # Strings like violin sounds like flute somehow...
-        40: 'note.flute',
-        41: 'note.flute',
-        42: 'note.flute',
-        43: 'note.flute',
-        44: 'note.guitar',
-        45: 'note.guitar',
-        46: 'note.harp',
-        47: 'note.snare',
-        # Ensemble
-        48: 'note.flute',
-        49: 'note.flute',
-        50: 'note.flute',
-        51: 'note.flute',
-        52: 'note.flute',
-        53: 'note.flute',
-        # Brass
-        54: 'note.flute',
-        55: 'note.snare',
-        56: 'note.chime',
-        57: 'note.chime',
-        58: 'note.chime',
-        59: 'note.chime',
-        60: 'note.chime',
-        61: 'note.chime',
-        62: 'note.chime',
-        63: 'note.chime',
-        # Reed
-        # note.bit sounds like Sax somehow...
-        64: 'note.bit',
-        65: 'note.bit',
-        66: 'note.bit',
-        67: 'note.bit',
-        68: 'note.flute',
-        69: 'note.flute',
-        70: 'note.flute',
-        71: 'note.flute',
-        # Pipe
-        72: 'note.flute',
-        73: 'note.flute',
-        74: 'note.flute',
-        75: 'note.flute',
-        76: 'note.flute',
-        77: 'note.flute',
-        78: 'note.bell',
-        79: 'note.flute',
-        # Synth Lead
-        80: 'note.bit',
-        81: 'note.bit',
-        82: 'note.flute',
-        83: 'note.flute',
-        84: 'note.guitar',
-        85: 'note.bit',
-        86: 'note.bit',
-        87: 'note.bit',
-        # Synth Pad
-        88: 'note.bit',
-        89: 'note.bit',
-        90: 'note.bit',
-        91: 'note.bit',
-        92: 'note.guitar',
-        93: 'note.bit',
-        94: 'note.bit',
-        95: 'note.guitar',
-        # Synth Effect
-        96: 'note.bit',
-        97: 'note.bit',
-        98: 'note.bit',
-        99: 'note.bit',
-        100: 'note.bit',
-        101: 'note.bit',
-        102: 'note.bit',
-        103: 'note.bit',
-        # Ethnic
-        104: 'note.guitar',
-        105: 'note.banjo',
-        106: 'note.guitar',
-        107: 'note.guitar',
-        108: 'note.bell',
-        109: 'note.flute',
-        110: 'note.guitar',
-        111: 'note.flute',
-        # Percussive
-        112: 'note.bell',
-        113: 'note.bell',
-        114: 'note.drum',
-        115: 'note.cow_bell',
-        116: 'note.drum',
-        117: 'note.drum',
-        118: 'note.drum',
-        119: 'note.bit',
-        # Sound Effects
-        120: 'note.hat',
-        121: 'note.hat',
-        122: 'note.hat',
-        123: 'note.hat',
-        124: 'note.hat',
-        125: 'note.hat',
-        126: 'note.hat',
-        127: 'note.snare'
-    }
-    CHANNEL_VOLUME = {
-        i: 1.0 for i in range(16)
-    }
 
     def __init__(self, midi, listener_str: str, looping: int,
                  note_offset: int, chunk_size: int, speed: float,
-                 volume: float, compiler):
+                 volume: float, channel_volume: Dict[int, float],
+                 instrument: Dict[int, str], compiler):
         super().__init__(MusicDataType(), compiler)
         self.midi = midi
         self.listener_str = listener_str
         self.note_offset = note_offset
         self.chunk_size = chunk_size
+        self.override_instrument = instrument
         self.tracks = [t.copy() for t in midi.tracks]
         # Check MIDI type
         if midi.type != 0 and midi.type != 1:
@@ -261,10 +279,10 @@ class Music(AcaciaExpr):
         # last_msg_mt: track id to MT when last Message is handled
         self.last_msg_mt = dict.fromkeys(range(len(midi.tracks)), 0)
         # Channel info
-        self.channel_volume = {}  # channel id to volume (0-127)
+        self.channel_volume = {}  # channel id to volume (0-15)
         self.channel_instrument = {}  # channel id to instrument id
-        ## Default instrument: 0~8 & 9~15: Piano (0); 9: Drum set (127)
-        ## Default volumn: 100
+        ## Default instrument: 0~8 & 10~15: Piano (0); 9: Drum set (127)
+        ## Default volume: 100
         for i in range(16):
             self.channel_instrument[i] = 0
             self.channel_volume[i] = 100
@@ -276,6 +294,8 @@ class Music(AcaciaExpr):
         self.timer = IntVar.new(compiler)
         # Volume
         self.user_volume = volume
+        self.user_channel_volume = dict.fromkeys(range(16), 1.0)
+        self.user_channel_volume.update(channel_volume)
         # Create file
         self.files = []
         # file_sep_gt: in which GT we seperate the file
@@ -406,12 +426,12 @@ class Music(AcaciaExpr):
     def get_instrument(self, channel: int) -> str:
         """Get MC sound of channel."""
         ins_id = self.channel_instrument[channel]
-        return self.ID2INSTRUMENT[ins_id]
+        return self.override_instrument.get(ins_id, ID2INSTRUMENT[ins_id])
 
     def get_volume(self, channel: int, velocity: int) -> float:
         """Get MC volume (0~1) according to channel and velocity."""
         channel_v = (self.channel_volume[channel]
-                     * self.CHANNEL_VOLUME[channel])
+                     * self.user_channel_volume[channel])
         return velocity * channel_v / 127 / 127 * self.user_volume
 
     def get_pitch(self, note: int) -> float:
@@ -421,6 +441,8 @@ class Music(AcaciaExpr):
     def play_note(self, message):
         """Play a note according to note_on Message"""
         volume = self.get_volume(message.channel, message.velocity)
+        if volume == 0:
+            return
         pitch = self.get_pitch(message.note)
         sound = self.get_instrument(message.channel)
         self.cur_file.write(cmds.Execute(
@@ -433,35 +455,6 @@ class Music(AcaciaExpr):
         ))
         self.cur_chunk_size += 1
 
-@axe.chop
-@axe.arg("id", axe.RangedLiteralInt(0, 127), rename="id_")
-@axe.arg("sound", axe.LiteralString())
-def _set_instrument(compiler, id_: int, sound: str):
-    """
-    music.set_instrument(id: int-literal, sound: str):
-        Set instrument mapping
-
-    Set the sound of MIDI instrument `id` to Minecraft
-    sound `sound`.
-    Example:
-        # Set MC sound of ID 127 instrument to `note.hat`
-        music.set_instrument(127, "note.hat")
-    """
-    Music.ID2INSTRUMENT[id_] = sound
-
-@axe.chop
-@axe.arg("channel", axe.RangedLiteralInt(0, 15))
-@axe.arg("volume", axe.LiteralFloat())
-def _channel_volume(compiler, channel: int, volume: float):
-    """
-    music.channel_volume(channel: int-literal, volume: float)
-
-    Modify volume of specified channel.
-    """
-    if volume < 0:
-        raise axe.ArgumentError('volume', "can't be negative")
-    Music.CHANNEL_VOLUME[channel] = volume
-
 def acacia_build(compiler):
     global mido, register_loop
     try:
@@ -471,8 +464,4 @@ def acacia_build(compiler):
                     message="Python module 'mido' is required")
     schedule = compiler.get_module(ModuleMeta("schedule"))
     register_loop = schedule.attribute_table.lookup("register_loop")
-    return {
-        "Music": MusicType(compiler),
-        "set_instrument": BinaryFunction(_set_instrument, compiler),
-        "channel_volume": BinaryFunction(_channel_volume, compiler)
-    }
+    return {"Music": MusicType(compiler)}
