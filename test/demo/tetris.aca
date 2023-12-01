@@ -9,10 +9,9 @@
  *   python acacia.py test/demo/tetris.aca
  * Create a super flat world, load the generated behavior pack
  * and type in chat:
- *   /function acacia/init
- *   /function acacia/load
- * (Above 2 only need to be ran once, the following command will start
- * or restart the game.)
+ *   /function acacia/main
+ * (The above one only needs to be ran once, the following command will
+ * start or restart the game.)
  *   /function acacia/interface/start
  * Everything will be set up by Acacia!
  * Press A to go left, D to go right, W to rotate.

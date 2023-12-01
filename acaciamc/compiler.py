@@ -21,12 +21,12 @@ import acaciamc.mccmdgen.cmds as cmds
 
 class OutputManager(cmds.FunctionsManager):
     def __init__(self):
-        super().__init__("%s/init" % Config.function_folder)
+        super().__init__()
         self._lib_count = 0
 
     def new_file(self, file: cmds.MCFunctionFile, path: str):
         file.set_path("%s/%s" % (Config.function_folder, path))
-        self.files.append(file)
+        self.add_file(file)
 
     def add_lib(self, file: cmds.MCFunctionFile):
         self._lib_count += 1
@@ -42,8 +42,7 @@ class OutputOptimized(OutputManager, Optimizer):
     def entry_files(self):
         entries = tuple(
             (Config.function_folder + "/%s" % path)
-            for path in ("interface/", "load", "tick")
-            # "init" is automatically added
+            for path in ("interface/", "main", "tick", "init")
         )
         for file in self.files:
             if file.get_path().startswith(entries):
@@ -82,7 +81,7 @@ class Compiler:
             self.output_mgr = OutputManager()
         self.file_main = cmds.MCFunctionFile()  # load program
         self.file_tick = cmds.MCFunctionFile()  # runs every tick
-        self.output_mgr.new_file(self.file_main, "load")
+        self.output_mgr.new_file(self.file_main, "main")
         self.output_mgr.new_file(self.file_tick, "tick")
         self.current_generator = None  # the Generator that is running
         # vars to record the resources that are applied
@@ -130,26 +129,39 @@ class Compiler:
             self.builtins.set(name, value)
 
         # --- START COMPILE ---
-        ## comment on load.mcfunction
-        self.file_main.write_debug(
-            '## Usage: Run this Acacia project',
-            '## Execute this before using interfaces!!!'
-        )
         ## start
         with self._load_generator(main_path) as generator:
             generator.parse()
         ## callback
         for cb in self._before_finish_cbs:
             cb()
-
-    def output(self, path: str):
-        """Output result to `path`
-        e.g. when `path` is "a/b", main file is generated at
-        "a/b/<Config.function_folder>/load.mcfunction".
-        """
+        ## init
+        init = self.output_mgr.generate_init()
+        if Config.split_init:
+            init_file = cmds.MCFunctionFile()
+            self.output_mgr.new_file(init_file, "init")
+            init_file.write_debug(
+                '## Usage: Initialize Acacia, only need to be ran ONCE',
+                '## Execute this before running anything from Acacia!!!'
+            )
+            init_file.extend(init)
+        else:
+            self.file_main.commands[:0] = init
+        ## comment on main.mcfunction
+        self.file_main.commands[:0] = [
+            cmds.Comment('## Usage: Run this Acacia project'),
+            cmds.Comment('## Execute this before using interfaces!!!')
+        ]
+        ## optimize
         if isinstance(self.output_mgr, OutputOptimized):
             self.output_mgr.optimize()
-        self.output_mgr.generate_init_file()  # do this after optimize
+
+    def output(self, path: str):
+        """
+        Output result to `path`.
+        e.g. when `path` is "a/b", main file is generated at
+        "a/b/<Config.function_folder>/main.mcfunction".
+        """
         # Mcfunctions
         for file in self.output_mgr.files:
             self._write_mcfunction(file, path)
@@ -368,6 +380,6 @@ class Compiler:
         "a/b/a.mcfunction".
         """
         self._write_file(
-            content=file.to_str(),
+            content=file.to_str(debugging=Config.debug_comments),
             path=os.path.join(path, file.get_path() + '.mcfunction')
         )

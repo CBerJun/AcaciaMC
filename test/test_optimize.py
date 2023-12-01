@@ -6,9 +6,6 @@ sys.path.append(os.path.realpath(
 ))
 
 from acaciamc.mccmdgen import optimizer, cmds
-from acaciamc.constants import Config
-
-Config.debug_comments = True
 
 class MyOpt(optimizer.Optimizer):
     def entry_files(self):
@@ -18,11 +15,11 @@ class MyOpt(optimizer.Optimizer):
 
     def dump(self):
         return ('\n\n'.join(
-            str(file) + '\n' + file.to_str()
+            str(file) + '\n' + file.to_str(debugging=True)
             for file in self.files
         ))
 
-project = MyOpt(init_file_path="test/init")
+project = MyOpt()
 f1 = cmds.MCFunctionFile("test/path1")
 f2 = cmds.MCFunctionFile("test/path2")
 f3 = cmds.MCFunctionFile("test/path3")
@@ -77,7 +74,6 @@ f4.write(cmds.Execute(
 f5.write(cmds.Cmd("say cmd5: 1"))
 f5.write(cmds.Cmd("say cmd5: 2"))
 
-project.generate_init_file()
 print(project.dump())
 project.optimize()
 print("\n==========================\n")

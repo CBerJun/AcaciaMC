@@ -50,6 +50,9 @@ class ScbSlot(NamedTuple):
         return self.target.startswith("@") or self.target == "*"
 
 class Command(metaclass=ABCMeta):
+
+    is_debug = False  # only write when -d is set
+
     @abstractmethod
     def resolve(self) -> str:
         pass
@@ -284,8 +287,11 @@ class MCFunctionFile:
 
     # --- Export Methods ---
 
-    def to_str(self) -> str:
-        return '\n'.join(cmd.resolve() for cmd in self.commands)
+    def to_str(self, debugging=False) -> str:
+        return '\n'.join([
+            cmd.resolve() for cmd in self.commands
+            if not cmd.is_debug or debugging
+        ])
 
     # --- Write Methods ---
 
@@ -293,8 +299,7 @@ class MCFunctionFile:
         self.extend(commands)
 
     def write_debug(self, *comments: str):
-        if Config.debug_comments:
-            self.commands.extend(map(Comment, comments))
+        self.commands.extend(map(Comment, comments))
 
     def extend(self, commands: Iterable[Union[str, Command]]):
         for command in commands:
@@ -304,10 +309,11 @@ class MCFunctionFile:
                 self.commands.append(Cmd(command))
 
 class Comment(Command):
-    def __init__(self, comment: str):
+    def __init__(self, comment: str, debug=True):
         if not comment.startswith("#"):
             raise ValueError("Comment must start with '#': %r" % comment)
         self.comment = comment
+        self.is_debug = debug
 
     def resolve(self) -> str:
         return self.comment
@@ -592,40 +598,32 @@ class TitlerawClear(Command):
 class FunctionsManager:
     EXTRA_OBJ = "{scb}{id}"
 
-    def __init__(self, init_file_path: str):
+    def __init__(self):
         self.files: List["MCFunctionFile"] = []
-        self.init_file_path = init_file_path
-        self.init_file: Optional["MCFunctionFile"] = None
         self._alloc_id = 0
         self._int_consts: Dict[int, ScbSlot] = {}
         self._scb_id = 0
 
-    def generate_init_file(self):
-        if self.init_file is not None:
-            return
-        self.init_file = res = MCFunctionFile(self.init_file_path)
-        res.write_debug(
-            '## Usage: Initialize Acacia, only need to be ran ONCE',
-            '## Execute this before running anything from Acacia!!!'
-        )
+    def generate_init(self) -> List[Command]:
+        res = []
         # Default scoreboard
-        res.write_debug('# Register scoreboard')
-        res.write(ScbObjAdd(Config.scoreboard))
+        res.append(Comment('# Register scoreboard'))
+        res.append(ScbObjAdd(Config.scoreboard))
         # Constants
         if self._int_consts:
-            res.write_debug('# Load constants')
-            res.extend(
+            res.append(Comment('# Load constants'))
+            res.extend([
                 ScbSetConst(slot, num)
                 for num, slot in self._int_consts.items()
-            )
+            ])
         # Extra scoreboard
         if self._scb_id >= 1:
-            res.write_debug('# Additional scoreboards')
-            res.extend(
+            res.append(Comment('# Additional scoreboards'))
+            res.extend([
                 ScbObjAdd(self.EXTRA_OBJ.format(scb=Config.scoreboard, id=i))
                 for i in range(1, self._scb_id + 1)
-            )
-        self.add_file(res)
+            ])
+        return res
 
     def allocate(self) -> ScbSlot:
         self._alloc_id += 1

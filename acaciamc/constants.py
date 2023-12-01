@@ -47,6 +47,7 @@ class Config:
     entity_pos = '~ ~ ~'  # which place to summon entity
     entity_tag = 'acacia'  # prefix of entity tags
     mc_version = (1, 20, 20)  # Mineraft version
+    split_init = False  # split init commands from main.mcfunction
     optimizer = True  # enable optimizer
     # Max size for a function that is called with /execute
     # condtions to be inlined:

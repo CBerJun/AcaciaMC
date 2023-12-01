@@ -69,6 +69,12 @@ def build_argparser():
         help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
     )
     argparser.add_argument(
+        '-i', '--init-file',
+        action='store_true',
+        help='split initialization commands from main.mcfunction into '
+             'init.mcfunction'
+    )
+    argparser.add_argument(
         '--encoding', metavar="CODEC", default="utf-8",
         help='encoding of file (default "utf-8")'
     )
@@ -125,6 +131,8 @@ def apply_config(args):
             fatal('max inline file size must >= 0: %s'
                   % args.max_inline_file_size)
         Config.max_inline_file_size = args.max_inline_file_size
+    if args.init_file:
+        Config.split_init = True
 
 def run(args):
     if not os.path.exists(args.file):

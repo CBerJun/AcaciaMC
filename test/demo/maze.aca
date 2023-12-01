@@ -2,9 +2,8 @@
  * Random Maze Generator
  *
  * Create a super flat world and load this program
- * Type these in chat to initialize:
- *   /function acacia/init
- *   /function acacia/load
+ * Type this in chat to initialize:
+ *   /function acacia/main
  * Type this to start:
  *   /function acacia/interface/start
  *

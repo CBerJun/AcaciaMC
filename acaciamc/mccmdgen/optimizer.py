@@ -6,7 +6,6 @@ from typing import Iterable, Dict, Set, List, Tuple
 from abc import ABCMeta, abstractmethod
 
 import acaciamc.mccmdgen.cmds as cmds
-from acaciamc.constants import Config
 
 class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
     def optimize(self):
@@ -242,12 +241,11 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                         inserts.append(cmds.execute(subcmds, command))
                 else:
                     inserts.extend(callee.commands)
-                if Config.debug_comments:
-                    fp = callee.get_path()
-                    inserts.insert(0, cmds.Comment(
-                        "## Function call to %s inlined by optimizer" % fp
-                    ))
-                    inserts.append(cmds.Comment("## Inline of %s ended" % fp))
+                fp = callee.get_path()
+                inserts.insert(0, cmds.Comment(
+                    "## Function call to %s inlined by optimizer" % fp
+                ))
+                inserts.append(cmds.Comment("## Inline of %s ended" % fp))
                 caller.commands[index : index+1] = inserts
                 self.files.remove(callee)
         for caller, _, _ in todo.values():
