@@ -43,10 +43,6 @@ if TYPE_CHECKING:
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
     from acaciamc.compiler import Compiler
 
-export_need_tmp_bool = export_need_tmp(
-    new_tmp=lambda c: BoolVar.new(c, tmp=True)
-)
-
 def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
     """Wildcard `compare` method to compare a bool with a bool."""
     if not (op is Operator.equal_to or op is Operator.unequal_to):
@@ -69,6 +65,29 @@ def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
     return ScbEqualCompare(
         self_var.slot, slot2, self.compiler, invert, dep
     )
+
+def _export_bool(subcmds: List["_ExecuteSubcmd"],
+                 var: "BoolVar", invert=False) -> CMDLIST_T:
+    res = []
+    FALSE = int(invert)
+    TRUE = 1 - FALSE
+    # decide if temporary value is needed
+    need_tmp = False
+    for subcmd in subcmds:
+        if subcmd.scb_did_read(var.slot):
+            need_tmp = True
+            break
+    if need_tmp:
+        tmp = var.compiler.allocate_tmp()
+    else:
+        tmp = var.slot
+    # set target to False first
+    res.append(cmds.ScbSetConst(tmp, FALSE))
+    # check condition and change it to True
+    res.append(cmds.Execute(subcmds, cmds.ScbSetConst(tmp, TRUE)))
+    if need_tmp:
+        res.append(cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, tmp))
+    return res
 
 class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "bool"
@@ -162,13 +181,20 @@ class NotBoolVar(AcaciaExpr):
     def __str__(self):
         return self.slot.to_str()
 
-    @export_need_tmp_bool
     def export(self, var: BoolVar):
-        return [
-            cmds.ScbSetConst(var.slot, 0),
-            cmds.Execute([cmds.ExecuteScoreMatch(self.slot, "0")],
-                         cmds.ScbSetConst(var.slot, 1))
-        ]
+        if var.slot == self.slot:
+            # negation of self
+            return [
+                cmds.ScbAddConst(var.slot, 1),
+                cmds.Execute([cmds.ExecuteScoreMatch(var.slot, "2")],
+                             cmds.ScbSetConst(var.slot, 0))
+            ]
+        else:
+            return [
+                cmds.ScbSetConst(var.slot, 0),
+                cmds.Execute([cmds.ExecuteScoreMatch(self.slot, "0")],
+                             cmds.ScbSetConst(var.slot, 1))
+            ]
 
     def compare(self, op, other):
         if not (op is Operator.equal_to or op is Operator.unequal_to):
@@ -195,14 +221,10 @@ class CompareBase(AcaciaExpr, metaclass=ABCMeta):
         """
         pass
 
-    @export_need_tmp_bool
     def export(self, var: BoolVar):
         # set `res` to dependencies that as_execute returns
         res, subcmds = self.as_execute()
-        # set target to 0 (False) first
-        res.append(cmds.ScbSetConst(var.slot, 0))
-        # check condition and change it to 1 (True)
-        res.append(cmds.Execute(subcmds, cmds.ScbSetConst(var.slot, 1)))
+        res.extend(_export_bool(subcmds, var))
         return res
 
     compare = _bool_compare
@@ -281,14 +303,11 @@ class AndGroup(AcaciaExpr):
         for operand in operands:
             self._add_operand(operand)
 
-    @export_need_tmp_bool
     def export(self, var: BoolVar):
         # Handle inversion
-        TRUE = 0 if self.inverted else 1
-        FALSE = int(not TRUE)
-        SET_FALSE = cmds.ScbSetConst(var.slot, FALSE)
-        res_dependencies = []  # dependencies part of result
-        res_main = []  # main part of result (/execute subcommands)
+        FALSE = int(self.inverted)
+        res: CMDLIST_T = []
+        subcmds: List["_ExecuteSubcmd"] = []
         # -- Now convert self.optimizable_operands into commands --
         # Optimization: When the same expr is compared by 2 or more
         # IntLiterals, redundant ones can be removed and commands can be merged
@@ -300,10 +319,7 @@ class AndGroup(AcaciaExpr):
         # Out: {a: [a > 3, a < 8], b: [b < 5], c: [c > 0]}
         opt_groups: Dict[cmds.ScbSlot, List[ScbMatchesCompare]] = {}
         for compare in self.optimizable_operands:
-            group = opt_groups.get(compare.slot, None)
-            if group is None:
-                group = []
-                opt_groups[compare.slot] = group
+            group = opt_groups.setdefault(compare.slot, [])
             group.append(compare)
         # 2nd Pass: Generate Commands
         for slot, group in opt_groups.items():
@@ -327,7 +343,7 @@ class AndGroup(AcaciaExpr):
                 elif compare.operator is Operator.less_equal:
                     max_ = min(literal, max_)
             if min_ > max_:  # must be False
-                return [SET_FALSE]
+                return [cmds.ScbSetConst(var.slot, FALSE)]
             elif min_ == max_:
                 int_range = str(min_)
             else:
@@ -335,15 +351,13 @@ class AndGroup(AcaciaExpr):
                 max_str = '' if max_ == INT_MAX else str(max_)
                 int_range = '%s..%s' % (min_str, max_str)
             # Calculate left (non-Literal one)
-            res_dependencies.extend(dependencies)
-            res_main.append(cmds.ExecuteScoreMatch(slot, int_range))
-        # Convert dependencies and `res_main` to real commands
-        res_main.extend(self.main)
-        res_dependencies.extend(self.dependencies)
-        return res_dependencies + [
-            SET_FALSE,
-            cmds.Execute(res_main, cmds.ScbSetConst(var.slot, TRUE))
-        ]
+            res.extend(dependencies)
+            subcmds.append(cmds.ExecuteScoreMatch(slot, int_range))
+        # Convert dependencies and `subcmds` to real commands
+        subcmds.extend(self.main)
+        res.extend(self.dependencies)
+        res.extend(_export_bool(subcmds, var, invert=self.inverted))
+        return res
 
     def _add_operand(self, operand: AcaciaExpr):
         """Add an operand to this `AndGroup`."""
@@ -372,8 +386,8 @@ class AndGroup(AcaciaExpr):
                 self.optimizable_operands.update(operand.optimizable_operands)
         else:
             # `BoolLiteral`s should have been optimized by
-            # `new_and_group`. `AcaciaExpr`s which are not boolean type
-            # (which is illegal) should have been detected by that too.
+            # `new_and_group`. Operands that are not boolean are
+            # not expected.
             raise ValueError
 
     def copy(self):

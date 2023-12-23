@@ -5,8 +5,7 @@ __all__ = [
     'AcaciaExpr', 'VarValue', 'AcaciaCallable', 'SupportsGetItem',
     'SupportsSetItem',
     # Utils
-    'ArgumentHandler', 'export_need_tmp',
-    'ImmutableMixin', 'transform_immutable',
+    'ArgumentHandler', 'ImmutableMixin', 'transform_immutable',
     # Type checking
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T', 'CMDLIST_T',
 ]
@@ -17,7 +16,6 @@ from typing import (
 from types import NotImplementedType
 from abc import ABCMeta, abstractmethod
 
-from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *
 
@@ -27,35 +25,6 @@ if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import Command
     from .boolean import CompareBase
-
-### --- UTILS --- ###
-
-def export_need_tmp(new_tmp: Callable[["Compiler"], "VarValue"]):
-    """Return a decorator for `AcaciaExpr.export`.
-    Usually when we do `A.export(B)`, the value of `A` is dumped to
-    `B` directly without a temporary value.
-    This decorator add a temporary value `T`, first `A.export(T)`,
-    then `T.export(B)`.
-    This is to prevent changing the value of `B` too early.
-    WITHOUT a temporary value, take `a = 1 + a` as an example,
-    we let `a` = 1 first, and then plus `a` itself to it, which is 1
-    now, so whatever `a` is before assigning, it becomes 2 now.
-    `new_tmp` should return a temporary `VarValue` of the same data type
-    as the class where this decorator is used.
-    """
-    def _decorator(func):
-        def _decorated(self, var: VarValue):
-            assert isinstance(self, AcaciaExpr)
-            assert isinstance(self.data_type, Storable)
-            temp = new_tmp(var.compiler)
-            cmds = []
-            cmds.extend(func(self, temp))
-            cmds.extend(temp.export(var))
-            return cmds
-        return _decorated
-    return _decorator
-
-### --- END UTILS --- ###
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
@@ -121,7 +90,6 @@ class AcaciaExpr:
         """Return the commands that assigns value of `self` to `var`.
         Since we need a `VarValue` here, only "storable" types need
         to implement this.
-        The method can be decorated with `export_need_tmp`.
         """
         raise NotImplementedError
 
