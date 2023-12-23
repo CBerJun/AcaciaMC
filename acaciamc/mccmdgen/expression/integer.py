@@ -30,8 +30,11 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import List, Tuple, TYPE_CHECKING, Callable, Union
+from typing import List, Tuple, TYPE_CHECKING, Callable, Optional
+from abc import ABCMeta, abstractmethod
 import operator as stdop
+
+from acaciamc.mccmdgen.expression.base import CMDLIST_T
 
 from .base import *
 from .types import Type
@@ -57,6 +60,8 @@ STR2SCBOP = {
     "*": cmds.ScbOp.MUL_EQ,
     "/": cmds.ScbOp.DIV_EQ,
     "%": cmds.ScbOp.MOD_EQ,
+    "<": cmds.ScbOp.MIN,
+    ">": cmds.ScbOp.MAX,
 }
 STR2PYOP = {
     '+': stdop.add, '-': stdop.sub,
@@ -69,10 +74,6 @@ COMPOP2SCBOP = {
     Operator.less_equal: cmds.ScbCompareOp.LTE,
     Operator.equal_to: cmds.ScbCompareOp.EQ
 }
-
-export_need_tmp_int = export_need_tmp(
-    new_tmp=lambda c: IntVar.new(c, tmp=True)
-)
 
 def remainder(a: int, b: int) -> int:
     """C-style % operator, which MC uses."""
@@ -155,18 +156,17 @@ class IntCompare(CompareBase):
         res_dependencies.extend(dependency)
         dependency, var_right = to_IntVar(self.right)
         res_dependencies.extend(dependency)
-        # != is special handled, because Minecraft does not provide
+        # != is specially handled, because Minecraft does not provide
         # such syntax like 'if score ... != ...' while other 5
-        # operators are OK.
+        # operators are built-in in MC.
         if self.operator is Operator.unequal_to:
             res_main.append(cmds.ExecuteScoreComp(
                 var_left.slot, var_right.slot,
                 cmds.ScbCompareOp.EQ, invert=True
             ))
         else:  # for other 5 operators
-            compare_op = COMPOP2SCBOP[self.operator]
             res_main.append(cmds.ExecuteScoreComp(
-                var_left.slot, var_right.slot, compare_op
+                var_left.slot, var_right.slot, COMPOP2SCBOP[self.operator]
             ))
         return res_dependencies, res_main
 
@@ -268,15 +268,14 @@ class IntVar(VarValue):
         return self
 
     def __neg__(self):
-        return -IntOpGroup(self, self.compiler)
+        return -IntOpGroup.from_intexpr(self)
 
     ## BINARY (SELF ... OTHER) OPERATORS
 
     def _bin_op(self, other, name: str):
         # `name` is method name
         if isinstance(other, (IntLiteral, IntVar)):
-            res = IntOpGroup(self, self.compiler)
-            return getattr(res, name)(other)
+            return getattr(IntOpGroup.from_intexpr(self), name)(other)
         return NotImplemented
 
     def __add__(self, other):
@@ -296,7 +295,7 @@ class IntVar(VarValue):
 
     def _r_bin_op(self, other, name):
         if isinstance(other, IntLiteral):
-            return getattr(IntOpGroup(other, self.compiler), name)(self)
+            return getattr(IntOpGroup.from_intexpr(other), name)(self)
         return NotImplemented
 
     def __radd__(self, other):
@@ -364,74 +363,157 @@ class IntVar(VarValue):
     def imod(self, other):
         return self._imul_div_mod(other, '%')
 
-PARTIALCMD_T = Callable[[cmds.ScbSlot, Tuple[cmds.ScbSlot]],
-                        Union[cmds.Command, str]]
+class IntOp(metaclass=ABCMeta):
+    # This is intended to be immutable
+
+    scb_read_self = False
+
+    def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
+        # Override-able
+        return False
+
+    def scb_did_assign(self, slot: cmds.ScbSlot) -> bool:
+        # Override-able
+        return False
+
+    @abstractmethod
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        # The returned list won't be modified
+        pass
+
+class IntSetConst(IntOp):
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        return [cmds.ScbSetConst(var.slot, self.value)]
+
+class IntSetVar(IntOp):
+    def __init__(self, slot: cmds.ScbSlot) -> None:
+        self.slot = slot
+
+    def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
+        return slot == self.slot
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
+
+class IntRandom(IntOp):
+    def __init__(self, min_: int, max_: int) -> None:
+        self.min = min_
+        self.max = max_
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        return [cmds.ScbRandom(var.slot, self.min, self.max)]
+
+class IntOpConst(IntOp):
+    def __init__(self, op: str, value: int) -> None:
+        self.op = op
+        self.value = value
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        if self.op == "+" or self.op == "-":
+            cls = cmds.ScbAddConst if self.op == "+" else cmds.ScbRemoveConst
+            return [cls(var.slot, self.value)]
+        c = var.compiler.add_int_const(self.value)
+        return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, c.slot)]
+
+class IntOpVar(IntOp):
+    def __init__(self, op: str, slot: cmds.ScbSlot) -> None:
+        self.op = op
+        self.slot = slot
+
+    def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
+        return slot == self.slot
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, self.slot)]
+
+class IntOpSelf(IntOp):
+    scb_read_self = True
+
+    def __init__(self, op: str) -> None:
+        self.op = op
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, var.slot)]
+
+class IntCmdOp(IntOp):
+    def __init__(self, commands: CMDLIST_T) -> None:
+        self.commands = commands
+
+    def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
+        for c in self.commands:
+            if c.scb_did_read(slot):
+                return True
+        return False
+
+    def scb_did_assign(self, slot: cmds.ScbSlot) -> bool:
+        for c in self.commands:
+            if c.scb_did_assign(slot):
+                return True
+        return False
+
+    def resolve(self, var: IntVar) -> CMDLIST_T:
+        return self.commands
 
 class IntOpGroup(AcaciaExpr):
-    """An `IntOpGroup` stores how an integer is changed by storing
-    unformatted commands where the target positions of scores are
-    preserved. It does not care about which score the value is assigning
-    to, but cares about the value itself, until you `export` it, when
-    all commands are completed.
-    e.g. IntOpGroup `1 + a` might be saved like this:
-      scoreboard players set {this} 1
-      # (When variable `a` is stored in `acacia1` of scoreboard `acacia`)
-      scoreboard players operation {this} += "acacia1" "acacia"
-    When method `export` is called, value of "this" is given
-
-    Sometimes temporary scores are needed, those are stored in attribute
-    `libs`, where other `IntOpGroup`s are stored (recursively).
-    """
-    def __init__(self, init, compiler):
+    """An `IntOpGroup` stores complex integer operations."""
+    def __init__(self, init: Optional[IntOp], compiler):
         super().__init__(IntDataType(compiler), compiler)
-        self.main: List[PARTIALCMD_T] = []
-        self.libs: List[IntOpGroup] = []
-        self._current_lib_index = 0  # always equals to `len(self.libs)`
-        # Initial value
-        if isinstance(init, IntLiteral):
-            self.write(lambda this, libs: cmds.ScbSetConst(this, init.value))
-        elif isinstance(init, IntVar):
-            self.write(lambda this, libs:
-                       cmds.ScbOperation(cmds.ScbOp.ASSIGN, this, init.slot))
-        elif init is not None:
-            raise ValueError
+        self.ops: List[IntOp] = []
+        if init is not None:
+            self.ops.append(init)
 
-    @export_need_tmp_int
-    def export(self, var: IntVar):
-        res = []
-        # subvars: Allocate a tmp int for every `IntOpGroup` in
-        # `self.libs` and export them to this var.
-        subvars: List[IntVar] = []
-        for subexpr in self.libs:
-            subvar = IntVar.new(self.compiler, tmp=True)
-            subvars.append(subvar)
-            res.extend(subexpr.export(subvar))
-        subslots = tuple(subvar.slot for subvar in subvars)
-        res.extend(func(var.slot, subslots) for func in self.main)
+    @classmethod
+    def from_intexpr(cls, init: AcaciaExpr) -> "IntOpGroup":
+        compiler = init.compiler
+        res = cls(None, compiler)
+        if isinstance(init, IntLiteral):
+            res.add_op(IntSetConst(init.value))
+        elif isinstance(init, IntVar):
+            res.add_op(IntSetVar(init.slot))
+        elif isinstance(init, IntOpGroup):
+            tmp = IntVar.new(compiler, tmp=True)
+            res.add_op(IntCmdOp(init.export(tmp)))
+            res.add_op(IntSetVar(tmp.slot))
+        else:
+            raise TypeError
         return res
 
-    def _add_lib(self, lib: "IntOpGroup") -> int:
-        """Register a dependency and return its index in `self.libs`."""
-        self.libs.append(lib)
-        self._current_lib_index += 1
-        return self._current_lib_index - 1
-
-    def write(self, *commands: PARTIALCMD_T):
-        """Write commands."""
-        self.main.extend(commands)
-
-    def write_str(self, *commands: str):
-        """Write commands that are unralated to this value."""
-        def _handle(cmd: str):
-            self.write(lambda this, libs: cmd)
-        for cmd in commands:
-            _handle(cmd)
+    def export(self, var: IntVar):
+        # res = []
+        # # subvars: Allocate a tmp int for every `IntOpGroup` in
+        # # `self.libs` and export them to this var.
+        # subvars: List[IntVar] = []
+        # for subexpr in self.libs:
+        #     subvar = IntVar.new(self.compiler, tmp=True)
+        #     subvars.append(subvar)
+        #     res.extend(subexpr.export(subvar))
+        # subslots = tuple([subvar.slot for subvar in subvars])
+        # res.extend(func(var.slot, subslots) for func in self.main)
+        # return res
+        need_tmp = False
+        for op in self.ops:
+            need_tmp = (
+                need_tmp or op.scb_did_read(var.slot)
+                or op.scb_read_self
+                or op.scb_did_assign(var.slot)
+            )
+        if need_tmp:
+            tmp = IntVar.new(self.compiler, tmp=True)
+        else:
+            tmp = var
+        res = []
+        for op in self.ops:
+            res.extend(op.resolve(tmp))
+        if need_tmp:
+            res.extend(tmp.export(var))
+        return res
 
     def copy(self):
         res = IntOpGroup(init=None, compiler=self.compiler)
-        res.main.extend(self.main)
-        res.libs.extend(self.libs)
-        res._current_lib_index = self._current_lib_index
+        res.ops = self.ops.copy()
         return res
 
     def compare(self, op, other):
@@ -443,6 +525,9 @@ class IntOpGroup(AcaciaExpr):
                 commands, var.slot, op, other.value, self.compiler
             )
         return IntCompare(self, op, other, self.compiler)
+
+    def add_op(self, op: IntOp):
+        self.ops.append(op)
 
     ## UNARY OPERATORS
 
@@ -456,56 +541,31 @@ class IntOpGroup(AcaciaExpr):
 
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _add_sub(self, other, operator: str):
-        """Implementation of __add__ and __sub__
-        `operator` is '+' or '-'.
-        """
+    def _bin_op(self, other, operator: str):
+        """Implements binary operators (see `STR2SCBOP`)."""
         res = self.copy()
         if isinstance(other, IntLiteral):
-            cls = cmds.ScbAddConst if operator == '+' else cmds.ScbRemoveConst
-            res.write(lambda this, libs: cls(this, other.value))
+            res.add_op(IntOpConst(operator, other.value))
         elif isinstance(other, IntVar):
-            res.write(lambda this, libs:
-                      cmds.ScbOperation(STR2SCBOP[operator], this, other.slot))
+            res.add_op(IntOpVar(operator, other.slot))
         elif isinstance(other, IntOpGroup):
-            idx = res._add_lib(other)
-            res.write(lambda this, libs:
-                      cmds.ScbOperation(STR2SCBOP[operator], this, libs[idx]))
-        else:
-            return NotImplemented
-        return res
-
-    def _mul_div_mod(self, other, operator: str):
-        """Implementation of __mul__, __floordiv__ and __mod__
-        operator is '*' or '/' or '%'.
-        """
-        res = self.copy()
-        op = STR2SCBOP[operator]
-        if isinstance(other, IntLiteral):
-            const = self.compiler.add_int_const(other.value)
-            res.write(lambda this, libs:
-                      cmds.ScbOperation(op, this, const.slot))
-        elif isinstance(other, IntVar):
-            res.write(lambda this, libs:
-                      cmds.ScbOperation(op, this, other.slot))
-        elif isinstance(other, IntOpGroup):
-            idx = res._add_lib(other)
-            res.write(lambda this, libs:
-                      cmds.ScbOperation(op, this, libs[idx]))
+            tmp = IntVar.new(self.compiler, tmp=True)
+            res.add_op(IntCmdOp(other.export(tmp)))
+            res.add_op(IntOpVar(operator, tmp.slot))
         else:
             return NotImplemented
         return res
 
     def __add__(self, other):
-        return self._add_sub(other, '+')
+        return self._bin_op(other, '+')
     def __sub__(self, other):
-        return self._add_sub(other, '-')
+        return self._bin_op(other, '-')
     def __mul__(self, other):
-        return self._mul_div_mod(other, '*')
+        return self._bin_op(other, '*')
     def __floordiv__(self, other):
-        return self._mul_div_mod(other, '/')
+        return self._bin_op(other, '/')
     def __mod__(self, other):
-        return self._mul_div_mod(other, '%')
+        return self._bin_op(other, '%')
 
     ## BINARY (OTHER ... SELF) OPERATORS
     # `other` in self.__rxxx__ may be Literal or VarValue
@@ -520,7 +580,7 @@ class IntOpGroup(AcaciaExpr):
         # Convert `other` to `IntOpGroup` and use this to handle this
         # operation.
         if isinstance(other, (IntLiteral, IntVar)):
-            return getattr(IntOpGroup(other, self.compiler), name)(self)
+            return getattr(IntOpGroup.from_intexpr(other), name)(self)
         return NotImplemented
 
     def __radd__(self, other):

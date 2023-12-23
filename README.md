@@ -25,27 +25,25 @@ print.tell(print.format("Sum of arithmetic sequence (-30~14, d=2) is %0", res))
 ```
 Acacia will convert the above code into commands:
 ```mcfunction
-# These are AUTO-GENERATED! Isn't that cool?
+# These efficient commands are AUTO-GENERATED! Isn't that cool?
 scoreboard players set acacia1 acacia -30
 scoreboard players set acacia2 acacia 14
 scoreboard players set acacia3 acacia 2
-scoreboard players operation acacia8 acacia = acacia2 acacia
-scoreboard players operation acacia8 acacia -= acacia1 acacia
-scoreboard players operation acacia8 acacia /= acacia3 acacia
-scoreboard players add acacia8 acacia 1
-scoreboard players operation acacia7 acacia = acacia8 acacia
-scoreboard players operation acacia6 acacia = acacia1 acacia
-scoreboard players operation acacia6 acacia += acacia2 acacia
-scoreboard players operation acacia6 acacia *= acacia7 acacia
-scoreboard players operation acacia6 acacia /= acacia5 acacia
-scoreboard players operation acacia4 acacia = acacia6 acacia
-scoreboard players operation acacia9 acacia = acacia4 acacia
-tellraw @a {"rawtext": [{"text": "Sum of arithmetic sequence (-30~14, d=2) is "}, {"score": {"objective": "acacia", "name": "acacia9"}}]}
+scoreboard players operation acacia4 acacia = acacia1 acacia
+scoreboard players operation acacia4 acacia += acacia2 acacia
+scoreboard players operation acacia5 acacia = acacia2 acacia
+scoreboard players operation acacia5 acacia -= acacia1 acacia
+scoreboard players operation acacia5 acacia /= acacia3 acacia
+scoreboard players add acacia5 acacia 1
+scoreboard players operation acacia4 acacia *= acacia5 acacia
+scoreboard players operation acacia4 acacia /= acacia6 acacia
+scoreboard players operation acacia7 acacia = acacia4 acacia
+tellraw @a {"rawtext": [{"text": "Sum of arithmetic sequence (-30~14, d=2) is "}, {"score": {"objective": "acacia", "name": "acacia7"}}]}
 ```
 ```mcfunction
 # Initialization: add scoreboard and set constants.
 scoreboard objectives add acacia dummy
-scoreboard players set acacia5 acacia 2
+scoreboard players set acacia6 acacia 2
 ```
 Running these generated commands will send this message in Minecraft's chat:
 > Sum of arithmetic sequence (-30~14, d=2) is -184

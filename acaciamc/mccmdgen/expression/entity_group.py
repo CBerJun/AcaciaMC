@@ -13,13 +13,14 @@ from .entity_template import ETemplateDataType
 from .entity_filter import EFilterDataType
 from .entity import EntityDataType, EntityReference
 from .boolean import AndGroup
-from .integer import IntOpGroup
+from .integer import IntOpGroup, IntOp
 from .functions import BinaryFunction, ConstructorFunction
 from .generic import BinaryGeneric
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import DataType
+    from .integer import IntVar
     from .entity_template import EntityTemplate
     from .entity_filter import EntityFilter
     from .entity import _EntityBase
@@ -68,6 +69,21 @@ class EGroupType(ConstructorFunction):
 
     def datatype_hook(self):
         return EGroupDataType(self.template)
+
+class IntEntityCount(IntOp):
+    init = True
+
+    def __init__(self, entity: str) -> None:
+        self.entity = entity
+
+    def resolve(self, var: "IntVar") -> CMDLIST_T:
+        return [
+            cmds.ScbSetConst(var.slot, 0),
+            cmds.Execute(
+                [cmds.ExecuteEnv("as", self.entity)],
+                runs=cmds.ScbAddConst(var.slot, 1)
+            )
+        ]
 
 class EntityGroup(VarValue):
     def __init__(self, data_type: EGroupDataType, compiler):
@@ -167,15 +183,7 @@ class EntityGroup(VarValue):
         @method_of(self, "size")
         @axe.chop
         def _size(compiler: "Compiler"):
-            res = IntOpGroup(init=None, compiler=compiler)
-            res.write(
-                lambda this, libs: cmds.ScbSetConst(this, 0),
-                lambda this, libs: cmds.Execute(
-                    [cmds.ExecuteEnv("as", SELF)],
-                    runs=cmds.ScbAddConst(this, 1)
-                )
-            )
-            return res
+            return IntOpGroup(init=IntEntityCount(SELF), compiler=compiler)
         @method_of(self, "to_single")
         @axe.chop
         def _to_single(compiler: "Compiler"):

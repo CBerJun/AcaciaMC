@@ -60,27 +60,12 @@ class Command(metaclass=ABCMeta):
     def func_ref(self) -> Optional["MCFunctionFile"]:
         return None
 
-    def scb_replace(
-            self, origin: ScbSlot, target: ScbSlot
-        ) -> Optional["Command"]:
-        return None
-
     def scb_did_read(self, slot: ScbSlot) -> bool:
         """Did read the slot or not?"""
         return False
 
     def scb_did_assign(self, slot: ScbSlot) -> bool:
-        """Did assign to the slot (set, operation =, random) or not?"""
-        return False
-
-    def scb_did_augassign(self, slot: ScbSlot) -> bool:
-        """Did augmented assign (add, remove, non-"=" operation,
-        /execute + assign) the slot or not?
-        """
-        return False
-
-    def scb_did_read_unreplacable(self, slot: ScbSlot) -> bool:
-        """Did call a mcfunction that read the slot or not?"""
+        """Did write to the slot or not?"""
         return False
 
     def __repr__(self) -> str:
@@ -127,7 +112,7 @@ class ScbAddConst(Command):
             self.target.to_str(), self.value
         )
 
-    def scb_did_augassign(self, slot: ScbSlot) -> bool:
+    def scb_did_assign(self, slot: ScbSlot) -> bool:
         return slot == self.target
 
 class ScbRemoveConst(Command):
@@ -140,7 +125,7 @@ class ScbRemoveConst(Command):
             self.target.to_str(), self.value
         )
 
-    def scb_did_augassign(self, slot: ScbSlot) -> bool:
+    def scb_did_assign(self, slot: ScbSlot) -> bool:
         return slot == self.target
 
 class ScbOp(Enum):
@@ -168,16 +153,9 @@ class ScbOperation(Command):
         )
 
     def scb_did_assign(self, slot: ScbSlot) -> bool:
-        if self.operator is ScbOp.ASSIGN:
-            return slot == self.operand1
-        elif self.operator is ScbOp.SWAP:
+        if self.operator is ScbOp.SWAP:
             return slot == self.operand1 or slot == self.operand2
         else:
-            return False
-
-    def scb_did_augassign(self, slot: ScbSlot) -> bool:
-        if (self.operator is not ScbOp.ASSIGN
-            and self.operator is not ScbOp.SWAP):
             return slot == self.operand1
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
@@ -185,11 +163,6 @@ class ScbOperation(Command):
             return slot == self.operand1 or slot == self.operand2
         else:
             return slot == self.operand2
-
-    def scb_replace(self, origin: ScbSlot, target: ScbSlot) -> "ScbOperation":
-        operand1 = target if origin == self.operand1 else self.operand1
-        operand2 = target if origin == self.operand2 else self.operand2
-        return ScbOperation(self.operator, operand1, operand2)
 
 class ScbRandom(Command):
     def __init__(self, target: ScbSlot, min_: int, max_: int):
@@ -344,15 +317,11 @@ class _InvokeFunction(Command):
         return any(cmd.scb_did_assign(slot) for cmd in self.file.commands)
 
     @_scb_check_for_invoke
-    def scb_did_augassign(self, slot: ScbSlot) -> bool:
-        return any(cmd.scb_did_augassign(slot) for cmd in self.file.commands)
-
-    @_scb_check_for_invoke
-    def scb_did_read_unreplacable(self, slot: ScbSlot) -> bool:
-        return any(
-            cmd.scb_did_read(slot) or cmd.scb_did_read_unreplacable(slot)
-            for cmd in self.file.commands
-        )
+    def scb_did_read(self, slot: ScbSlot) -> bool:
+        for cmd in self.file.commands:
+            if cmd.scb_did_read(slot):
+                return True
+        return False
 
 class InvokeFunction(_InvokeFunction):
     def resolve(self) -> str:
@@ -380,11 +349,6 @@ class _ExecuteSubcmd(metaclass=ABCMeta):
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
         return False
-
-    def scb_replace(
-            self, origin: ScbSlot, target: ScbSlot
-        ) -> Optional["_ExecuteSubcmd"]:
-        return None
 
 class ExecuteEnv(_ExecuteSubcmd):
     def __init__(self, cmd: str, args: str):
@@ -422,11 +386,6 @@ class ExecuteScoreComp(_ExecuteSubcmd):
     def scb_did_read(self, slot: ScbSlot) -> bool:
         return slot == self.operand1 or slot == self.operand2
 
-    def scb_replace(self, origin: ScbSlot, target: ScbSlot):
-        operand1 = target if origin == self.operand1 else self.operand1
-        operand2 = target if origin == self.operand2 else self.operand2
-        return ExecuteScoreComp(operand1, operand2, self.operator, self.invert)
-
     def resolve(self) -> str:
         return "%s score %s %s %s" % (
             "unless" if self.invert else "if",
@@ -444,10 +403,6 @@ class ExecuteScoreMatch(_ExecuteSubcmd):
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
         return slot == self.operand
-
-    def scb_replace(self, origin: ScbSlot, target: ScbSlot):
-        operand = target if origin == self.operand else self.operand
-        return ExecuteScoreMatch(operand, self.range, self.invert)
 
     def resolve(self) -> str:
         return "%s score %s matches %s" % (
@@ -486,31 +441,18 @@ class Execute(Command):
         )
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
-        return (any(subcmd.scb_did_read(slot) for subcmd in self.subcmds)
-                or self.runs.scb_did_read(slot))
+        if self.runs.scb_did_read(slot):
+            return True
+        for subcmd in self.subcmds:
+            if subcmd.scb_did_read(slot):
+                return True
+        return False
 
-    def scb_did_augassign(self, slot: ScbSlot) -> bool:
-        return (self.runs.scb_did_assign(slot)
-                or self.runs.scb_did_augassign(slot))
-
-    def scb_did_read_unreplacable(self, slot: ScbSlot) -> bool:
-        return self.runs.scb_did_read_unreplacable(slot)
+    def scb_did_assign(self, slot: ScbSlot) -> bool:
+        return self.runs.scb_did_assign(slot)
 
     def func_ref(self) -> Optional["MCFunctionFile"]:
         return self.runs.func_ref()
-
-    def scb_replace(self, origin: ScbSlot, target: ScbSlot):
-        subcmds = []
-        for subcmd in self.subcmds:
-            rep = subcmd.scb_replace(origin, target)
-            if rep is None:
-                subcmds.append(subcmd)
-            else:
-                subcmds.append(rep)
-        runs = self.runs.scb_replace(origin, target)
-        if runs is None:
-            runs = self.runs
-        return Execute(subcmds, runs)
 
 def execute(subcmds: List[_ExecuteSubcmd], runs: Union[Command, str]):
     """`Execute` factory. This prevents /execute being added when
@@ -555,19 +497,6 @@ class RawtextOutput(Command):
             slot.objective == d["objective"] and slot.target == d["name"]
             for d in self.score_components
         )
-
-    def scb_replace(self, origin: ScbSlot, target: ScbSlot):
-        components = deepcopy(self.components)
-        for component in components:
-            if "score" in component:
-                d = component["score"]
-                if "name" not in d or "objective" not in d:
-                    raise ValueError
-                if (origin.objective == d["objective"]
-                    and origin.target == d["name"]):
-                    d["name"] = target.target
-                    d["objective"] = target.objective
-        return RawtextOutput(self.prefix, components)
 
 class TitlerawTimes(Command):
     def __init__(self, player: str, fade_in: int, stay: int, fade_out: int):

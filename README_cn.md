@@ -20,27 +20,25 @@ print.tell(print.format("从-30到14，公差为2的等差数列和为%0", res))
 ```
 Acacia 可以把上面这段代码转换为命令:
 ```mcfunction
-# 这些是自动生成的! 很酷吧?
+# 这些高效的指令是自动生成的! 很酷吧?
 scoreboard players set acacia1 acacia -30
 scoreboard players set acacia2 acacia 14
 scoreboard players set acacia3 acacia 2
-scoreboard players operation acacia8 acacia = acacia2 acacia
-scoreboard players operation acacia8 acacia -= acacia1 acacia
-scoreboard players operation acacia8 acacia /= acacia3 acacia
-scoreboard players add acacia8 acacia 1
-scoreboard players operation acacia7 acacia = acacia8 acacia
-scoreboard players operation acacia6 acacia = acacia1 acacia
-scoreboard players operation acacia6 acacia += acacia2 acacia
-scoreboard players operation acacia6 acacia *= acacia7 acacia
-scoreboard players operation acacia6 acacia /= acacia5 acacia
-scoreboard players operation acacia4 acacia = acacia6 acacia
-scoreboard players operation acacia9 acacia = acacia4 acacia
-tellraw @a {"rawtext": [{"text": "从-30到14，公差为2的等差数列和为"}, {"score": {"objective": "acacia", "name": "acacia9"}}]}
+scoreboard players operation acacia4 acacia = acacia1 acacia
+scoreboard players operation acacia4 acacia += acacia2 acacia
+scoreboard players operation acacia5 acacia = acacia2 acacia
+scoreboard players operation acacia5 acacia -= acacia1 acacia
+scoreboard players operation acacia5 acacia /= acacia3 acacia
+scoreboard players add acacia5 acacia 1
+scoreboard players operation acacia4 acacia *= acacia5 acacia
+scoreboard players operation acacia4 acacia /= acacia6 acacia
+scoreboard players operation acacia7 acacia = acacia4 acacia
+tellraw @a {"rawtext": [{"text": "从-30到14，公差为2的等差数列和为"}, {"score": {"objective": "acacia", "name": "acacia7"}}]}
 ```
 ```mcfunction
 # 初始化: 创建计分板并建立常量
 scoreboard objectives add acacia dummy
-scoreboard players set acacia5 acacia 2
+scoreboard players set acacia6 acacia 2
 ```
 运行这些生成的命令，就会在 Minecraft 聊天栏输出:
 > 从-30到14，公差为2的等差数列和为-184

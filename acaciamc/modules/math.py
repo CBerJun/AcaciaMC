@@ -1,8 +1,10 @@
 """math - Math related utilities."""
 from typing import List
-from itertools import repeat
 
 from acaciamc.mccmdgen.expression import *
+from acaciamc.mccmdgen.expression.integer import (
+    IntRandom, IntOpSelf, IntCmdOp, IntOpVar
+)
 from acaciamc.ast import ModuleMeta
 from acaciamc.tools import axe
 import acaciamc.mccmdgen.cmds as cmds
@@ -20,9 +22,7 @@ def _randint(compiler, min_: int, max_: int):
     """randint(min: int-literal, max: int-literal) -> int
     Get a random integer between `min` and `max` (inclusive).
     """
-    res = IntOpGroup(init=None, compiler=compiler)
-    res.write(lambda this, libs: cmds.ScbRandom(this, min_, max_))
-    return res
+    return IntOpGroup(init=IntRandom(min_, max_), compiler=compiler)
 
 @axe.chop
 @axe.arg("base", IntDataType)
@@ -30,21 +30,23 @@ def _randint(compiler, min_: int, max_: int):
 def _pow(compiler, base, exp):
     """pow(base: int, exp: int) -> int
     return "base" to the power of "exp".
+    `pow(0, 0)` is defined to be 1.
+    Negative values of `exp` result in undefined behavior.
     """
     if not isinstance(exp, IntLiteral):
         # Fallback to `_math._pow`
         return internal("_pow").call(args=[base, exp], keywords={})
-    if exp.value <= 0:
-        raise axe.ArgumentError('exp', 'must be a positive integer')
+    if exp.value < 0:
+        raise axe.ArgumentError('exp', 'must be a non-negative integer')
+    if exp.value == 0:
+        return IntLiteral(1, compiler)
     # Optimize when x is a literal
     if isinstance(base, IntLiteral):
         return IntLiteral(base.value ** exp.value, compiler)
     # Write
-    res = IntOpGroup(init=base, compiler=compiler)
-    res.write(*repeat(
-        lambda this, libs: cmds.ScbOperation(cmds.ScbOp.MUL_EQ, this, this),
-        exp.value
-    ))
+    res = IntOpGroup.from_intexpr(base)
+    for _ in range(exp.value - 1):
+        res.add_op(IntOpSelf("*"))
     return res
 
 @axe.chop
@@ -56,15 +58,12 @@ def _min(compiler, operands: List[AcaciaExpr]):
     if not operands:
         raise axe.ArgumentError('operands', 'at least 1 operand required')
     # Get first arg
-    res = IntOpGroup(init=operands[0], compiler=compiler)
+    res = IntOpGroup.from_intexpr(operands[0])
     # Handle args left
-    def _handle(operand):
-        deps, var = to_IntVar(operand)
-        res.write_str(*deps)
-        res.write(lambda this, libs:
-                  cmds.ScbOperation(cmds.ScbOp.MIN, this, var.slot))
     for operand in operands[1:]:
-        _handle(operand)
+        deps, var = to_IntVar(operand)
+        res.add_op(IntCmdOp(deps))
+        res.add_op(IntOpVar("<", var.slot))
     return res
 
 @axe.chop
@@ -76,15 +75,12 @@ def _max(compiler, operands: List[AcaciaExpr]):
     if not operands:
         raise axe.ArgumentError('operands', 'at least 1 operand required')
     # Get first arg
-    res = IntOpGroup(init=operands[0], compiler=compiler)
+    res = IntOpGroup.from_intexpr(operands[0])
     # Handle args left
-    def _handle(operand):
-        deps, var = to_IntVar(operand)
-        res.write_str(*deps)
-        res.write(lambda this, libs:
-                  cmds.ScbOperation(cmds.ScbOp.MAX, this, var.slot))
     for operand in operands[1:]:
-        _handle(operand)
+        deps, var = to_IntVar(operand)
+        res.add_op(IntCmdOp(deps))
+        res.add_op(IntOpVar(">", var.slot))
     return res
 
 @axe.chop
