@@ -41,7 +41,8 @@ class Type(AcaciaCallable, metaclass=ABCMeta):
         # Call `__new__`
         new = self.attribute_table.lookup('__new__')
         if new is None:
-            raise Error(ErrorType.CANT_CREATE_INSTANCE, type_=self.name)
+            raise Error(ErrorType.CANT_CREATE_INSTANCE,
+                        type_=str(self.datatype_hook()))
         if not isinstance(new, AcaciaCallable):
             raise TypeError("__new__ of Type objects must be a callable"
                             " expression")
@@ -54,7 +55,8 @@ class Type(AcaciaCallable, metaclass=ABCMeta):
                                 " expression")
             ret, _cmds = initializer.call(args, keywords)
             if not ret.data_type.matches_cls(NoneDataType):
-                raise Error(ErrorType.INITIALIZER_RESULT, type_=self.name)
+                raise TypeError("__init__ of Type objects return %r instead "
+                                "of None" % str(ret.data_type))
             cmds.extend(_cmds)
         return instance, cmds
 
