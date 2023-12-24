@@ -7,26 +7,32 @@ There are several classes that are used to represent bool expressions:
 - NotBoolVar: inverted (`not var`) form of `BoolVar`.
 - CompareBase: abstract class that should be returned by
   `AcaciaExpr.compare` to implement comparison operators. 
-- AndGroup: store several bool expressions that are connected with
-  "and". Always use factory `new_and_group`.
+- WildBool: stores any boolean expression. It consists of two parts:
+  the command dependencies and /execute subcommands. The expression
+  is True if and only if the subcommands executed successfully.
+  It also stores "ranges" of a specific scoreboard slot (this is used
+  as an optimization for "and" expressions).
 
-Q: WHERE IS AN `or` EXPRESSION STORED???
-A: `or` expressions are all converted into other types of expressions
-this is done by `new_or_expression`.
+Q: WHERE ARE `and` AND `or` EXPRESSION STORED???
+A: `and` expressions are created using `new_and_group`. Normally a
+`WildBool` is returned but some optimizations may apply. `or`
+expressions are all converted into other types of expressions. This
+is done by `new_or_expression`.
 """
 
 __all__ = [
     # Type
     'BoolType', 'BoolDataType',
     # Expressions
-    'BoolLiteral', 'BoolVar', 'NotBoolVar', 'CompareBase', 'AndGroup',
+    'BoolLiteral', 'BoolVar', 'NotBoolVar', 'CompareBase', 'WildBool',
+    'SupportsAsExecute',
     # Factory functions
     'new_and_group', 'new_or_expression',
     # Utils
     'to_BoolVar'
 ]
 
-from typing import Iterable, List, Tuple, Set, Dict, Optional, TYPE_CHECKING
+from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
 from .base import *
@@ -54,7 +60,7 @@ def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
     elif isinstance(other, NotBoolVar):
         slot2 = other.slot
         invert = not invert
-    elif isinstance(other, (CompareBase, AndGroup)):
+    elif isinstance(other, (CompareBase, WildBool)):
         _dep, other_var = to_BoolVar(other)
         dep.extend(_dep)
         slot2 = other_var.slot
@@ -106,6 +112,17 @@ class BoolType(Type):
     def datatype_hook(self):
         return BoolDataType(self.compiler)
 
+class SupportsAsExecute(AcaciaExpr, metaclass=ABCMeta):
+    """See `as_execute` method. Should only be used by booleans."""
+    @abstractmethod
+    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
+        """
+        Convert this expression to some dependency commands and
+        subcommands of /execute. Value of this expression is considered
+        True if and only if the subcommands executed successfully.
+        """
+        pass
+
 class BoolLiteral(AcaciaExpr):
     """Literal boolean."""
     def __init__(self, value: bool, compiler):
@@ -144,7 +161,7 @@ class BoolLiteral(AcaciaExpr):
         res.value = not res.value
         return res
 
-class BoolVar(VarValue):
+class BoolVar(VarValue, SupportsAsExecute):
     """Boolean stored as a score on scoreboard."""
     def __init__(self, slot: cmds.ScbSlot, compiler):
         super().__init__(BoolDataType(compiler), compiler)
@@ -154,6 +171,9 @@ class BoolVar(VarValue):
     def new(cls, compiler: "Compiler", tmp=False):
         alloc = compiler.allocate_tmp if tmp else compiler.allocate
         return cls(alloc(), compiler)
+
+    def as_execute(self):
+        return [], [cmds.ExecuteScoreMatch(self.slot, '1')]
 
     def __str__(self):
         return self.slot.to_str()
@@ -180,6 +200,9 @@ class NotBoolVar(AcaciaExpr):
 
     def __str__(self):
         return self.slot.to_str()
+
+    def as_execute(self):
+        return [], [cmds.ExecuteScoreMatch(self.slot, '0')]
 
     def export(self, var: BoolVar):
         if var.slot == self.slot:
@@ -208,21 +231,11 @@ class NotBoolVar(AcaciaExpr):
     def not_(self):
         return BoolVar(self.slot, self.compiler)
 
-class CompareBase(AcaciaExpr, metaclass=ABCMeta):
+class CompareBase(SupportsAsExecute, metaclass=ABCMeta):
     def __init__(self, compiler: "Compiler"):
         super().__init__(BoolDataType(compiler), compiler)
 
-    @abstractmethod
-    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
-        """
-        Convert this compare to some dependency commands and subcommands
-        of /execute. The compare will be True if the subcommands
-        executed successfully.
-        """
-        pass
-
     def export(self, var: BoolVar):
-        # set `res` to dependencies that as_execute returns
         res, subcmds = self.as_execute()
         res.extend(_export_bool(subcmds, var))
         return res
@@ -291,111 +304,45 @@ class ScbEqualCompare(CompareBase):
             self.left, self.right, self.compiler, not self.invert
         )
 
-class AndGroup(AcaciaExpr):
-    def __init__(self, operands: Iterable[AcaciaExpr], compiler):
+class WildBool(SupportsAsExecute):
+    def __init__(
+        self, subcmds: List["_ExecuteSubcmd"],
+        dependencies: CMDLIST_T, compiler,
+        ranges: Optional[List[Tuple[cmds.ScbSlot, int, int]]] = None
+    ):
         super().__init__(BoolDataType(compiler), compiler)
-        self.main: List["_ExecuteSubcmd"] = []
-        self.dependencies: CMDLIST_T = []  # commands before `self.main`
-        # `optimizable_operands` are converted to commands when
-        # `export`ed since there may be optimizations.
-        self.optimizable_operands: Set[ScbMatchesCompare] = set()
+        self.subcmds = subcmds
+        self.dependencies = dependencies
+        if ranges is None:
+            ranges = []
+        self.ranges = ranges
         self.inverted = False  # if this is "not"ed
-        for operand in operands:
-            self._add_operand(operand)
 
     def export(self, var: BoolVar):
-        # Handle inversion
-        FALSE = int(self.inverted)
-        res: CMDLIST_T = []
-        subcmds: List["_ExecuteSubcmd"] = []
-        # -- Now convert self.optimizable_operands into commands --
-        # Optimization: When the same expr is compared by 2 or more
-        # IntLiterals, redundant ones can be removed and commands can be merged
-        # e.g. `1 <= x <= 5 and x <= 3` can be merged
-        # into a single /execute if score ... matches 1..3
-        # 1st Pass: Find IntCompares which has an IntLiteral as operand
-        # and which the other operands are the same
-        # In: [a > 3, b < 5, a < 8, c > 0]
-        # Out: {a: [a > 3, a < 8], b: [b < 5], c: [c > 0]}
-        opt_groups: Dict[cmds.ScbSlot, List[ScbMatchesCompare]] = {}
-        for compare in self.optimizable_operands:
-            group = opt_groups.setdefault(compare.slot, [])
-            group.append(compare)
-        # 2nd Pass: Generate Commands
-        for slot, group in opt_groups.items():
-            # Get max and min value of this group
-            min_, max_ = INT_MIN, INT_MAX
-            dependencies = []
-            for compare in group:
-                dependencies.extend(compare.dependencies)
-                literal = compare.literal
-                if compare.operator is Operator.equal_to:
-                    min_ = max(literal, min_)
-                    max_ = min(literal, max_)
-                # Operator.unequal_to is filtered in `_add_operand`
-                # because it can't be optimized.
-                elif compare.operator is Operator.greater:
-                    min_ = max(literal + 1, min_)
-                elif compare.operator is Operator.greater_equal:
-                    min_ = max(literal, min_)
-                elif compare.operator is Operator.less:
-                    max_ = min(literal - 1, max_)
-                elif compare.operator is Operator.less_equal:
-                    max_ = min(literal, max_)
-            if min_ > max_:  # must be False
-                return [cmds.ScbSetConst(var.slot, FALSE)]
-            elif min_ == max_:
+        res, subcmds = self.as_execute()
+        res.extend(_export_bool(subcmds, var, invert=self.inverted))
+        return res
+
+    def as_execute(self):
+        subcmds = self.subcmds.copy()
+        for slot, min_, max_ in self.ranges:
+            if min_ == INT_MIN and max_ == INT_MAX:
+                continue
+            if min_ == max_:
                 int_range = str(min_)
             else:
                 min_str = '' if min_ == INT_MIN else str(min_)
                 max_str = '' if max_ == INT_MAX else str(max_)
                 int_range = '%s..%s' % (min_str, max_str)
-            # Calculate left (non-Literal one)
-            res.extend(dependencies)
             subcmds.append(cmds.ExecuteScoreMatch(slot, int_range))
-        # Convert dependencies and `subcmds` to real commands
-        subcmds.extend(self.main)
-        res.extend(self.dependencies)
-        res.extend(_export_bool(subcmds, var, invert=self.inverted))
-        return res
-
-    def _add_operand(self, operand: AcaciaExpr):
-        """Add an operand to this `AndGroup`."""
-        if isinstance(operand, BoolVar):
-            self.main.append(cmds.ExecuteScoreMatch(operand.slot, '1'))
-        elif isinstance(operand, NotBoolVar):
-            self.main.append(cmds.ExecuteScoreMatch(operand.slot, '0'))
-        elif (isinstance(operand, ScbMatchesCompare)
-                and operand.operator is not Operator.unequal_to):
-            self.optimizable_operands.add(operand)
-        elif isinstance(operand, CompareBase):
-            commands, subcmds = operand.as_execute()
-            self.dependencies.extend(commands)
-            self.main.extend(subcmds)
-        elif isinstance(operand, AndGroup):
-            # Combine AndGroups
-            if operand.inverted:
-                # `a and not (b and c)` needs a tmp var:
-                # tmp = `not (b and c)`, self = `a and tmp`
-                tmp = BoolVar.new(tmp=True, compiler=self.compiler)
-                self.dependencies.extend(operand.export(tmp))
-                self._add_operand(tmp)
-            else:
-                self.main.extend(operand.main)
-                self.dependencies.extend(operand.dependencies)
-                self.optimizable_operands.update(operand.optimizable_operands)
-        else:
-            # `BoolLiteral`s should have been optimized by
-            # `new_and_group`. Operands that are not boolean are
-            # not expected.
-            raise ValueError
+        return self.dependencies.copy(), subcmds
 
     def copy(self):
-        res = AndGroup(operands=(), compiler=self.compiler)
-        res.main.extend(self.main)
-        res.dependencies.extend(self.dependencies)
+        res = WildBool(
+            self.subcmds.copy(), self.dependencies.copy(),
+            self.compiler, self.ranges.copy()
+        )
         res.inverted = self.inverted
-        res.optimizable_operands.update(self.optimizable_operands)
         return res
 
     compare = _bool_compare
@@ -407,9 +354,8 @@ class AndGroup(AcaciaExpr):
         return res
 
 def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
-    """Creates a boolean value connected with "and"."""
+    """Creates an "and" expression."""
     assert operands
-    # The purpose is to do these optimizations:
     literals = [operand for operand in operands
                 if isinstance(operand, BoolLiteral)]
     new_operands = operands.copy()
@@ -418,20 +364,74 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
             # throw away operands that are always true
             new_operands.remove(literal)
         else:
-            # when any of the `operands` is always false, return false
+            # when any operand is literal false, the result is false
             return BoolLiteral(False, compiler)
-    # if there is no operands left, meaning all operands are
-    # constantly true, so return true
+    # if there is no operand left, return true
     if not new_operands:
         return BoolLiteral(True, compiler)
     # if there is only 1 operand left, return that
     if len(new_operands) == 1:
         return new_operands[0]
+    # fallback
+    res_subcmds: List[_ExecuteSubcmd] = []
+    res_commands: CMDLIST_T = []
+    ranges: Dict[cmds.ScbSlot, List[int]] = {}
+    for operand in new_operands:
+        if isinstance(operand, WildBool):
+            if operand.inverted:
+                # `a and not (b and c)` needs a tmp var:
+                # tmp = `not (b and c)`, self = `a and tmp`
+                # XXX try implementing by inverting each of `subcmds`?
+                tmp = BoolVar.new(tmp=True, compiler=compiler)
+                res_commands.extend(operand.export(tmp))
+                operand = tmp
+            else:
+                res_subcmds.extend(operand.subcmds)
+                res_commands.extend(operand.dependencies)
+                for slot, min_, max_ in operand.ranges:
+                    rng = ranges.setdefault(slot, [INT_MIN, INT_MAX])
+                    rng[0] = max(min_, rng[0])
+                    rng[1] = min(max_, rng[1])
+                operand = None
+        elif (isinstance(operand, ScbMatchesCompare)
+              and operand.operator is not Operator.unequal_to):
+            # Optimization: When the same expr is compared to two or more
+            # `IntLiteral`s, execute score matches subcommands can be merged.
+            # e.g. `1 <= x <= 5 and x <= 3` can be merged into a single
+            # /execute if score ... matches 1..3
+            rng = ranges.setdefault(operand.slot, [INT_MIN, INT_MAX])
+            res_commands.extend(operand.dependencies)
+            literal = operand.literal
+            if operand.operator is Operator.equal_to:
+                rng[0] = max(literal, rng[0])
+                rng[1] = min(literal, rng[1])
+            elif operand.operator is Operator.greater:
+                rng[0] = max(literal + 1, rng[0])
+            elif operand.operator is Operator.greater_equal:
+                rng[0] = max(literal, rng[0])
+            elif operand.operator is Operator.less:
+                rng[1] = min(literal - 1, rng[1])
+            elif operand.operator is Operator.less_equal:
+                rng[1] = min(literal, rng[1])
+            if rng[0] > rng[1]:  # must be False
+                return BoolLiteral(False, compiler)
+            operand = None
+        if operand is not None:
+            assert isinstance(operand, (BoolVar, NotBoolVar, CompareBase))
+            commands, subcmds = operand.as_execute()
+            res_commands.extend(commands)
+            res_subcmds.extend(subcmds)
+    res_ranges = [(slot, *rng) for slot, rng in ranges.items()
+                  if rng[0] != INT_MIN or rng[1] != INT_MAX]
+    # if there is no subcommands generated, then just return True since
+    # no restrictions is added.
+    if not res_subcmds and not res_ranges:
+        return BoolLiteral(True, compiler)
     # Final fallback
-    return AndGroup(new_operands, compiler)
+    return WildBool(res_subcmds, res_commands, compiler, res_ranges)
 
 def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
-    """Create a boolean value connected with "or"."""
+    """Create an "or" expression."""
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
     inverted_operands = [operand.not_() for operand in operands]
     # connect them with `and` (-> `not a and not b and not c`)

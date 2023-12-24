@@ -373,26 +373,33 @@ class Generator(ASTVisitor):
             for stmt in run_node:
                 self.visit(stmt)
             return
-        condition_var: BoolVar = BoolVar.new(self.compiler)
-        dependencies: CMDLIST_T = condition.export(condition_var)
-        self.current_file.extend(dependencies)
         # process body
         with self.new_mcfunc_file() as body_file:
             self.write_debug('If body')
             for stmt in node.body:
                 self.visit(stmt)
-        if body_file.has_content():
-            # only add command when some commands ARE generated
-            self.current_file.write(cmds.Execute(
-                [cmds.ExecuteScoreMatch(condition_var.slot, "1")],
-                runs=cmds.InvokeFunction(body_file)
-            ))
-        # process else_bosy (almost same as above)
         with self.new_mcfunc_file() as else_body_file:
             self.write_debug('Else branch of If')
             for stmt in node.else_body:
                 self.visit(stmt)
-        if else_body_file.has_content():
+        has_else = else_body_file.has_content()
+        if (not has_else and isinstance(condition, SupportsAsExecute)):
+            # optimization for SupportsAsExecute (when there is no
+            # "else" branch)
+            dependencies, subcmds = condition.as_execute()
+            self.current_file.extend(dependencies)
+            self.current_file.write(cmds.Execute(
+                subcmds, runs=cmds.InvokeFunction(body_file)
+            ))
+            return
+        dependencies, condition_var = to_BoolVar(condition, tmp=False)
+        self.current_file.extend(dependencies)
+        if body_file.has_content():
+            self.current_file.write(cmds.Execute(
+                [cmds.ExecuteScoreMatch(condition_var.slot, "1")],
+                runs=cmds.InvokeFunction(body_file)
+            ))
+        if has_else:
             self.current_file.write(cmds.Execute(
                 [cmds.ExecuteScoreMatch(condition_var.slot, "0")],
                 runs=cmds.InvokeFunction(else_body_file)
@@ -413,8 +420,11 @@ class Generator(ASTVisitor):
                 return
             else:
                 self.error_c(ErrorType.ENDLESS_WHILE_LOOP)
-        # convert condition to BoolVar
-        dependencies, condition = to_BoolVar(condition, tmp=False)
+        if isinstance(condition, SupportsAsExecute):
+            dependencies, subcmds = condition.as_execute()
+        else:
+            dependencies, condition_var = to_BoolVar(condition, tmp=False)
+            subcmds = [cmds.ExecuteScoreMatch(condition_var.slot, "1")]
         # body
         with self.new_mcfunc_file() as body_file:
             self.write_debug('While definition')
@@ -426,8 +436,7 @@ class Generator(ASTVisitor):
             def _write_condition(file: cmds.MCFunctionFile):
                 file.extend(dependencies)
                 file.write(cmds.Execute(
-                    [cmds.ExecuteScoreMatch(condition.slot, "1")],
-                    runs=cmds.InvokeFunction(body_file)
+                    subcmds, runs=cmds.InvokeFunction(body_file)
                 ))
             # Keep recursion if condition is True
             body_file.write_debug('## Part 2. Recursion')

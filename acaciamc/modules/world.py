@@ -841,10 +841,11 @@ def move_local(compiler, target: "MCSelector", left: float, up: float,
 @axe.arg("pos", PosDataType)
 @axe.arg("block", ArgBlock())
 def is_block(compiler, pos: Position, block: Block):
-    res = AndGroup((), compiler)
-    res.main.extend(pos.context)
-    res.main.append(cmds.ExecuteCond("block", "~ ~ ~ %s" % block.to_str()))
-    return res
+    subcmds = [
+        *pos.context,
+        cmds.ExecuteCond("block", "~ ~ ~ %s" % block.to_str())
+    ]
+    return WildBool(subcmds, [], compiler)
 
 @_register("is_same_area")
 @axe.chop
@@ -854,12 +855,13 @@ def is_block(compiler, pos: Position, block: Block):
 @axe.arg("ignore_air", axe.LiteralBool(), default=False)
 def is_same_area(compiler, pos: Position, offset: PosOffset,
                  other: PosOffset, ignore_air: bool):
-    res = AndGroup((), compiler)
-    res.main.extend(pos.context)
-    res.main.append(cmds.ExecuteCond("blocks", "~ ~ ~ %s %s %s" % (
-        offset, other, "masked" if ignore_air else "all"
-    )))
-    return res
+    subcmds = [
+        *pos.context,
+        cmds.ExecuteCond("blocks", "~ ~ ~ %s %s %s" % (
+            offset, other, "masked" if ignore_air else "all"
+        ))
+    ]
+    return WildBool(subcmds, [], compiler)
 
 @_register("is_entity")
 @axe.chop
@@ -870,14 +872,13 @@ def is_entity(compiler: "Compiler", ent: "_EntityBase", filter: EntityFilter):
     Select entities that match the filter and return whether given
     entity is in those entities.
     """
-    res = AndGroup((), compiler)
     tmp = compiler.allocate_entity_tag()
     selector = ent.get_selector()
     selector.tag(tmp)
     commands = filter.dump("tag {selected} add %s" % tmp)
-    res.dependencies.extend(commands)
-    res.main.append(cmds.ExecuteCond("entity", selector.to_str()))
-    return res, ["tag @e[tag={0}] remove {0}".format(tmp)]
+    subcmds = [cmds.ExecuteCond("entity", selector.to_str())]
+    return (WildBool(subcmds, commands, compiler),
+            ["tag @e[tag={0}] remove {0}".format(tmp)])
 
 def acacia_build(compiler: "Compiler"):
     attrs = {}

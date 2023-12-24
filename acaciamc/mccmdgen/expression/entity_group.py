@@ -12,7 +12,7 @@ from .base import *
 from .entity_template import ETemplateDataType
 from .entity_filter import EFilterDataType
 from .entity import EntityDataType, EntityReference
-from .boolean import AndGroup
+from .boolean import WildBool
 from .integer import IntOpGroup, IntOp
 from .functions import BinaryFunction, ConstructorFunction
 from .generic import BinaryGeneric
@@ -177,9 +177,8 @@ class EntityGroup(VarValue):
         @method_of(self, "is_empty")
         @axe.chop
         def _is_empty(compiler: "Compiler"):
-            res = AndGroup(operands=(), compiler=compiler)
-            res.main.append(cmds.ExecuteCond("entity", SELF, invert=True))
-            return res
+            subcmds = [cmds.ExecuteCond("entity", SELF, invert=True)]
+            return WildBool(subcmds, [], compiler)
         @method_of(self, "size")
         @axe.chop
         def _size(compiler: "Compiler"):
@@ -193,11 +192,10 @@ class EntityGroup(VarValue):
         @axe.chop
         @axe.arg("ent", MEMBER_TYPE)
         def _includes(compiler: "Compiler", ent: "_EntityBase"):
-            res = AndGroup(operands=(), compiler=compiler)
             selector = ent.get_selector()
             selector.tag(self.tag)
-            res.main.append(cmds.ExecuteCond("entity", selector.to_str()))
-            return res
+            subcmds = [cmds.ExecuteCond("entity", selector.to_str())]
+            return WildBool(subcmds, [], compiler)
 
     @classmethod
     def from_template(cls, template: "EntityTemplate", compiler: "Compiler"):
