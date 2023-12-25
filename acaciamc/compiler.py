@@ -19,18 +19,34 @@ from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.optimizer import Optimizer
 import acaciamc.mccmdgen.cmds as cmds
 
+TICK_FILE = "tick"
+
 class OutputManager(cmds.FunctionsManager):
     def __init__(self):
         super().__init__()
         self._lib_count = 0
 
+    @staticmethod
+    def mcfunction_path(path: str) -> str:
+        if Config.root_folder.endswith("/") or not Config.root_folder:
+            return "%s%s" % (Config.root_folder, path)
+        else:
+            return "%s/%s" % (Config.root_folder, path)
+
+    def tick_file_name(self) -> str:
+        return self.mcfunction_path(
+            "%s/%s" % (Config.internal_folder, TICK_FILE)
+        )
+
     def new_file(self, file: cmds.MCFunctionFile, path: str):
-        file.set_path("%s/%s" % (Config.function_folder, path))
+        file.set_path(self.mcfunction_path(path))
         self.add_file(file)
 
     def add_lib(self, file: cmds.MCFunctionFile):
         self._lib_count += 1
-        self.new_file(file, "lib/acalib%d" % self._lib_count)
+        self.new_file(
+            file, "%s/acalib%d" % (Config.internal_folder, self._lib_count)
+        )
 
 class OutputOptimized(OutputManager, Optimizer):
     def is_volatile(self, slot: cmds.ScbSlot) -> bool:
@@ -40,12 +56,10 @@ class OutputOptimized(OutputManager, Optimizer):
         return slot.objective != Config.scoreboard
 
     def entry_files(self):
-        entries = tuple(
-            (Config.function_folder + "/%s" % path)
-            for path in ("interface/", "main", "tick", "init")
-        )
+        internal = self.mcfunction_path(Config.internal_folder)
         for file in self.files:
-            if file.get_path().startswith(entries):
+            path = file.get_path()
+            if (not path.startswith(internal)) or path.endswith(TICK_FILE):
                 yield file
 
     @property
@@ -55,7 +69,7 @@ class OutputOptimized(OutputManager, Optimizer):
     def dont_inline_execute_call(self, file: cmds.MCFunctionFile) -> bool:
         # Expanding /execute function calls in tick.mcfunction can
         # decrease performance badly.
-        return file.get_path() == Config.function_folder + "/tick"
+        return file.get_path() == self.tick_file_name()
 
 class Compiler:
     """Start compiling the project
@@ -81,8 +95,10 @@ class Compiler:
             self.output_mgr = OutputManager()
         self.file_main = cmds.MCFunctionFile()  # load program
         self.file_tick = cmds.MCFunctionFile()  # runs every tick
-        self.output_mgr.new_file(self.file_main, "main")
-        self.output_mgr.new_file(self.file_tick, "tick")
+        self.output_mgr.new_file(self.file_main, Config.main_file)
+        self.output_mgr.new_file(
+            self.file_tick, self.output_mgr.tick_file_name()
+        )
         self.current_generator = None  # the Generator that is running
         # vars to record the resources that are applied
         self._score_max = 0  # max id of score allocated
@@ -139,7 +155,7 @@ class Compiler:
         init = self.output_mgr.generate_init()
         if Config.split_init:
             init_file = cmds.MCFunctionFile()
-            self.output_mgr.new_file(init_file, "init")
+            self.output_mgr.new_file(init_file, Config.init_file)
             init_file.write_debug(
                 '## Usage: Initialize Acacia, only need to be ran ONCE',
                 '## Execute this before running anything from Acacia!!!'
@@ -160,7 +176,7 @@ class Compiler:
         """
         Output result to `path`.
         e.g. when `path` is "a/b", main file is generated at
-        "a/b/<Config.function_folder>/main.mcfunction".
+        "a/b/<Config.root_folder>/main.mcfunction".
         """
         # Mcfunctions
         for file in self.output_mgr.files:
@@ -168,7 +184,7 @@ class Compiler:
         # tick.json
         if self.file_tick.has_content():
             self._write_file(
-                '{"values": ["%s/tick"]}' % Config.function_folder,
+                '{"values": ["%s"]}' % self.output_mgr.tick_file_name(),
                 os.path.join(path, 'tick.json')
             )
 
@@ -178,8 +194,10 @@ class Compiler:
         raise error
 
     def add_file(self, file: cmds.MCFunctionFile, path: Optional[str] = None):
-        """Add a file to project. If file's path is not set, then it
-        will go to "lib" folder.
+        """
+        Add a new file to the project.
+        `path` is the path relative to the Config.root_folder.
+        If `path` is None, the file will be added as an internal lib.
         """
         if path is None:
             self.output_mgr.add_lib(file)
@@ -315,6 +333,14 @@ class Compiler:
         """
         return self.parse_module(meta)[0]
 
+    def is_reserved_path(self, path: str) -> bool:
+        """Return if a mcfunction path is reserved (not for user)."""
+        return (
+            path == Config.main_file
+            or (path == Config.init_file and Config.split_init)
+            or path.startswith(Config.internal_folder)
+        )
+
     @contextmanager
     def _load_generator(self, path: str):
         """Load the Generator of an Acacia source and store it at
@@ -366,7 +392,7 @@ class Compiler:
             return s
 
     def _write_file(self, content: str, path: str):
-        """write `content` to `path`."""
+        """Write `content` to `path`."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
             with open(path, 'w', **self.OPEN_ARGS) as f:

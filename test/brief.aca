@@ -398,10 +398,10 @@ interface a:
     local := 20 < x <= 100  # Chained comparison operators!
     # Do something...
 # Now we can use the `a` interface in Minecraft through /function
-# command (when using default compile options, it is stored at
-# acacia/interface/a.mcfunction)
+# command (when using default compile options, it is stored at just
+# a.mcfunction)
 
-# The following is generated at acacia/interface/b/c.mcfunction
+# The following is generated at b/c.mcfunction
 interface b.c:
     /say b.c called
 

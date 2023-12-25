@@ -40,14 +40,17 @@ COLORS_NEW = {
 
 class Config:
     debug_comments = False  # generate debug comments in .mcfunction files
-    function_folder = 'acacia'  # name of the folder of functions
+    root_folder = ''  # output root folder (relative to "functions" folder)
+    internal_folder = '_acacia'  # name of the folder of internal mcfunctions
+    main_file = 'main'  # name of mcfunction file that executes the program
     scoreboard = 'acacia'  # prefix of scoreboard that Acacia uses to hold data
     entity_name = 'acacia'  # prefix of entity names
     entity_type = 'armor_stand'  # default type of entity
     entity_pos = '~ ~ ~'  # which place to summon entity
     entity_tag = 'acacia'  # prefix of entity tags
     mc_version = (1, 20, 20)  # Mineraft version
-    split_init = False  # split init commands from main.mcfunction
+    split_init = False  # split initialization commands from main file
+    init_file = 'init'  # name of init file (ignored if split_init is False)
     optimizer = True  # enable optimizer
     # Max size for a function that is called with /execute
     # condtions to be inlined:

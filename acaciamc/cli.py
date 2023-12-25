@@ -15,6 +15,7 @@ DESCRIPTION = (
     'Compiler of Acacia, a programming language that runs in Minecraft '
     'Bedrock Edition by compiling code into mcfunction files.'
 )
+_NOTGIVEN = object()
 
 def fatal(message: str):
     print("acacia: error: %s" % message, file=sys.stderr)
@@ -41,9 +42,15 @@ def build_argparser():
         help='the scoreboard that Acacia uses to store data (default "acacia")'
     )
     argparser.add_argument(
-        '-f', '--function-folder', metavar='NAME',
-        help='the subfolder of `functions` in data pack that Acacia uses to '
-            'store output .mcfunction files'
+        '-f', '--function-folder', metavar='PATH',
+        help='path relative to "functions" directory in a behavior pack where'
+             ' Acacia generates its output .mcfunction files (default "", i.e.'
+             ' generate directly at "functions" level)'
+    )
+    argparser.add_argument(
+        '-m', '--main-file', metavar='NAME',
+        help='name of the mcfunction file that executes your program '
+             '(default "main")'
     )
     argparser.add_argument(
         '-n', '--entity-name', metavar="NAME",
@@ -69,10 +76,13 @@ def build_argparser():
         help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
     )
     argparser.add_argument(
-        '-i', '--init-file',
-        action='store_true',
-        help='split initialization commands from main.mcfunction into '
-             'init.mcfunction'
+        '-i', '--init-file', nargs='?', metavar='NAME', const=_NOTGIVEN,
+        help='if set, split initialization commands from main mcfunction '
+             'file into given file (default "init")'
+    )
+    argparser.add_argument(
+        '--internal-folder', metavar="NAME",
+        help='name of the folder where Acacia stores its internal files'
     )
     argparser.add_argument(
         '--encoding', metavar="CODEC", default="utf-8",
@@ -90,26 +100,42 @@ def build_argparser():
     )
     return argparser
 
-def check_id(name: str, option: str):
-    """Make sure `name` is a valid Acacia identifier."""
+def check_id(name: str):
+    """Raise ValueError if `name` is not a valid Acacia identifier."""
     if not name:
-        fatal('option "%s" can\'t be empty' % option)
+        raise ValueError('can\'t be empty')
     if name[0].isdecimal():
-        fatal('option "%s" can\'t start with a number' % option)
+        raise ValueError('can\'t start with a number')
     for s in name:
         if not (s.isalnum() or s == '_'):
-            fatal('invalid character %r for option "%s"' % (s, option))
+            raise ValueError('invalid character %r' % s)
+
+def assert_id(name: str, option: str):
+    """Make sure `name` is a valid Acacia identifier."""
+    try:
+        check_id(name)
+    except ValueError as e:
+        fatal('option %s: %s' % (option, e.args[0]))
 
 def apply_config(args):
     """Apply arguments to `Config`."""
     if args.debug_comments:
         Config.debug_comments = True
     if args.scoreboard:
-        check_id(args.scoreboard, 'scoreboard')
+        assert_id(args.scoreboard, '--scoreboard')
         Config.scoreboard = args.scoreboard
     if args.function_folder:
-        check_id(args.function_folder, 'function folder')
-        Config.function_folder = args.function_folder
+        path = [p for p in args.function_folder.split("/") if p]
+        for p in path:
+            try:
+                check_id(p)
+            except ValueError as e:
+                fatal('option --function-folder: invalid name %r: %s'
+                      % (p, e.args[0]))
+        Config.root_folder = args.function_folder
+    if args.main_file:
+        assert_id(args.main_file, '--main-file')
+        Config.main_file = args.main_file
     if args.entity_name:
         Config.entity_name = args.entity_name
     if args.entity_tag:
@@ -133,6 +159,12 @@ def apply_config(args):
         Config.max_inline_file_size = args.max_inline_file_size
     if args.init_file:
         Config.split_init = True
+        if args.init_file is not _NOTGIVEN:
+            assert_id(args.init_file, '--init-file')
+            Config.init_file = args.init_file
+    if args.internal_folder:
+        assert_id(args.internal_folder, '--internal-folder')
+        Config.internal_folder = args.internal_folder
 
 def run(args):
     if not os.path.exists(args.file):
@@ -151,7 +183,7 @@ def run(args):
 
     if args.override_old:
         # remove old output directory
-        rm_path = os.path.join(out_path, Config.function_folder)
+        rm_path = os.path.join(out_path, Config.root_folder)
         if os.path.exists(rm_path):
             shutil.rmtree(rm_path)
 

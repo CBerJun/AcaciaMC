@@ -447,12 +447,13 @@ class Generator(ASTVisitor):
             self.write_debug('No commands generated')
 
     def visit_InterfaceDef(self, node: InterfaceDef):
+        path = '/'.join(node.path)
+        if self.compiler.is_reserved_path(path):
+            self.error_c(ErrorType.RESERVED_INTERFACE_PATH, path=path)
         with self.new_ctx():
             self.ctx.new_scope()
             # body
-            with self.new_mcfunc_file(
-                'interface/%s' % '/'.join(node.path)
-            ) as body_file:
+            with self.new_mcfunc_file(path) as body_file:
                 self.write_debug('Interface definition')
                 for stmt in node.body:
                     self.visit(stmt)

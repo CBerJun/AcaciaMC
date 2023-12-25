@@ -3,9 +3,9 @@
  *
  * Create a super flat world and load this program
  * Type this in chat to initialize:
- *   /function acacia/main
+ *   /function main
  * Type this to start:
- *   /function acacia/interface/start
+ *   /function start
  *
  * Generate a random maze using Prim's algorithm.
  * Here's a size 3 maze template:
