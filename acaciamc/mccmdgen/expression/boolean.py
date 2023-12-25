@@ -12,6 +12,7 @@ There are several classes that are used to represent bool expressions:
   is True if and only if the subcommands executed successfully.
   It also stores "ranges" of a specific scoreboard slot (this is used
   as an optimization for "and" expressions).
+- NotWildBool: inverted (`not expr`) form of `WildBool`.
 
 Q: WHERE ARE `and` AND `or` EXPRESSION STORED???
 A: `and` expressions are created using `new_and_group`. Normally a
@@ -25,7 +26,7 @@ __all__ = [
     'BoolType', 'BoolDataType',
     # Expressions
     'BoolLiteral', 'BoolVar', 'NotBoolVar', 'CompareBase', 'WildBool',
-    'SupportsAsExecute',
+    'NotWildBool', 'SupportsAsExecute',
     # Factory functions
     'new_and_group', 'new_or_expression',
     # Utils
@@ -304,6 +305,21 @@ class ScbEqualCompare(CompareBase):
             self.left, self.right, self.compiler, not self.invert
         )
 
+def _ranges2subcmds(ranges: List[Tuple[cmds.ScbSlot, int, int]]) \
+        -> List["_ExecuteSubcmd"]:
+    res = []
+    for slot, min_, max_ in ranges:
+        if min_ == INT_MIN and max_ == INT_MAX:
+            continue
+        if min_ == max_:
+            int_range = str(min_)
+        else:
+            min_str = '' if min_ == INT_MIN else str(min_)
+            max_str = '' if max_ == INT_MAX else str(max_)
+            int_range = '%s..%s' % (min_str, max_str)
+        res.append(cmds.ExecuteScoreMatch(slot, int_range))
+    return res
+
 class WildBool(SupportsAsExecute):
     def __init__(
         self, subcmds: List["_ExecuteSubcmd"],
@@ -316,42 +332,64 @@ class WildBool(SupportsAsExecute):
         if ranges is None:
             ranges = []
         self.ranges = ranges
-        self.inverted = False  # if this is "not"ed
 
     def export(self, var: BoolVar):
         res, subcmds = self.as_execute()
-        res.extend(_export_bool(subcmds, var, invert=self.inverted))
+        res.extend(_export_bool(subcmds, var))
         return res
 
     def as_execute(self):
-        subcmds = self.subcmds.copy()
-        for slot, min_, max_ in self.ranges:
-            if min_ == INT_MIN and max_ == INT_MAX:
-                continue
-            if min_ == max_:
-                int_range = str(min_)
-            else:
-                min_str = '' if min_ == INT_MIN else str(min_)
-                max_str = '' if max_ == INT_MAX else str(max_)
-                int_range = '%s..%s' % (min_str, max_str)
-            subcmds.append(cmds.ExecuteScoreMatch(slot, int_range))
+        subcmds = self.subcmds + _ranges2subcmds(self.ranges)
         return self.dependencies.copy(), subcmds
 
     def copy(self):
-        res = WildBool(
+        return WildBool(
             self.subcmds.copy(), self.dependencies.copy(),
             self.compiler, self.ranges.copy()
         )
-        res.inverted = self.inverted
-        return res
 
     compare = _bool_compare
 
     # Unary operator
     def not_(self):
-        res = self.copy()
-        res.inverted = not res.inverted
+        return NotWildBool(
+            self.subcmds.copy(), self.dependencies.copy(),
+            self.compiler, self.ranges.copy()
+        )
+
+class NotWildBool(AcaciaExpr):
+    def __init__(
+        self, subcmds: List["_ExecuteSubcmd"],
+        dependencies: CMDLIST_T, compiler,
+        ranges: Optional[List[Tuple[cmds.ScbSlot, int, int]]] = None
+    ):
+        super().__init__(BoolDataType(compiler), compiler)
+        self.subcmds = subcmds
+        self.dependencies = dependencies
+        if ranges is None:
+            ranges = []
+        self.ranges = ranges
+
+    def export(self, var: BoolVar):
+        subcmds = self.subcmds + _ranges2subcmds(self.ranges)
+        res = self.dependencies.copy()
+        res.extend(_export_bool(subcmds, var, invert=True))
         return res
+
+    def copy(self):
+        return NotWildBool(
+            self.subcmds.copy(), self.dependencies.copy(),
+            self.compiler, self.ranges.copy()
+        )
+
+    compare = _bool_compare
+
+    # Unary operator
+    def not_(self):
+        return WildBool(
+            self.subcmds.copy(), self.dependencies.copy(),
+            self.compiler, self.ranges.copy()
+        )
 
 def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Creates an "and" expression."""
@@ -378,21 +416,19 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     ranges: Dict[cmds.ScbSlot, List[int]] = {}
     for operand in new_operands:
         if isinstance(operand, WildBool):
-            if operand.inverted:
-                # `a and not (b and c)` needs a tmp var:
-                # tmp = `not (b and c)`, self = `a and tmp`
-                # XXX try implementing by inverting each of `subcmds`?
-                tmp = BoolVar.new(tmp=True, compiler=compiler)
-                res_commands.extend(operand.export(tmp))
-                operand = tmp
-            else:
-                res_subcmds.extend(operand.subcmds)
-                res_commands.extend(operand.dependencies)
-                for slot, min_, max_ in operand.ranges:
-                    rng = ranges.setdefault(slot, [INT_MIN, INT_MAX])
-                    rng[0] = max(min_, rng[0])
-                    rng[1] = min(max_, rng[1])
-                operand = None
+            res_subcmds.extend(operand.subcmds)
+            res_commands.extend(operand.dependencies)
+            for slot, min_, max_ in operand.ranges:
+                rng = ranges.setdefault(slot, [INT_MIN, INT_MAX])
+                rng[0] = max(min_, rng[0])
+                rng[1] = min(max_, rng[1])
+            operand = None
+        elif isinstance(operand, NotWildBool):
+            # `a and not (b and c)` needs a tmp var:
+            # tmp = `not (b and c)`, self = `a and tmp`
+            tmp = BoolVar.new(tmp=True, compiler=compiler)
+            res_commands.extend(operand.export(tmp))
+            operand = tmp
         elif (isinstance(operand, ScbMatchesCompare)
               and operand.operator is not Operator.unequal_to):
             # Optimization: When the same expr is compared to two or more
