@@ -101,7 +101,7 @@ class Expression(AST):
 # details
 
 class Module(AST):  # a module
-    def __init__(self, body: list, lineno, col):
+    def __init__(self, body: _List[Statement], lineno, col):
         super().__init__(lineno, col)
         self.body = body
 
@@ -143,7 +143,7 @@ class FormattedStr(AST):  # a literal string with ${formatted exprs}
         self.content = content
 
 class ExprStatement(Statement):  # a statement that is an expression
-    def __init__(self, value: AST, lineno, col):
+    def __init__(self, value: Expression, lineno, col):
         super().__init__(lineno, col)
         self.value = value
 
@@ -153,7 +153,7 @@ class Pass(Statement):  # does nothing
 class If(Statement):  # if statement
     def __init__(
         self, condition: Expression,
-        body: list, else_body: list, lineno, col
+        body: _List[Statement], else_body: _List[Statement], lineno, col
     ):
         super().__init__(lineno, col)
         self.condition = condition
@@ -161,7 +161,8 @@ class If(Statement):  # if statement
         self.else_body = else_body
 
 class While(Statement):  # while statement
-    def __init__(self, condition: Expression, body: list, lineno, col):
+    def __init__(self, condition: Expression,
+                 body: _List[Statement], lineno, col):
         super().__init__(lineno, col)
         self.condition = condition
         self.body = body
@@ -169,7 +170,7 @@ class While(Statement):  # while statement
 class FuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: _Optional[TypeSpec], lineno, col
+        body: _List[Statement], returns: _Optional[TypeSpec], lineno, col
     ):  # function definition
         super().__init__(lineno, col)
         self.name = name
@@ -180,7 +181,7 @@ class FuncDef(Statement):
 class InlineFuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: list, returns: _Optional[TypeSpec], lineno, col
+        body: _List[Statement], returns: _Optional[TypeSpec], lineno, col
     ):  # inline function definition
         super().__init__(lineno, col)
         self.name = name
@@ -189,16 +190,9 @@ class InlineFuncDef(Statement):
         self.body = body
 
 class InterfaceDef(Statement):  # define an interface
-    def __init__(self, path: list, body: list, lineno, col):
+    def __init__(self, path: _List[str], body: _List[Statement], lineno, col):
         super().__init__(lineno, col)
         self.path = path
-        self.body = body
-
-class EntityTemplateDef(Statement):  # entity statement
-    def __init__(self, name: str, parents: list, body: list, lineno, col):
-        super().__init__(lineno, col)
-        self.name = name
-        self.parents = parents
         self.body = body
 
 class EntityField(Statement):  # entity field definition
@@ -220,11 +214,20 @@ class EntityMeta(Statement):  # entity meta like @type
         self.name = name
         self.value = value
 
+class EntityTemplateDef(Statement):  # entity statement
+    def __init__(
+        self, name: str, parents: _List[Expression],
+        body: _List[_Union[EntityMethod, EntityField, EntityMeta, Pass]],
+        lineno, col
+    ):
+        super().__init__(lineno, col)
+        self.name = name
+        self.parents = parents
+        self.body = body
+
 class VarDef(Statement):  # x: y [= z] variable declaration
-    def __init__(self, target: Expression,
-                 type_: TypeSpec,
-                 value: _Optional[Expression],
-                 lineno, col):
+    def __init__(self, target: Expression, type_: TypeSpec,
+                 value: _Optional[Expression], lineno, col):
         super().__init__(lineno, col)
         self.target = target
         self.type = type_
@@ -288,7 +291,8 @@ class FromImportAll(Statement):  # import everything in a module
         self.meta = meta
 
 class For(Statement):  # for-in iteration
-    def __init__(self, name: str, expr: Expression, body: list, lineno, col):
+    def __init__(self, name: str, expr: Expression,
+                 body: _List[Statement], lineno, col):
         super().__init__(lineno, col)
         self.name = name
         self.expr = expr
@@ -330,13 +334,14 @@ class Identifier(Expression):  # an identifier
         self.name = name
 
 class UnaryOp(Expression):  # +x, -x, not x
-    def __init__(self, operator: Operator, operand: AST, lineno, col):
+    def __init__(self, operator: Operator, operand: Expression, lineno, col):
         super().__init__(lineno, col)
         self.operator = operator
         self.operand = operand
 
 class BinOp(Expression):  # an expr with binary operator (+, %, >=, etc)
-    def __init__(self, left: AST, operator: Operator, right: AST, lineno, col):
+    def __init__(self, left: Expression, operator: Operator,
+                 right: Expression, lineno, col):
         super().__init__(lineno, col)
         self.left = left
         self.operator = operator
@@ -355,8 +360,8 @@ class Attribute(Expression):  # attr of an expr
         self.attr = attr
 
 class Subscript(Expression):  # value[v1, v2]
-    def __init__(self, object_: Expression, subscripts: _List[Expression],
-                 lineno, col):
+    def __init__(self, object_: Expression,
+                 subscripts: _List[Expression], lineno, col):
         super().__init__(lineno, col)
         self.object = object_
         self.subscripts = subscripts
@@ -385,9 +390,8 @@ class BoolOp(Expression):  # and, or
         self.operands = operands
 
 class RawScore(Expression):  # directly get the score on a scoreboard
-    def __init__(
-        self, objective: Expression, selector: Expression, lineno, col
-    ):
+    def __init__(self, objective: Expression,
+                 selector: Expression, lineno, col):
         super().__init__(lineno, col)
         self.objective = objective
         self.selector = selector
@@ -397,7 +401,7 @@ class ListDef(Expression):  # a literal compile time list
         super().__init__(lineno, col)
         self.items = items
 
-class MapDef(Expression):  # a map
+class MapDef(Expression):  # a literal compile time map
     def __init__(self, keys: _List[Expression],
                  values: _List[Expression], lineno, col):
         super().__init__(lineno, col)
