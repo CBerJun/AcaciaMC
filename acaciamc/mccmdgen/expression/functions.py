@@ -76,10 +76,9 @@ class AcaciaFunction(AcaciaCallable):
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
         # Create a `VarValue` for every args according to their types
         # and store them as dict at `self.arg_vars`.
-        # Meanwhile, check whether arg types are supported.
-        self.arg_vars: Dict[str, VarValue] = {}
-        for arg in args:
-            self.arg_vars[arg] = arg_types[arg].new_var()
+        self.arg_vars: Dict[str, VarValue] = {
+            arg: arg_type.new_var() for arg, arg_type in arg_types.items()
+        }
         # Allocate a var for result value
         self.result_var = returns.new_var()
         # `file`: the target file of function. When it is None,
@@ -100,7 +99,10 @@ class AcaciaFunction(AcaciaCallable):
         # Call function
         if self.file is not None:
             res.append(cmds.InvokeFunction(self.file))
-        return self.result_var, res
+        # Make a copy of `result_var`
+        result = self.result_type.new_var()
+        res.extend(self.result_var.export(result))
+        return result, res
 
 class InlineFunction(AcaciaCallable):
     def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
