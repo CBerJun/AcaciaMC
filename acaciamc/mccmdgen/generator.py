@@ -743,6 +743,13 @@ class Generator(ASTVisitor):
 
     def visit_StructDef(self, node: StructDef):
         base_structs = list(map(self.visit, node.bases))
+        for i, base in enumerate(base_structs):
+            if not isinstance(base, StructTemplate):
+                err = Error(
+                    ErrorType.INVALID_STEMPLATE, got=str(base.data_type)
+                )
+                err.location.linecol = node.bases[i].lineno, node.bases[i].col
+                self.error(err)
         fields: Dict[str, "DataType"] = {}
         for decl in node.body:
             res = self.visit(decl)
