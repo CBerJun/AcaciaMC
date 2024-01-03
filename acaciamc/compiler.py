@@ -56,7 +56,7 @@ class OutputOptimized(OutputManager, Optimizer):
         return slot.objective != Config.scoreboard
 
     def entry_files(self):
-        internal = self.mcfunction_path(Config.internal_folder)
+        internal = self.mcfunction_path(Config.internal_folder) + "/"
         for file in self.files:
             path = file.get_path()
             if (not path.startswith(internal)) or path.endswith(TICK_FILE):
@@ -335,11 +335,15 @@ class Compiler:
 
     def is_reserved_path(self, path: str) -> bool:
         """Return if a mcfunction path is reserved (not for user)."""
-        return (
-            path == Config.main_file
-            or (path == Config.init_file and Config.split_init)
-            or path.startswith(Config.internal_folder)
-        )
+        checks = [Config.main_file, Config.internal_folder]
+        if Config.split_init:
+            checks.append(Config.init_file)
+        path = path.lower()
+        for check in checks:
+            check = check.lower()
+            if path == check or path.startswith(check + "/"):
+                return True
+        return False
 
     @contextmanager
     def _load_generator(self, path: str):
