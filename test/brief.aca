@@ -103,7 +103,7 @@ my_list[0] = 10
 n = my_list[0]
 # Common bisection algorithm implemented with this feature:
 y_length := 23
-bisection_arr -> list.geometric(1, ratio=2, times=5)
+bisection_arr -> list.geometric(1, ratio=2, length=5)
 bisection_arr.reverse()
 for i in bisection_arr:
     if y_length >= i:

@@ -11,7 +11,7 @@ expressions that can be calculated in compile time.
 __all__ = ["ListType", "ListDataType", "AcaciaList"]
 
 from typing import List, Union
-from itertools import repeat, chain
+from itertools import chain
 
 from .base import *
 from .types import Type
@@ -60,16 +60,16 @@ class ListType(Type):
         @axe.arg("object", axe.AnyValue(), rename="obj")
         @axe.arg("times", axe.LiteralInt())
         def _repeat(compiler, obj: AcaciaExpr, times: int):
-            return AcaciaList(list(repeat(obj, times)), compiler)
+            return AcaciaList([obj] * times, compiler)
         @method_of(self, "geometric")
         @axe.chop
         @axe.arg("start", axe.LiteralInt())
         @axe.arg("ratio", axe.LiteralInt())
-        @axe.arg("times", axe.LiteralInt())
-        def _geometric(compiler, start: int, ratio: int, times: int):
+        @axe.arg("length", axe.LiteralInt())
+        def _geometric(compiler, start: int, ratio: int, length: int):
             cur = start
             res = []
-            for _ in range(times):
+            for _ in range(length):
                 res.append(IntLiteral(cur, compiler))
                 cur *= ratio
             return AcaciaList(res, compiler)
@@ -81,6 +81,7 @@ class AcaciaList(SupportsGetItem, SupportsSetItem):
     def __init__(self, items: List[AcaciaExpr], compiler):
         super().__init__(ListDataType(), compiler)
         self.items = items
+
         @method_of(self, "chain")
         @axe.chop
         @axe.star_arg("value", axe.Iterator())
