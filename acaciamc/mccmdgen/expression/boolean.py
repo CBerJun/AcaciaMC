@@ -302,7 +302,8 @@ class ScbEqualCompare(CompareBase):
 
     def not_(self):
         return ScbEqualCompare(
-            self.left, self.right, self.compiler, not self.invert
+            self.left, self.right, self.compiler, not self.invert,
+            self.dependencies
         )
 
 def _ranges2subcmds(ranges: List[Tuple[cmds.ScbSlot, int, int]]) \
