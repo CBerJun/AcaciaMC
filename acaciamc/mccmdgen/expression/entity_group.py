@@ -16,6 +16,7 @@ from .boolean import WildBool
 from .integer import IntOpGroup, IntOp
 from .functions import BinaryFunction, ConstructorFunction
 from .generic import BinaryGeneric
+from .types import TypeDataType
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -54,7 +55,7 @@ class EGroupGeneric(BinaryGeneric):
 
 class EGroupType(ConstructorFunction):
     def __init__(self, template: "EntityTemplate", compiler):
-        super().__init__(EGroupDataType(template), compiler)
+        super().__init__(TypeDataType(), compiler)
         self.template = template
 
     def initialize(
