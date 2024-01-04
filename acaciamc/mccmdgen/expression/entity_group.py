@@ -189,10 +189,11 @@ class EntityGroup(VarValue):
         def _to_single(compiler: "Compiler"):
             return EntityReference(self.get_selector(),
                                    self.template, compiler)
-        @method_of(self, "includes")
+        @method_of(self, "has")
         @axe.chop
         @axe.arg("ent", MEMBER_TYPE)
-        def _includes(compiler: "Compiler", ent: "_EntityBase"):
+        @axe.slash
+        def _has(compiler: "Compiler", ent: "_EntityBase"):
             selector = ent.get_selector()
             selector.tag(self.tag)
             subcmds = [cmds.ExecuteCond("entity", selector.to_str())]
