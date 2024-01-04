@@ -177,12 +177,8 @@ METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 
 class _BoundMethod(AcaciaCallable):
     """
-    A method bound to an entity, but when called it does not add
-    /execute as (bound entity) run ...
-    This exists to optimize in virtual method dispatchers. 
-    Virtual method dispatchers are guaranteed to be executed "as" the
-    entity which is bound to the dispatcher, so there is no need to say
-    "as" again in the dispatcher.
+    A method bound to an entity, but when called it does not set self
+    var. Self var is set by `BoundMethod` and `BoundVirtualMethod`.
     """
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T, compiler):
@@ -208,29 +204,29 @@ class _BoundMethod(AcaciaCallable):
 
 class BoundMethod(AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
-                 definition: METHODDEF_T, compiler):
+                 definition: METHODDEF_T,
+                 get_self_var: Optional[Callable[[], "_EntityBase"]],
+                 # Getter of self var is needed to prevent circular
+                 # dependency: creating an entity requires binding
+                 # methods, binding a method requires self var which is
+                 # just an entity, and creating an entity ...
+                 compiler):
         super().__init__(FunctionDataType(), compiler)
         self.content = _BoundMethod(object_, method_name, definition, compiler)
         self.func_repr = self.content.func_repr
         self.source = self.content.source
+        self.self_var_getter = get_self_var
+        assert (get_self_var is None) == self.content.is_inline
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         result, commands = self.content.call(args, keywords)
-        if self.content.is_inline:
-            # Inline function calls does not need execute `as` context
-            commands2 = commands
-        else:
-            commands2 = [
-                cmds.execute([
-                    cmds.ExecuteEnv("as", self.content.object.to_str())
-                ], runs=cmd)
-                for cmd in commands
-            ]
-        return result, commands2
+        if not self.content.is_inline:
+            commands[:0] = self.content.object.export(self.self_var_getter())
+        return result, commands
 
 class BoundVirtualMethod(AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
-                 result_var: VarValue, compiler):
+                 result_var: VarValue, self_var: "_EntityBase", compiler):
         super().__init__(FunctionDataType(), compiler)
         self.name = method_name
         self.object = object_
@@ -238,6 +234,7 @@ class BoundVirtualMethod(AcaciaCallable):
             Dict[METHODDEF_T, Tuple[_BoundMethod, List["EntityTemplate"]]] = {}
         self.files: \
             List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
+        self.self_var = self_var
         self.result_var = result_var
         self.func_repr = self.name
         self.compiler.before_finish(self._generate)
@@ -256,10 +253,10 @@ class BoundVirtualMethod(AcaciaCallable):
         file = cmds.MCFunctionFile()
         self.files.append((args, keywords, file))
         self.compiler.add_file(file)
-        return self.result_var, [cmds.Execute(
-            [cmds.ExecuteEnv("as", self.object.to_str())],
-            runs=cmds.InvokeFunction(file)
-        )]
+        return self.result_var, [
+            *self.object.export(self.self_var), 
+            cmds.InvokeFunction(file)
+        ]
 
     def _generate(self):
         def _call_bm(args: "ARGS_T", keywords: "KEYWORDS_T",
@@ -290,10 +287,9 @@ class BoundVirtualMethod(AcaciaCallable):
                     "# implementation for %s"
                     % (", ".join(template.name for template in templates))
                 )
-                sel = "@s[%s]" % ",".join(
-                    "tag=!%s" % template.runtime_tag
-                    for template in templates
-                )
+                sel = self.self_var.get_selector()
+                sel.tag_n(*[template.runtime_tag for template in templates])
+                sel_s = sel.to_str()
                 commands = _call_bm(args, keywords, bound_method)
                 if len(commands) > 10:
                     # Long commands: dump commands to a new file
@@ -303,14 +299,14 @@ class BoundVirtualMethod(AcaciaCallable):
                     f.extend(commands)
                     file.write(
                         cmds.Execute(
-                            [cmds.ExecuteCond("entity", sel, invert=True)],
+                            [cmds.ExecuteCond("entity", sel_s, invert=True)],
                             runs=cmds.InvokeFunction(f)
                         )
                     )
                 else:
                     file.extend(
                         cmds.execute(
-                            [cmds.ExecuteCond("entity", sel, invert=True)],
+                            [cmds.ExecuteCond("entity", sel_s, invert=True)],
                             runs=cmd
                         )
                         for cmd in commands

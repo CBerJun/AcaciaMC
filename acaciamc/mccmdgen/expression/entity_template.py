@@ -2,7 +2,7 @@
 
 __all__ = ["ETemplateDataType", "EntityTemplate"]
 
-from typing import List, Tuple, Dict, Union, Any, TYPE_CHECKING
+from typing import List, Tuple, Dict, Union, Any, Optional, TYPE_CHECKING
 import itertools
 
 from acaciamc.ast import MethodQualifier
@@ -37,6 +37,14 @@ class _MethodDispatcher:
         self.bound: List[BoundVirtualMethod] = []
         self.temp_n_impl: List[Tuple["EntityTemplate", "METHODDEF_T"]] = []
         self.result_var: Union[VarValue, None] = None
+        self.self_tag = compiler.allocate_entity_tag()
+        self.self_var = TaggedEntity(
+            self.self_tag,
+            # When calling a virtual method the object's template is
+            # unknown at compile time, so we just use the base template.
+            self.compiler.base_template,
+            self.compiler
+        )
 
     def register(self, template: "EntityTemplate",
                  implementation: "METHODDEF_T"):
@@ -65,8 +73,10 @@ class _MethodDispatcher:
             raise ValueError("Base not found")
 
     def bind_to(self, entity: "_EntityBase"):
-        res = BoundVirtualMethod(entity, self.method_name,
-                                    self.result_var, self.compiler)
+        res = BoundVirtualMethod(
+            entity, self.method_name, self.result_var,
+            self.self_var, self.compiler
+        )
         self.bound.append(res)
         for template, implementation in self.temp_n_impl:
             res.add_implementation(template, implementation)
@@ -79,8 +89,44 @@ class _MethodDispatcher:
             if template in mro:
                 candidates[mro.index(template)] = implementation
         implementation = candidates[min(candidates)]
-        return BoundMethod(entity, self.method_name,
-                           implementation, self.compiler)
+        if isinstance(implementation, InlineFunction):
+            self_var_getter = None
+        else:
+            def self_var_getter():
+                return TaggedEntity(
+                    self.self_tag, entity.template,
+                    self.compiler, entity.cast_template
+                )
+        return BoundMethod(
+            entity, self.method_name, implementation,
+            self_var_getter, self.compiler
+        )
+
+class _SimpleMethod:
+    """Non-virtual and non-override methods."""
+    def __init__(self, name: str, implementation: "METHODDEF_T",
+                 template: "EntityTemplate", compiler: "Compiler"):
+        self.name = name
+        self.compiler = compiler
+        self.implementation = implementation
+        self.template = template
+        self.is_inline = isinstance(implementation, InlineFunction)
+        self._self_var = None
+
+    def get_self_var(self) -> Optional[TaggedEntity]:
+        # We don't compute this inside __init__ because at that time
+        # the template is not fully initialized yet.
+        assert not self.is_inline
+        if self._self_var is None:
+            self._self_var = TaggedEntity.new_tag(self.template, self.compiler)
+        return self._self_var
+
+    def bind_to(self, entity: "_EntityBase"):
+        return BoundMethod(
+            entity, self.name, self.implementation,
+            None if self.is_inline else self.get_self_var,
+            self.compiler
+        )
 
 def _check_override(implementation: "METHODDEF_T", method: str):
     """
@@ -119,7 +165,7 @@ class EntityTemplate(ConstructorFunction):
         self.field_metas: Dict[str, dict] = {}
         # method_dispatchers: for virtual methods AND override methods
         self.method_dispatchers: Dict[str, _MethodDispatcher] = {}
-        self.simple_methods: Dict[str, "METHODDEF_T"] = {}
+        self.simple_methods: Dict[str, _SimpleMethod] = {}
         self.metas: Dict[str, Any] = {}
         self.mro_: List[EntityTemplate] = [self]  # Method Resolution Order
         # Handle meta
@@ -214,7 +260,9 @@ class EntityTemplate(ConstructorFunction):
             else:
                 if qualifier is MethodQualifier.none:
                     # This method is a simple method
-                    self.simple_methods[method] = implementation
+                    self.simple_methods[method] = _SimpleMethod(
+                        method, implementation, self, self.compiler
+                    )
                 elif qualifier is MethodQualifier.virtual:
                     # This method is a virtual method
                     _check_override(implementation, method)
@@ -233,11 +281,11 @@ class EntityTemplate(ConstructorFunction):
                     # Inherited override methods
                     self.method_dispatchers[method] = disp
                     disp.register_inherit(self, parent)
-            for method, implementation in parent.simple_methods.items():
+            for method, mgr in parent.simple_methods.items():
                 if (method not in self.method_dispatchers
                         and method not in self.simple_methods):
                     # Inherited simple methods
-                    self.simple_methods[method] = implementation
+                    self.simple_methods[method] = mgr
 
     def datatype_hook(self):
         return EntityDataType(self)
@@ -250,20 +298,17 @@ class EntityTemplate(ConstructorFunction):
         # Convert stored virtual methods into bound method of `entity`.
         if entity.cast_template is None:
             for name, disp in self.method_dispatchers.items():
-                bound_method_disp = disp.bind_to(entity)
-                entity.attribute_table.set(name, bound_method_disp)
+                entity.attribute_table.set(name, disp.bind_to(entity))
         else:
             for name, disp in entity.cast_template.method_dispatchers.items():
-                bound_method = disp.bind_to_cast(entity)
-                entity.attribute_table.set(name, bound_method)
+                entity.attribute_table.set(name, disp.bind_to_cast(entity))
         # Convert stored simple methods into bound method of `entity`.
         if entity.cast_template is None:
             template = self
         else:
             template = entity.cast_template
-        for name, definition in template.simple_methods.items():
-            bound_method = BoundMethod(entity, name, definition, self.compiler)
-            entity.attribute_table.set(name, bound_method)
+        for name, mgr in template.simple_methods.items():
+            entity.attribute_table.set(name, mgr.bind_to(entity))
         # Convert stored fields to attributes of `entity`.
         for name, meta in self.field_metas.items():
             type_ = self.field_types[name]

@@ -643,7 +643,7 @@ class Generator(ASTVisitor):
                 if isinstance(res, AcaciaFunction):
                     methods_2ndpass.append((res, decl.content))
             elif isinstance(decl, EntityMeta):
-                # `res` is (mata name, mata value)
+                # `res` is (meta name, meta value)
                 key, value = res
                 if key in metas:
                     self.error_c(ErrorType.REPEAT_ENTITY_META, meta=key)
@@ -658,9 +658,14 @@ class Generator(ASTVisitor):
         # 2nd Pass: parse the non-inline method bodies.
         for method, ast in methods_2ndpass:
             with self._in_noninline_func(method):
-                self.ctx.self_value = EntityReference(
-                    MCSelector("s"), template, self.compiler
-                )
+                if ast.name in template.method_dispatchers:
+                    t = template.method_dispatchers[ast.name].self_tag
+                    self_var = TaggedEntity(t, template, self.compiler)
+                else:
+                    assert ast.name in template.simple_methods
+                    self_var = template.simple_methods[ast.name].get_self_var()
+                    assert self_var is not None
+                self.ctx.self_value = self_var
                 # Register arguments to scope
                 for arg, var in method.arg_vars.items():
                     self.ctx.scope.set(arg, var)
@@ -719,11 +724,12 @@ class Generator(ASTVisitor):
                  self.new_ctx():
                 self.ctx.new_scope()
                 self.write_debug("Entity group iteration body")
-                self.ctx.scope.set(
-                    node.name, EntityReference(
-                        MCSelector("s"), iterable.template, self.compiler
-                    )
+                this = TaggedEntity.new_tag(iterable.template, self.compiler)
+                executer = EntityReference(
+                    MCSelector("s"), iterable.template, self.compiler
                 )
+                self.current_file.extend(executer.export(this))
+                self.ctx.scope.set(node.name, this)
                 for stmt in node.body:
                     self.visit(stmt)
             self.write_debug("Entity group iteration at %s"
