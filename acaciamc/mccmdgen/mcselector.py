@@ -94,7 +94,7 @@ class MCSelector:
         self.args["tag"].extend(map(mc_str, tag))
 
     def tag_n(self, *tag: str):
-        if not self.has_arg("tag"):
+        if not self.has_arg("tag!"):
             self.args["tag!"] = []
         self.args["tag!"].extend(map(mc_str, tag))
 
