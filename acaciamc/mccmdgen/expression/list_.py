@@ -11,7 +11,6 @@ expressions that can be calculated in compile time.
 __all__ = ["ListType", "ListDataType", "AcaciaList"]
 
 from typing import List, Union
-from itertools import chain
 
 from .base import *
 from .types import Type
@@ -82,11 +81,12 @@ class AcaciaList(SupportsGetItem, SupportsSetItem):
         super().__init__(ListDataType(), compiler)
         self.items = items
 
-        @method_of(self, "chain")
+        @method_of(self, "extend")
         @axe.chop
-        @axe.star_arg("value", axe.Iterator())
-        def _chain(compiler, value: List[ITERLIST_T]):
-            self.items.extend(chain.from_iterable(value))
+        @axe.arg("value", axe.Iterator())
+        @axe.slash
+        def _extend(compiler, value: ITERLIST_T):
+            self.items.extend(value)
         @method_of(self, "append")
         @axe.chop
         @axe.arg("value", axe.AnyValue())
@@ -143,6 +143,10 @@ class AcaciaList(SupportsGetItem, SupportsSetItem):
         @axe.arg("times", axe.RangedLiteralInt(0, None))
         def _cycle(compiler, times: int):
             return AcaciaList(self.items * times, compiler)
+        @method_of(self, "size")
+        @axe.chop
+        def _size(compiler):
+            return IntLiteral(len(self.items), compiler)
 
     def _validate_index(self, index: int):
         length = len(self.items)

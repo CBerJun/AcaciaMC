@@ -11,6 +11,8 @@ from .base import *
 from .types import Type
 from .none import NoneLiteral
 from .list_ import AcaciaList
+from .boolean import BoolLiteral
+from .integer import IntLiteral
 from acaciamc.tools import axe, method_of
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
@@ -102,6 +104,15 @@ class Map(SupportsGetItem, SupportsSetItem):
                 self.set(key, default)
                 res = default
             return res
+        @method_of(self, "has")
+        @axe.chop
+        @axe.arg("key", axe.AnyValue())
+        def _has(compiler, key: AcaciaExpr):
+            return BoolLiteral(self._get_key(key) in self.dict, compiler)
+        @method_of(self, "size")
+        @axe.chop
+        def _size(compiler):
+            return IntLiteral(len(self.dict), compiler)
 
     def iterate(self) -> ITERLIST_T:
         return list(self.py_key2key.values())
