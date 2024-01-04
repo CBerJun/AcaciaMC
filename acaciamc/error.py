@@ -144,6 +144,7 @@ class ErrorType(enum.Enum):
         "or inside non-inline function"
     NEVER_RESULT = "The function should have set its result but didn't"
     RESERVED_INTERFACE_PATH = 'Reserved interface path: {path}'
+    DUPLICATE_INTERFACE = 'Multiple definitions of interface: {path}'
     # Compiler
     IO = 'I/O Error: {message}'
     MODULE_NOT_FOUND = 'Module not found: "{module}"'

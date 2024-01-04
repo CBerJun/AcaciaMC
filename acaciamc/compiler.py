@@ -4,7 +4,7 @@ It assembles files and classes together and write output.
 
 __all__ = ['Compiler']
 
-from typing import Tuple, Union, Optional, Callable
+from typing import Tuple, Union, Optional, Callable, Dict
 import os
 from contextlib import contextmanager
 
@@ -101,6 +101,7 @@ class Compiler:
         )
         self.current_generator = None  # the Generator that is running
         # vars to record the resources that are applied
+        self._interface_paths: Dict[str, SourceLocation] = {}
         self._score_max = 0  # max id of score allocated
         self._scoreboard_max = 0  # max id of scoreboard allocated
         self._entity_max = 0  # max id of entity name allocated
@@ -332,6 +333,18 @@ class Compiler:
         An API for binary module developing.
         """
         return self.parse_module(meta)[0]
+
+    def lookup_interface(self, path: str) -> Optional[SourceLocation]:
+        """Return the location of the interface if it exists."""
+        path = path.lower()
+        if path in self._interface_paths:
+            return self._interface_paths[path]
+        return None
+
+    def add_interface(self, path: str, location: SourceLocation):
+        """Register an interface."""
+        path = path.lower()
+        self._interface_paths[path] = location
 
     def is_reserved_path(self, path: str) -> bool:
         """Return if a mcfunction path is reserved (not for user)."""

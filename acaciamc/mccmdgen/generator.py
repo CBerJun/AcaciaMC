@@ -450,6 +450,12 @@ class Generator(ASTVisitor):
         path = '/'.join(node.path)
         if self.compiler.is_reserved_path(path):
             self.error_c(ErrorType.RESERVED_INTERFACE_PATH, path=path)
+        location = self.compiler.lookup_interface(path)
+        if location is not None:
+            err = Error(ErrorType.DUPLICATE_INTERFACE, path=path)
+            err.add_frame(ErrFrame(location, "First occurrence", note=None))
+            self.error(err)
+        self.compiler.add_interface(path, self.node_location(node))
         with self.new_ctx():
             self.ctx.new_scope()
             # body
