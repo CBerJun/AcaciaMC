@@ -52,8 +52,6 @@ class ErrorType(enum.Enum):
         'must be specified: "{arg}"'
     DUPLICATE_ARG_DEF = 'Duplicate argument "{arg}" in function definition'
     POSITIONED_ARG_AFTER_KEYWORD = 'Positional argument after keyword'
-    # INVALID_ASSIGN_TARGET is used by both Generator and Parser
-    INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_VARDEF_STMT = 'Invalid variable definition target'
     INVALID_BIND_TARGET = 'Invalid bind target'
     # Command Generator
@@ -102,6 +100,7 @@ class ErrorType(enum.Enum):
     NOT_ITERABLE = '"{type_}" is not iterable'
     NO_GETITEM = '"{type_}" is not subscriptable'
     NO_SETITEM = '"{type_}" does not support item write access'
+    INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_FEXPR = 'Invalid formatted expression'
     INVALID_RAWSCORE_SELECTOR = 'Invalid raw score selector of "{got}" type'
     INVALID_RAWSCORE_OBJECTIVE = 'Invalid raw score objective of "{got}" type'

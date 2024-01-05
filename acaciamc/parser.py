@@ -717,28 +717,20 @@ class Parser:
             TokenType.mod_equal: Operator.mod
         }
         BINDABLE = (Attribute, Identifier, Result, Subscript)
-        ASSIGNABLE = BINDABLE + (RawScore,)
         VARDEFABLE = (Identifier,)
 
-        # assignable := expr
-        # that is Attribute, Identifier, RawScore, Subscript or Result
         if self.current_token.type is TokenType.equal:
-            # assign_stmt := assignable EQUAL expr
+            # assign_stmt := expr EQUAL expr
             self.eat()  # eat equal
-            if not isinstance(expr, ASSIGNABLE):
-                self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
             node = Assign(expr, self.expr(), **pos)
         elif self.current_token.type in AUG_ASSIGN:
-            # aug_assign_stmt := assignable (PLUS_EQUAL |
+            # aug_assign_stmt := expr (PLUS_EQUAL |
             #   MINUS_EQUAL | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
             operator = AUG_ASSIGN[self.current_token.type]
             self.eat()  # eat operator
-            if not isinstance(expr, ASSIGNABLE):
-                self.error(ErrorType.INVALID_ASSIGN_TARGET, **pos)
             node = AugmentedAssign(expr, operator, self.expr(), **pos)
         elif self.current_token.type is TokenType.arrow:
             # bind_stmt := bindable ARROW expr
-            #   where bindable is assignable that is not RawScore
             self.eat()  # eat arrow
             if not isinstance(expr, BINDABLE):
                 self.error(ErrorType.INVALID_BIND_TARGET, **pos)
