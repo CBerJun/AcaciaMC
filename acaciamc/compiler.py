@@ -49,12 +49,6 @@ class OutputManager(cmds.FunctionsManager):
         )
 
 class OutputOptimized(OutputManager, Optimizer):
-    def is_volatile(self, slot: cmds.ScbSlot) -> bool:
-        if super().is_volatile(slot):
-            return True
-        # Scores on user custom scoreboards are volatile
-        return slot.objective != Config.scoreboard
-
     def entry_files(self):
         internal = self.mcfunction_path(Config.internal_folder) + "/"
         for file in self.files:

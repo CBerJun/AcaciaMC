@@ -675,7 +675,7 @@ class Parser:
         )
         embedded_statement := (
           if_stmt | while_stmt | for_stmt | interface_stmt | def_stmt |
-          entity_stmt | for_entity_stmt | struct_stmt
+          entity_stmt | struct_stmt
         )
         statement := ((simple_statement | expr_statement) NEW_LINE) |
           embedded_statement

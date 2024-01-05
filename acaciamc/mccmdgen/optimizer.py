@@ -15,16 +15,6 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
         self.opt_execute_as_ats()
         self.opt_function_inliner()
 
-    def is_volatile(self, slot: cmds.ScbSlot) -> bool:
-        """Can be implemented by subclasses to mark scores as volatile.
-        By default, scores whose target is not a fake player are
-        considered volatile.
-        Scores that do not have unique representation (like selector)
-        or might be referenced outside this command project should be
-        set to volatile.
-        """
-        return slot.is_selector()
-
     @abstractmethod
     def entry_files(self) -> Iterable[cmds.MCFunctionFile]:
         """Must be implemented by subclasses to mark mcfunction files

@@ -482,17 +482,6 @@ class IntOpGroup(AcaciaExpr):
         return res
 
     def export(self, var: IntVar):
-        # res = []
-        # # subvars: Allocate a tmp int for every `IntOpGroup` in
-        # # `self.libs` and export them to this var.
-        # subvars: List[IntVar] = []
-        # for subexpr in self.libs:
-        #     subvar = IntVar.new(self.compiler, tmp=True)
-        #     subvars.append(subvar)
-        #     res.extend(subexpr.export(subvar))
-        # subslots = tuple([subvar.slot for subvar in subvars])
-        # res.extend(func(var.slot, subslots) for func in self.main)
-        # return res
         need_tmp = False
         for op in self.ops:
             need_tmp = (

@@ -2,7 +2,6 @@
 
 from abc import ABCMeta, abstractmethod
 from enum import Enum
-from copy import deepcopy
 from typing import List, NamedTuple, Optional, Union, Iterable, Callable, Dict
 import json
 
@@ -44,10 +43,6 @@ class ScbSlot(NamedTuple):
             mc_wc_selector(self.target),
             mc_str(self.objective)
         )
-
-    def is_selector(self) -> bool:
-        """Return whether the slot target is selector or wildcard."""
-        return self.target.startswith("@") or self.target == "*"
 
 class Command(metaclass=ABCMeta):
 
