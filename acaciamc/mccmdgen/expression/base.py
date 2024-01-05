@@ -189,16 +189,17 @@ class ArgumentHandler:
         return res
 
 class VarValue(AcaciaExpr):
-    """`VarValue`s are special `AcaciaExpr`s that can be assigned to.
-    Examples are builtin int, bool and nonetype.
-    Users can create new variables of these types.
-    `VarValue`s are also used to hold temporary variables.
+    """
+    `VarValue`s are special `AcaciaExpr`s that can be assigned to. It
+    represents a "variable" of a storable type and is sometimes used as
+    a temporary (with `is_temporary` set to `True`, in which case it
+    cannot be assigned).
     e.g. 1 + 2 -> IntLiteral(3) -> Unassignable
     e.g. a -> IntVar("acacia", "acacia3") -> Assignable
     e.g. |"x": "y"| -> IntVar("y", "x") -> Assignable
     e.g. bool -> Type -> Unassignable
     """
-    pass
+    is_temporary = False  # used as a temporary and is read-only
 
 class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
     """Acacia expressions that are callable."""

@@ -114,7 +114,7 @@ class Generator(ASTVisitor):
 
     def check_assignable(self, value: AcaciaExpr):
         """Raise error when an `AcaciaExpr` can't be assigned."""
-        if not isinstance(value, VarValue):
+        if not isinstance(value, VarValue) or value.is_temporary:
             self.error_c(ErrorType.INVALID_ASSIGN_TARGET)
 
     def register_symbol(

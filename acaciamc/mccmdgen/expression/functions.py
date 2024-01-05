@@ -102,6 +102,7 @@ class AcaciaFunction(AcaciaCallable):
         # Make a copy of `result_var`
         result = self.result_type.new_var()
         res.extend(self.result_var.export(result))
+        result.is_temporary = True
         return result, res
 
 class InlineFunction(AcaciaCallable):
