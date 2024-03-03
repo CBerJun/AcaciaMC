@@ -64,6 +64,13 @@ class MethodQualifier(_enum.Enum):
     virtual = "virtual"
     override = "override"
 
+class FuncPortType(_enum.Enum):
+    """Function port types."""
+    # These values are shown in error messages
+    by_value = "(none)"
+    by_reference = "&"
+    const = "const"
+
 class ModuleMeta:
     """Specifies a module."""
     def __init__(self, last_name: str, leading_dots=0, parents=[]):
@@ -76,6 +83,9 @@ class ModuleMeta:
                 + ".".join(self.parents)
                 + ("." if self.parents else "")
                 + self.last_name)
+
+    def __repr__(self) -> str:
+        return "<ModuleMeta %r>" % str(self)
 
 #################
 ### AST NODES ###
@@ -110,13 +120,14 @@ class ArgumentTable(AST):  # arguments used in function definition
 
     def __init__(self, lineno, col):
         super().__init__(lineno, col)
-        self.args: _List[str] = []  # names of arguments
-        self.default = {}  # default values of arguments
-        self.types = {}  # types of arguments
+        self.args: _List[str] = []  # argument names
+        self.default: _Dict[str, _Optional[Expression]] = {}
+        self.types: _Dict[str, FunctionPort] = {}
 
-    def add_arg(self, name: str, type: "TypeSpec", default: Expression):
+    def add_arg(self, name: str, type_: "FunctionPort",
+                default: _Optional[Expression]):
         self.args.append(name)
-        self.types[name] = type
+        self.types[name] = type_
         self.default[name] = default
 
 class CallTable(AST):  # call table
@@ -134,6 +145,15 @@ class TypeSpec(AST):  # specify type of value `int`
     def __init__(self, content: Expression, lineno, col):
         super().__init__(lineno, col)
         self.content = content
+
+class FunctionPort(AST):
+    show_debug = False
+
+    def __init__(self, type_: _Optional[TypeSpec],
+                 port: FuncPortType, lineno, col):
+        super().__init__(lineno, col)
+        self.type = type_
+        self.port = port
 
 class FormattedStr(AST):  # a literal string with ${formatted exprs}
     show_debug = False
@@ -170,24 +190,41 @@ class While(Statement):  # while statement
 class FuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: _List[Statement], returns: _Optional[TypeSpec], lineno, col
+        body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
     ):  # function definition
         super().__init__(lineno, col)
         self.name = name
         self.arg_table = arg_table
-        self.returns = returns
+        if returns is None:
+            self.returns = None
+        else:
+            assert returns.port is FuncPortType.by_value
+            assert returns.type is not None
+            self.returns = returns.type
         self.body = body
 
 class InlineFuncDef(Statement):
     def __init__(
         self, name: str, arg_table: ArgumentTable,
-        body: _List[Statement], returns: _Optional[TypeSpec], lineno, col
+        body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
     ):  # inline function definition
         super().__init__(lineno, col)
         self.name = name
         self.arg_table = arg_table
         self.returns = returns
         self.body = body
+
+class ConstFuncDef(Statement):
+    def __init__(
+        self, name: str, arg_table: ArgumentTable,
+        body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
+    ):  # compile time function definition
+        super().__init__(lineno, col)
+        self.name = name
+        self.arg_table = arg_table
+        self.returns = returns
+        self.body = body
+        assert returns is None or returns.port is not FuncPortType.const
 
 class InterfaceDef(Statement):  # define an interface
     def __init__(self, path: _List[str], body: _List[Statement], lineno, col):
@@ -226,7 +263,7 @@ class EntityTemplateDef(Statement):  # entity statement
         self.body = body
 
 class VarDef(Statement):  # x: y [= z] variable declaration
-    def __init__(self, target: Expression, type_: TypeSpec,
+    def __init__(self, target: str, type_: TypeSpec,
                  value: _Optional[Expression], lineno, col):
         super().__init__(lineno, col)
         self.target = target
@@ -234,7 +271,7 @@ class VarDef(Statement):  # x: y [= z] variable declaration
         self.value = value
 
 class AutoVarDef(Statement):  # := short variable declaration
-    def __init__(self, target: Expression, value: Expression, lineno, col):
+    def __init__(self, target: str, value: Expression, lineno, col):
         super().__init__(lineno, col)
         self.target = target
         self.value = value
@@ -243,6 +280,22 @@ class Assign(Statement):  # normal assign
     def __init__(self, target: Expression, value: Expression, lineno, col):
         super().__init__(lineno, col)
         self.target = target
+        self.value = value
+
+class ConstDef(Statement):  # constant definition
+    def __init__(self, names: _List[str], types: _List[_Optional[TypeSpec]],
+                 values: _List[Expression], lineno, col):
+        super().__init__(lineno, col)
+        self.names = names
+        self.types = types
+        self.values = values
+
+class ReferenceDef(Statement):  # reference definition
+    def __init__(self, name: str, type_: _Optional[TypeSpec],
+                 value: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.name = name
+        self.type = type_
         self.value = value
 
 class Command(Statement):  # raw command
@@ -260,19 +313,11 @@ class AugmentedAssign(Statement):  # augmented assign
         self.operator = operator
         self.value = value
 
-class Binding(Statement):  # binding
-    def __init__(self, target: Expression, value: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.target = target
-        self.value = value
-
 class Import(Statement):  # import a module
     def __init__(self, meta: ModuleMeta, alias: _Optional[str], lineno, col):
         super().__init__(lineno, col)
         self.meta = meta
-        self.name = alias
-        if self.name is None:
-            self.name = self.meta.last_name
+        self.name = self.meta.last_name if alias is None else alias
 
 class FromImport(Statement):  # import specific things from a module
     def __init__(
@@ -281,7 +326,7 @@ class FromImport(Statement):  # import specific things from a module
     ):
         super().__init__(lineno, col)
         self.meta = meta
-        self.id2name = {}  # keys are actual IDs and values are aliases
+        self.id2name: _Dict[str, str] = {}
         for name, alias in zip(names, aliases):
             self.id2name[name] = name if alias is None else alias
 
@@ -323,9 +368,6 @@ class StrLiteral(Expression):  # a string literal
         self.content = content
 
 class Self(Expression):  # "self" keyword
-    pass
-
-class Result(Expression):  # "result" keyword
     pass
 
 class Identifier(Expression):  # an identifier
@@ -407,6 +449,11 @@ class MapDef(Expression):  # a literal compile time map
         super().__init__(lineno, col)
         self.keys = keys
         self.values = values
+
+class Result(Statement):  # result xxx
+    def __init__(self, value: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.value = value
 
 #############
 ### UTILS ###

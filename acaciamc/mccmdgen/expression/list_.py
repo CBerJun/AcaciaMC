@@ -10,12 +10,13 @@ expressions that can be calculated in compile time.
 
 __all__ = ["ListType", "ListDataType", "AcaciaList"]
 
-from typing import List, Union
+from typing import List, Union, Iterable
+from itertools import repeat
 
 from .base import *
 from .types import Type
 from .integer import IntDataType, IntLiteral
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe, cmethod_of
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 
@@ -24,7 +25,7 @@ class ListDataType(DefaultDataType):
 
 class ListType(Type):
     def do_init(self):
-        @method_of(self, "range")
+        @cmethod_of(self, "range")
         class _range(metaclass=axe.OverloadChopped):
             @classmethod
             def _impl(cls, compiler, *args: int):
@@ -48,19 +49,19 @@ class ListType(Type):
             @axe.arg("step", axe.LiteralInt())
             def full(cls, compiler, start: int, stop: int, step: int):
                 return cls._impl(compiler, start, stop, step)
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("x", axe.Iterator())
         @axe.slash
         def _new(compiler, x: ITERLIST_T):
             return AcaciaList(x, compiler)
-        @method_of(self, "repeat")
+        @cmethod_of(self, "repeat")
         @axe.chop
         @axe.arg("object", axe.AnyValue(), rename="obj")
         @axe.arg("times", axe.LiteralInt())
         def _repeat(compiler, obj: AcaciaExpr, times: int):
-            return AcaciaList([obj] * times, compiler)
-        @method_of(self, "geometric")
+            return AcaciaList(repeat(obj, times), compiler)
+        @cmethod_of(self, "geometric")
         @axe.chop
         @axe.arg("start", axe.LiteralInt())
         @axe.arg("ratio", axe.LiteralInt())
@@ -74,48 +75,24 @@ class ListType(Type):
             return AcaciaList(res, compiler)
 
     def datatype_hook(self):
-        return ListDataType()
+        return ListDataType(self.compiler)
 
-class AcaciaList(SupportsGetItem, SupportsSetItem):
-    def __init__(self, items: List[AcaciaExpr], compiler):
-        super().__init__(ListDataType(), compiler)
-        self.items = items
+class AcaciaList(ConstExpr):
+    def __init__(self, items: Iterable[ConstExpr], compiler):
+        super().__init__(ListDataType(compiler), compiler)
+        self.items: List[ConstExpr] = list(items)
 
-        @method_of(self, "extend")
-        @axe.chop
-        @axe.arg("value", axe.Iterator())
-        @axe.slash
-        def _extend(compiler, value: ITERLIST_T):
-            self.items.extend(value)
-        @method_of(self, "append")
-        @axe.chop
-        @axe.arg("value", axe.AnyValue())
-        @axe.slash
-        def _append(compiler, value: AcaciaExpr):
-            self.items.append(value)
-        @method_of(self, "insert")
+        @cmethod_of(self, "__getitem__")
         @axe.chop
         @axe.arg("index", axe.LiteralInt())
-        @axe.arg("value", axe.AnyValue())
-        @axe.slash
-        def _insert(compiler, index: int, value: AcaciaExpr):
+        def _getitem(compiler, index: int):
             self._validate_index(index)
-            self.items.insert(index, value)
-        @method_of(self, "reverse")
-        @axe.chop
-        def _reverse(compiler):
-            self.items.reverse()
-        @method_of(self, "pop")
-        @axe.chop
-        @axe.arg("index", axe.LiteralInt())
-        def _pop(compiler, index: int):
-            self._validate_index(index)
-            self.items.pop(index)
-        @method_of(self, "copy")
+            return self.items[index]
+        @cmethod_of(self, "copy")
         @axe.chop
         def _copy(compiler):
-            return AcaciaList(self.items.copy(), compiler)
-        @method_of(self, "slice")
+            return AcaciaList(self.items, self.compiler)
+        @cmethod_of(self, "slice")
         class _slice(metaclass=axe.OverloadChopped):
             @classmethod
             def _impl(cls, compiler, *args: Union[int, None]):
@@ -138,33 +115,58 @@ class AcaciaList(SupportsGetItem, SupportsSetItem):
             @axe.arg("step", axe.LiteralInt())
             def full(cls, compiler, start, stop, step: int):
                 return cls._impl(compiler, start, stop, step)
-        @method_of(self, "cycle")
+        @cmethod_of(self, "cycle")
         @axe.chop
         @axe.arg("times", axe.RangedLiteralInt(0, None))
         def _cycle(compiler, times: int):
             return AcaciaList(self.items * times, compiler)
-        @method_of(self, "size")
+        @cmethod_of(self, "size")
         @axe.chop
         def _size(compiler):
             return IntLiteral(len(self.items), compiler)
+        @cmethod_of(self, "extend", runtime=False)
+        @axe.chop
+        @axe.arg("value", axe.Iterator())
+        @axe.slash
+        def _extend(compiler, value: ITERLIST_T):
+            self.items.extend(value)
+        @cmethod_of(self, "append", runtime=False)
+        @axe.chop
+        @axe.arg("value", axe.AnyValue())
+        @axe.slash
+        def _append(compiler, value: AcaciaExpr):
+            self.items.append(value)
+        @cmethod_of(self, "insert", runtime=False)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        @axe.arg("value", axe.AnyValue())
+        @axe.slash
+        def _insert(compiler, index: int, value: AcaciaExpr):
+            self._validate_index(index)
+            self.items.insert(index, value)
+        @cmethod_of(self, "reverse", runtime=False)
+        @axe.chop
+        def _reverse(compiler):
+            self.items.reverse()
+        @cmethod_of(self, "pop", runtime=False)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        def _pop(compiler, index: int):
+            self._validate_index(index)
+            self.items.pop(index)
+        @cmethod_of(self, "__setitem__", runtime=False)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        @axe.arg("value", axe.AnyValue())
+        def _setitem(compiler, index: int, value: AcaciaExpr):
+            self._validate_index(index)
+            self.items[index] = value
 
     def _validate_index(self, index: int):
         length = len(self.items)
         if not -length <= index < length:
             raise Error(ErrorType.LIST_INDEX_OUT_OF_BOUNDS,
                         length=length, index=index)
-
-    @axe.chop_getitem
-    @axe.arg("index", axe.LiteralInt())
-    def getitem(self, index: int) -> AcaciaExpr:
-        self._validate_index(index)
-        return self.items[index]
-
-    @axe.chop_setitem(value_type=axe.AnyValue())
-    @axe.arg("index", axe.LiteralInt())
-    def setitem(self, index: int, value: AcaciaExpr):
-        self._validate_index(index)
-        self.items[index] = value
 
     def iterate(self) -> ITERLIST_T:
         return self.items

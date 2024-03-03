@@ -5,14 +5,18 @@
 
 #* Cache test *#
 # `module.aca` has imported `print`, so here it should use cache
-import print
+import print  # Names imported are not exported
+
+def _internal() -> int:
+    # Names starting with an underscore is not exported
+    result 0
 
 def test(x: int) -> bool:
-    result = x >= 0
+    result x >= _internal()
 
-inline def get_inline_func():
+inline def get_counter() -> const Any:
     a: int = 0
-    inline def inline_func():
+    def counter():
         a += 1
         print.tell(print.format("a: %0", a))
-    result -> inline_func
+    result counter

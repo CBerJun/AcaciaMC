@@ -19,7 +19,7 @@ class NoneVar(VarValue):
     def export(self, var: "NoneVar"):
         return []
 
-class NoneLiteral(AcaciaExpr):
+class NoneLiteral(ConstExpr):
     """Represents a literal None. Used by "None" keyword."""
     def __init__(self, compiler):
         super().__init__(NoneDataType(compiler), compiler)

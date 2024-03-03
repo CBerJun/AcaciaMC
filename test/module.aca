@@ -4,7 +4,7 @@
 import math
 x: int = math.randint(1, 10)  # Random integer between 1 ~ 10
 y: int = math.pow(2, x)  # 2 to the power of `x`
-x: int = math.max(x, y, 50)  # Maximum of all the given arguments
+x = math.max(x, y, 50)  # Maximum of all the given arguments
 x = math.pow(2, 5)  # 32
 x = math.pow(x, 4)
 x = math.min(x + 10, y + 20)
@@ -15,11 +15,11 @@ y = math.floordiv(-5, 3)  # -2
 
 #* print: Output and formatting *#
 import print
-fs1 -> print.format("ab%1cd%%%{a}%x%{0}", x, y, a=1)
+const fs1 = print.format("ab%1cd%%%{a}%x%{0}", x, y, a=1)
 # Usage of % escape is similar to this in Python
 print.tell(fs1)
-fs2 -> print.format("an%0", x)
-s -> "some string"
+const fs2 = print.format("an%0", x)
+const s = "some string"
 player := Engroup[Entity]()
 player.select(Enfilter().distance_from(Pos(10, 10, 10), max=2))
 print.tell(print.format("fs1: %0, fs2: %1, s: " + s, fs1, fs2), player)
@@ -34,10 +34,10 @@ print.tell(print.format(
 
 #* schedule: Working through several ticks *#
 import schedule
-x: int = 10
+x = 10
 def foo():
     x += 1
-task -> schedule.Task(foo)
+const task = schedule.Task(foo)
 task.after(20)
 task.on_tickingarea("Area")
 
@@ -56,7 +56,7 @@ from .mod import *
 b := testmod.test(-10)
 b = test_function(-10)
 b = test(-10)
-f -> testmod.get_inline_func()
+const f = testmod.get_counter()
 f()
 f()
 

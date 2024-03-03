@@ -81,9 +81,9 @@ Player only:
 /ability (EDU)
 ability(player: PlayerSelector, ability: str, value: bool-literal)
 /clear
-clear_all(player: PlayerSelector)
-clear(player: PlayerSelector, item_id: str, item_data: int-literal
-      max_count: int-literal | None)
+clear_inventory(player: PlayerSelector)
+clear(player: PlayerSelector, item_id: str, item_data: int-literal = -1,
+      max_count: int-literal = -1)
 /clearspawnpoint
 spawnpoint_clear(player: PlayerSelector)
 /gamemode
@@ -92,17 +92,14 @@ gamemode(player: PlayerSelector, mode: "survival" | "creative"
 /give
 give(player: PlayerSelector, item: Item, amount=1)
 /kick
-kick(player_name: str, reason: str | None)
+kick(player_name: str, reason: str | None = None)
 /recipe
-recipe_give(player: PlayerSelector, recipe: str)
-recipe_give_all(player: PlayerSelector)
-recipe_take(player: PlayerSelector, recipe: str)
-recipe_take_all(player: PlayerSelector)
+recipe(player: PlayerSelector, recipe: str, unlock: bool-literal)
 /spawnpoint
 spawnpoint_set(player: PlayerSelector, pos: Pos)
 /xp
-xp_add(player: PlayerSelector, amount: int-literal)
-xp_add_level(player: PlayerSelector, amount: int-literal)
+xp_add_levels(player: PlayerSelector, amount: int-literal)
+xp_add_points(player: PlayerSelector, amount: int-literal)
 
 Client side:
 /camera (WIP)
@@ -244,6 +241,7 @@ import json
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.tools.versionlib import edu_only
 from acaciamc.constants import Config
 import acaciamc.mccmdgen.cmds as cmds
 
@@ -292,18 +290,18 @@ class ItemType(Type):
             return Item(id_, data, components, compiler)
 
     def datatype_hook(self):
-        return ItemDataType()
+        return ItemDataType(self.compiler)
 
-class Item(AcaciaExpr):
+class Item(ConstExpr):
     def __init__(self, id_: str, data: int, components: dict, compiler):
-        super().__init__(ItemDataType(), compiler)
+        super().__init__(ItemDataType(compiler), compiler)
         self.id = id_
         self.data = data
         self.components = components
 
     def to_str(self, fmt: str) -> str:
-        return fmt.format(id=self.id, data=self.data,
-                          components=json.dumps(self.components))
+        c = "" if not self.components else " " + json.dumps(self.components)
+        return fmt.format(id=self.id, data=self.data, components=c)
 
 class BlockDataType(DefaultDataType):
     name = "Block"
@@ -321,12 +319,12 @@ class BlockType(Type):
             return Block(id_, states, compiler)
 
     def datatype_hook(self):
-        return BlockDataType()
+        return BlockDataType(self.compiler)
 
-class Block(AcaciaExpr):
+class Block(ConstExpr):
     def __init__(self, id_: str,
                  states: Dict[str, Union[str, int, bool]], compiler):
-        super().__init__(BlockDataType(), compiler)
+        super().__init__(BlockDataType(compiler), compiler)
         self.id = id_
         self.states = states
 
@@ -473,21 +471,21 @@ def setblock(compiler, pos: Position, block: Block, replacement: str):
 @axe.chop
 @axe.arg("target", axe.Selector())
 @axe.arg("amount", axe.RangedLiteralInt(0, None))
-@axe.arg("cause", axe.Nullable(axe.LiteralString()))
-@axe.arg("damager", axe.Nullable(axe.Typed(EntityDataType)))
+@axe.arg("cause", axe.Nullable(axe.LiteralString()), default=None)
+@axe.arg("damager", axe.Nullable(axe.Typed(EntityDataType)), default=None)
 def damage(compiler, target: "MCSelector", amount: int,
         cause: Optional[str], damager: Optional["_EntityBase"]):
-    if damager:
+    if damager is not None:
         if cause is None:
             raise axe.ArgumentError(
                 "cause", "must be specified when damager presents"
             )
-        suffix = "%s entity %s" % (cause, damager)
+        suffix = " %s entity %s" % (cause, damager)
     elif cause is not None:
-        suffix = cause
+        suffix = " " + cause
     else:
         suffix = ""
-    cmd = "damage %s %d %s" % (target.to_str(), amount, suffix)
+    cmd = "damage %s %d%s" % (target.to_str(), amount, suffix)
     return resultlib.commands([cmd], compiler)
 
 @_register("effect_give")
@@ -558,7 +556,7 @@ def replaceitem_block(compiler, pos: Position, slot: int, item: Item,
         pos.context,
         "replaceitem block ~ ~ ~ slot.container %d %s %s" % (
             slot, "keep" if keep_old else "destroy",
-            item.to_str("{id} %s {data} {components}" % amount)
+            item.to_str("{id} %s {data}{components}" % amount)
         )
     )
     return resultlib.commands([cmd], compiler)
@@ -575,7 +573,7 @@ def replaceitem_entity(compiler, target: "MCSelector", location: str,
                        slot: int, item: Item, amount: int, keep_old: bool):
     cmd = "replaceitem entity %s %s %d %s %s" % (
         target.to_str(), location, slot, "keep" if keep_old else "destroy",
-        item.to_str("{id} %s {data} {components}" % amount)
+        item.to_str("{id} %s {data}{components}" % amount)
     )
     return resultlib.commands([cmd], compiler)
 
@@ -779,11 +777,14 @@ def tp(compiler, target: "MCSelector", dest: Position, check_for_blocks: bool):
 @axe.arg("target", axe.Selector())
 @axe.arg("rot", RotDataType)
 def rotate(compiler, target: "MCSelector", rot: Rotation):
-    ctx = []
-    ctx.append(cmds.ExecuteEnv("as", target.to_str()))
-    ctx.append(cmds.ExecuteEnv("at", "@s"))
-    ctx.extend(rot.context)
-    cmd = cmds.Execute(ctx, "tp @s ~ ~ ~ ~ ~")
+    cmd = cmds.Execute(
+        [
+            cmds.ExecuteEnv("as", target.to_str()),
+            cmds.ExecuteEnv("at", "@s"),
+            *rot.context
+        ],
+        "tp @s ~ ~ ~ ~ ~"
+    )
     return resultlib.commands([cmd], compiler)
 
 @_register("move")
@@ -823,7 +824,116 @@ def move_local(compiler, target: "MCSelector", left: float, up: float,
     return resultlib.commands([cmd], compiler)
 
 ##### Player Only #####
-...
+
+@_register("ability")
+@edu_only
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("ability", axe.LiteralString())
+@axe.arg("value", axe.LiteralBool())
+def ability(compiler, player: "MCSelector", ability: str, value: bool):
+    cmd = "ability %s %s %s" % (
+        player.to_str(), ability, _fmt_bool(value)
+    )
+    return resultlib.commands([cmd], compiler)
+
+@_register("clear_inventory")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+def clear_inventory(compiler, player: "MCSelector"):
+    return resultlib.commands(["clear %s" % player.to_str()], compiler)
+
+@_register("clear")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("item_id", axe.LiteralString())
+@axe.arg("item_data", axe.RangedLiteralInt(-1, None), default=-1)
+@axe.arg("max_count", axe.RangedLiteralInt(-1, None), default=-1)
+def clear(compiler, player: "MCSelector", item_id: str, item_data: int,
+          max_count: int):
+    cmd = "clear %s %s %d %d" % (
+        player.to_str(), item_id, item_data, max_count
+    )
+    return resultlib.commands([cmd], compiler)
+
+@_register("spawnpoint_clear")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+def spawnpoint_clear(compiler, player: "MCSelector"):
+    cmd = "clearspawnpoint %s" % player.to_str()
+    return resultlib.commands([cmd], compiler)
+
+@_register("gamemode")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("gamemode", axe.LiteralStringEnum(
+    "survival", "creative", "adventure", "spectator", "default"
+))
+def gamemode(compiler, player: "MCSelector", gamemode: str):
+    cmd = "gamemode %s %s" % (gamemode, player.to_str())
+    return resultlib.commands([cmd], compiler)
+
+@_register("give")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("item", ArgItem())
+@axe.arg("amount", axe.RangedLiteralInt(1, 32767), default=1)
+def give(compiler, player: "MCSelector", item: Item, amount: int):
+    cmd = "give %s %s" % (
+        player.to_str(),
+        item.to_str("{id} %s {data}{components}" % amount)
+    )
+    return resultlib.commands([cmd], compiler)
+
+@_register("kick")
+@axe.chop
+@axe.arg("player_name", axe.LiteralString())
+@axe.arg("reason", axe.Nullable(axe.LiteralString()), default=None)
+def kick(compiler, player_name: str, reason: Optional[str]):
+    reason = "" if reason is None else " " + reason
+    cmd = "kick %s%s" % (cmds.mc_str(player_name), reason)
+    return resultlib.commands([cmd], compiler)
+
+@_register("recipe")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("recipe", axe.LiteralString())
+@axe.arg("unlock", axe.LiteralBool())
+def recipe(compiler, player: "MCSelector", recipe: str, unlock: bool):
+    if recipe != "*":
+        recipe = cmds.mc_str(recipe)
+    cmd = "recipe %s %s %s" % (
+        "give" if unlock else "take",
+        player.to_str(), recipe
+    )
+    return resultlib.commands([cmd], compiler)
+
+@_register("spawnpoint_set")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("pos", PosDataType)
+def spawnpoint_set(compiler, player: "MCSelector", pos: Position):
+    cmd = cmds.Execute(
+        pos.context,
+        "spawnpoint %s ~ ~ ~" % player.to_str()
+    )
+    return resultlib.commands([cmd], compiler)
+
+@_register("xp_add_levels")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("amount", axe.LiteralInt())
+def xp_add_levels(compiler, player: "MCSelector", amount: int):
+    cmd = "xp %dL %s" % (amount, player.to_str())
+    return resultlib.commands([cmd], compiler)
+
+@_register("xp_add_points")
+@axe.chop
+@axe.arg("player", axe.PlayerSelector())
+@axe.arg("amount", axe.RangedLiteralInt(0, None))
+def xp_add_points(compiler, player: "MCSelector", amount: int):
+    cmd = "xp %d %s" % (amount, player.to_str())
+    return resultlib.commands([cmd], compiler)
 
 ##### Client Side #####
 ...

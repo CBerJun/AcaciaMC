@@ -9,77 +9,74 @@ sys.path.append(os.path.realpath(
 
 import io
 from types import MethodType
+from typing import List, Dict, Type as PyType
 
 from acaciamc.tokenizer import Tokenizer, TokenType
 from acaciamc.parser import Parser
 from acaciamc.error import *
-from acaciamc.ast import *
+from acaciamc.ast import AST
 
-class ASTVisualizer(ASTVisitor):
-    def __init__(self, node: AST):
+class ASTVisualizer:
+    _fields_cache: Dict[PyType[AST], List[str]] = {}
+
+    def __init__(self, node: AST, indent=2):
         self.node = node
+        self.indent = indent
         super().__init__()
 
-    @staticmethod
-    def get_fields(node: AST):
-        # get the names of fields of a node
-        return filter(
-            lambda name:
-                not name.startswith('_')
-                and name != 'lineno'
-                and name != 'col'
-                and name != 'show_debug',
-            dir(node)
-        )
+    @classmethod
+    def get_fields(cls, node: AST) -> List[str]:
+        """Get the names of fields of a node."""
+        tp = type(node)
+        if tp not in cls._fields_cache:
+            cls._fields_cache[tp] = [
+                name for name in dir(node)
+                if (
+                    not name.startswith('_')
+                    and name != 'lineno'
+                    and name != 'col'
+                    and name != 'show_debug'
+                )
+            ]
+        return cls._fields_cache[tp]
 
-    def general_visit(self, node: AST, indent: int = 0):
-        res = '@%d:%d %s(\n' % (
-            node.lineno, node.col,
-            node.__class__.__name__
-        )
-        for field in self.get_fields(node):
-            # get sub value
-            value = getattr(node, field)
-            if isinstance(value, AST):
-                substr = self.visit(value, indent=(indent + 2))
-            elif isinstance(value, list):
-                substr = '[\n'
-                for element in value:
-                    if isinstance(element, AST):
-                        subsub = self.visit(element, indent=(indent + 4))
-                    else: subsub = str(element)
-                    substr += '%s%s\n' % (
-                        ' ' * (indent + 4),
-                        subsub
-                    )
-                substr += '%s]' % (' ' * (indent + 2))
-            elif isinstance(value, dict):
-                substr = '{\n'
-                for k, v in value.items():
-                    if isinstance(v, AST):
-                        subsub = self.visit(v, indent=(indent + 4))
-                    else:
-                        subsub = str(v)
-                    substr += '%s%s: %s\n' % (
-                        ' ' * (indent + 4),
-                        k, subsub
-                    )
-                substr += '%s}' % (' ' * (indent + 2))
-            elif not isinstance(value, MethodType):
-                substr = str(value)
-            else:
-                continue
-            # connect string
-            res += '%s%s = %s\n' % (
-                ' ' * (indent + 2),
-                field,
-                substr
+    def _convert(self, value, indent: int = 0) -> str:
+        res: List[str] = []
+        indent_next = indent + self.indent
+        if isinstance(value, AST):
+            res.append(
+                '@%d:%d %s(\n' % (
+                    value.lineno, value.col,
+                    value.__class__.__name__
+                )
             )
-        res += '%s)' % (' ' * indent)
-        return res
+            for field in self.get_fields(value):
+                fvalue = getattr(value, field)
+                if isinstance(fvalue, MethodType):
+                    continue
+                res.append('%s%s = %s\n' % (
+                    ' ' * indent_next, field,
+                    self._convert(fvalue, indent=indent_next)
+                ))
+            res.append('%s)' % (' ' * indent))
+        elif isinstance(value, list):
+            res.append('[\n')
+            for element in value:
+                sub = self._convert(element, indent=(indent + self.indent))
+                res.append('%s%s\n' % (' ' * indent_next, sub))
+            res.append('%s]' % (' ' * indent))
+        elif isinstance(value, dict):
+            res.append('{\n')
+            for k, v in value.items():
+                sub = self._convert(v, indent=(indent + self.indent))
+                res.append('%s%r: %s\n' % (' ' * indent_next, k, sub))
+            res.append('%s}' % (' ' * indent))
+        else:
+            res.append(repr(value))
+        return "".join(res)
 
-    def get_string(self):
-        return self.visit(self.node)
+    def get_string(self) -> str:
+        return self._convert(self.node)
 
 def test_tokenize(src: str):
     print('===TOKENIZER===')

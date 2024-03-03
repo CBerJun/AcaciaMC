@@ -21,6 +21,9 @@ class DataType(metaclass=ABCMeta):
      specifies the type of an expression including extra information
      like template for entity and `Engroup`.
     """
+    def __init__(self, compiler: "Compiler"):
+        self.compiler = compiler
+
     @abstractmethod
     def __str__(self) -> str:
         pass
@@ -50,10 +53,6 @@ class DataType(metaclass=ABCMeta):
 
 class Storable(DataType):
     """A "storable" data type. (See `AcaciaExpr`)."""
-    def __init__(self, compiler: "Compiler") -> None:
-        super().__init__()
-        self.compiler = compiler
-
     @abstractmethod
     def new_var(self) -> "VarValue":
         """Construct a `VarValue` of this type."""

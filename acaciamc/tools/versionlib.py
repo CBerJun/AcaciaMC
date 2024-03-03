@@ -2,7 +2,7 @@
 
 __all__ = [
     # Utils
-    "only", "format_version",
+    "only", "format_version", "edu_only",
     # Version requirements
     "at_least", "at_most", "between", "older",
     "VersionRequirement",
@@ -101,3 +101,18 @@ def only(version: VersionRequirement):
             )
         return _decorated
     return _decorator
+
+def edu_only(func: Callable):
+    """
+    Decorator that makes a binary function only available when
+    Education Edition features are enabled.
+    """
+    def _decorated(compiler: "Compiler", args, kwds):
+        if not Config.education_edition:
+            raise AcaciaError(
+                ErrorType.ANY,
+                message="Education Edition features must be enabled to"
+                " use this function"
+            )
+        return func(compiler, args, kwds)
+    return _decorated

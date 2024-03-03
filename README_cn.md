@@ -14,7 +14,7 @@ Acacia 代码最终会被编译为多个 `.mcfunction` 文件，也就是说 Aca
 import print
 def arithmetic(start: int, to: int, delta=1) -> int:
     #* 返回以`start`为首项，`to`为末项，`delta`为公差的等差数列的和 *#
-    result = (start + to) * ((to - start) / delta + 1) / 2
+    result (start + to) * ((to - start) / delta + 1) / 2
 res := arithmetic(-30, 14, delta=2)
 print.tell(print.format("从-30到14，公差为2的等差数列和为%0", res))
 ```
@@ -45,7 +45,7 @@ scoreboard players set acacia6 acacia 2
 
 **总结一下，使用 Acacia 可以制作 Minecraft 的项目——但不是利用命令，而是利用 Acacia 代码，它阅读和维护起来都更加简单。**
 
-Acacia 是使用 Python 编写的，所以编译器 (就是把代码转换为命令的程序) 需要 Python（需要 3.6 或以上版本）来运行。
+Acacia 是使用 Python 编写的，所以编译器 (就是把代码转换为命令的程序) 需要 Python（3.6.1 或以上版本）来运行。
 
 ## Acacia 能干什么?
 一些实例:
@@ -81,9 +81,10 @@ b := (10 + a) * a - 5
 ```python
 def foo(x: int, y = True) -> int:
     # 这里是函数体代码
-    result = x  # 返回值
+    res := x
     if y:
-        result += 10
+        res += 10
+    result res  # 返回值
 z: int
 # 下面这些都是合法的调用:
 foo(1)
@@ -95,12 +96,13 @@ z = foo(x=3)
 ```python
 def is_prime(x: int) -> bool:
     #* 检测`x`是不是质数 *#
-    result = True
+    res := True
     mod: int = 2
     while mod <= x / 2:
         if x % mod == 0:
-            result = False
+            res = False
         mod += 1
+    result res
 ```
 
 丰富的内置模块:
@@ -115,7 +117,7 @@ print.title(print.format("Money: %0", money), mode=print.ACTIONBAR)
 ```python
 import music
 # 自动生成红石音乐，并采用1.2倍速。
-m -> music.Music("music_score.mid", speed=1.2)
+const m = music.Music("music_score.mid", speed=1.2)
 m.play()
 ```
 
@@ -124,12 +126,13 @@ m.play()
 import world
 
 # 根据变量的值放置不同颜色的混凝土方块
-COLORS -> {
+const COLORS = {
     0: "cyan", 1: "orange", 2: "yellow",
     3: "purple", 4: "lime", 5: "red", 6: "blue"
 }
 i := 0  # 计算`i`...
 for c in COLORS:
+    # `for` 会引导编译器帮你重复生成下面这段代码!
     if c == i:
         world.setblock(
             Pos(0, -50, 0),
@@ -141,8 +144,8 @@ for c in COLORS:
 ```python
 import world
 
-ORIGIN -> AbsPos(0, -50, 0)
-world.fill(ORIGIN, Offset().offset(x=5, z=5),
+const ORIGIN = AbsPos(0, -50, 0)
+world.fill(ORIGIN, Offset(x=5, z=5),
            world.Block("concrete", {"color": "red"}))
 
 entity Test:

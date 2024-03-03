@@ -8,26 +8,28 @@ import print
 import math
 import schedule
 
-MAX_ANSWER -> 999  # the last digit should be 9
+const MAX_ANSWER = 999  # the last digit should be 9
 answer: int
 guess: int
 player := Engroup[Entity]()
 
 interface input:
-    # Input 1 digit
-    # Set the value of "input" on scoreboard "numguess" to the
-    # number user pressed.
+    #**
+     * Input 1 digit.
+     * Set the value of "input" on scoreboard "numguess" to the
+     * number user pressed.
+     *#
     if guess <= MAX_ANSWER / 10:
         # Make sure the input value is not larger than MAX_ANSWER
         guess *= 10
         guess += |"input": "numguess"|
 
 interface delete:
-    # Delete 1 digit
+    #* Delete 1 digit. *#
     guess /= 10
 
 interface commit:
-    # Commit user's guess
+    #* Submit user's guess *#
     if guess == answer:
         print.title("You win!", player)
         print.title(
@@ -41,7 +43,7 @@ interface commit:
         print.title("Too small", player)
 
 interface start:
-    # Start the game
+    #* Start the game. *#
     answer = math.randint(1, MAX_ANSWER)
     guess = 0
     player.select(Enfilter().all_players())
@@ -52,7 +54,7 @@ interface start:
     )
 
 def show_guess():
-    # Show users the number they input
+    #* Show users the number they input. *#
     print.title(
         print.format("Your guess: %0", guess),
         player, print.ACTIONBAR

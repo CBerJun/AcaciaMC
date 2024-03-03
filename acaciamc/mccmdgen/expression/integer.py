@@ -30,8 +30,9 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import List, Tuple, TYPE_CHECKING, Callable, Optional
+from typing import List, Tuple, TYPE_CHECKING, Callable, Optional, Dict
 from abc import ABCMeta, abstractmethod
+from functools import partialmethod
 import operator as stdop
 
 from acaciamc.mccmdgen.expression.base import CMDLIST_T
@@ -43,7 +44,7 @@ from .boolean import (
 )
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
-from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.tools import axe, resultlib, cmethod_of
 from acaciamc.ast import Operator, OP2PYOP, COMPOP_INVERT
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
@@ -62,6 +63,7 @@ STR2SCBOP = {
     "%": cmds.ScbOp.MOD_EQ,
     "<": cmds.ScbOp.MIN,
     ">": cmds.ScbOp.MAX,
+    "=": cmds.ScbOp.ASSIGN
 }
 STR2PYOP = {
     '+': stdop.add, '-': stdop.sub,
@@ -87,6 +89,11 @@ def c_int_div(a: int, b: int) -> int:
     else:
         return a // b
 
+STR2PYINTOP: Dict[str, Callable[[int, int], int]] = {
+    '+': int.__add__, '-': int.__sub__, '*': int.__mul__,
+    '/': c_int_div, '%': remainder
+}
+
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
 
@@ -104,32 +111,24 @@ class IntType(Type):
     def do_init(self):
         self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
         self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
-        @method_of(self, "__new__")
-        class _new(metaclass=axe.OverloadChopped):
+        @cmethod_of(self, "__new__")
+        @axe.chop
+        @axe.arg("b", BoolDataType)
+        @axe.slash
+        def _new(compiler, b):
             """
-            int() -> literal 0
-            int(x: int) -> x
-            int(x: bool) -> 1 if x else 0
+            int(b: bool, /) -> int
+            Returns 1 if `b` is True, or 0 otherwise.
             """
-            @axe.overload
-            def zero(cls, compiler):
-                return resultlib.literal(0, compiler)
-
-            @axe.overload
-            @axe.arg("x", IntDataType)
-            def copy(cls, compiler, x):
-                return x
-
-            @axe.overload
-            @axe.arg("b", BoolDataType)
-            def from_bool(cls, compiler, b):
-                if isinstance(b, BoolLiteral):
-                    return resultlib.literal(int(b.value), compiler)
-                # Fallback: convert `b` to `BoolVar`,
-                # Since 0 is used to store False, 1 is for True, just
-                # "cast" it to `IntVar`.
-                dependencies, bool_var = to_BoolVar(b)
-                return IntVar(bool_var.slot, self.compiler), dependencies
+            if isinstance(b, BoolLiteral):
+                return resultlib.literal(int(b.value), compiler)
+            # Fallback: convert `b` to `BoolVar`,
+            # Since 0 is used to store False, 1 is for True, just
+            # "cast" it to `IntVar`.
+            dependencies, bool_var = to_BoolVar(b)
+            res = IntVar(bool_var.slot, self.compiler)
+            res.is_temporary = True
+            return res, dependencies
 
     def datatype_hook(self):
         return IntDataType(self.compiler)
@@ -176,7 +175,7 @@ class IntCompare(CompareBase):
             self.left, COMPOP_INVERT[self.operator], self.right, self.compiler
         )
 
-class IntLiteral(AcaciaExpr):
+class IntLiteral(ConstExpr):
     """Represents a literal integer.
     The purpose of these class is to implement constant folding
     which calculate the value of constant expressions
@@ -198,9 +197,6 @@ class IntLiteral(AcaciaExpr):
     def export(self, var: "IntVar"):
         return [cmds.ScbSetConst(var.slot, self.value)]
 
-    def copy(self):
-        return IntLiteral(self.value, self.compiler)
-
     def compare(self, op, other):
         if isinstance(other, IntLiteral):
             b = OP2PYOP[op](self.value, other.value)
@@ -217,27 +213,36 @@ class IntLiteral(AcaciaExpr):
 
     ## BINARY OPERATORS
 
-    def _bin_op(self, other, func: Callable[[int, int], int]):
+    def _bin_op(self, op: str, other):
         if isinstance(other, IntLiteral):
             try:
-                v = func(self.value, other.value)
+                v = STR2PYINTOP[op](self.value, other.value)
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return IntLiteral(v, self.compiler)
         return NotImplemented
 
-    def __add__(self, other):
-        return self._bin_op(other, int.__add__)
-    def __sub__(self, other):
-        return self._bin_op(other, int.__sub__)
-    def __mul__(self, other):
-        return self._bin_op(other, int.__mul__)
-    def __floordiv__(self, other):
-        # MC uses C-style "integer division", not Python's "floor division".
-        return self._bin_op(other, c_int_div)
-    def __mod__(self, other):
-        # MC uses C-style "remainder", not Python's "modulo".
-        return self._bin_op(other, remainder)
+    __add__ = partialmethod(_bin_op, '+')
+    __sub__ = partialmethod(_bin_op, '-')
+    __mul__ = partialmethod(_bin_op, '*')
+    __floordiv__ = partialmethod(_bin_op, '/')
+    __mod__ = partialmethod(_bin_op, '%')
+
+    def _ciop(self, op: str, other):
+        if isinstance(other, IntLiteral):
+            try:
+                v = STR2PYINTOP[op](self.value, other.value)
+            except ArithmeticError as err:
+                raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
+            return IntLiteral(v, self.compiler)
+        else:
+            raise TypeError
+
+    ciadd = partialmethod(_ciop, '+')
+    cisub = partialmethod(_ciop, '-')
+    cimul = partialmethod(_ciop, '*')
+    cidiv = partialmethod(_ciop, '/')
+    cimod = partialmethod(_ciop, '%')
 
 class IntVar(VarValue):
     """An integer variable."""
@@ -365,9 +370,6 @@ class IntVar(VarValue):
 
 class IntOp(metaclass=ABCMeta):
     # This is intended to be immutable
-
-    scb_read_self = False
-
     def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
         # Override-able
         return False
@@ -387,16 +389,6 @@ class IntSetConst(IntOp):
 
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return [cmds.ScbSetConst(var.slot, self.value)]
-
-class IntSetVar(IntOp):
-    def __init__(self, slot: cmds.ScbSlot) -> None:
-        self.slot = slot
-
-    def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
-        return slot == self.slot
-
-    def resolve(self, var: IntVar) -> CMDLIST_T:
-        return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
 
 class IntRandom(IntOp):
     def __init__(self, min_: int, max_: int) -> None:
@@ -420,18 +412,20 @@ class IntOpConst(IntOp):
 
 class IntOpVar(IntOp):
     def __init__(self, op: str, slot: cmds.ScbSlot) -> None:
-        self.op = op
+        self.op = STR2SCBOP[op]
         self.slot = slot
 
     def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
         return slot == self.slot
 
     def resolve(self, var: IntVar) -> CMDLIST_T:
-        return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, self.slot)]
+        return [cmds.ScbOperation(self.op, var.slot, self.slot)]
+
+class IntSetVar(IntOpVar):
+    def __init__(self, slot: cmds.ScbSlot) -> None:
+        super().__init__("=", slot)
 
 class IntOpSelf(IntOp):
-    scb_read_self = True
-
     def __init__(self, op: str) -> None:
         self.op = op
 
@@ -467,16 +461,13 @@ class IntOpGroup(AcaciaExpr):
 
     @classmethod
     def from_intexpr(cls, init: AcaciaExpr) -> "IntOpGroup":
-        compiler = init.compiler
-        res = cls(None, compiler)
+        if isinstance(init, IntOpGroup):
+            return init
+        res = cls(None, init.compiler)
         if isinstance(init, IntLiteral):
             res.add_op(IntSetConst(init.value))
         elif isinstance(init, IntVar):
             res.add_op(IntSetVar(init.slot))
-        elif isinstance(init, IntOpGroup):
-            tmp = IntVar.new(compiler, tmp=True)
-            res.add_op(IntCmdOp(init.export(tmp)))
-            res.add_op(IntSetVar(tmp.slot))
         else:
             raise TypeError
         return res
@@ -484,11 +475,9 @@ class IntOpGroup(AcaciaExpr):
     def export(self, var: IntVar):
         need_tmp = False
         for op in self.ops:
-            need_tmp = (
-                need_tmp or op.scb_did_read(var.slot)
-                or op.scb_read_self
-                or op.scb_did_assign(var.slot)
-            )
+            if op.scb_did_read(var.slot) or op.scb_did_assign(var.slot):
+                need_tmp = True
+                break
         if need_tmp:
             tmp = IntVar.new(self.compiler, tmp=True)
         else:

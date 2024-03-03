@@ -9,13 +9,12 @@ __all__ = ["RotType", "RotDataType", "Rotation"]
 
 from typing import List, TYPE_CHECKING
 
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe, cfunction, cmethod_of
 from acaciamc.constants import DEFAULT_ANCHOR
 from acaciamc.mccmdgen.datatype import DefaultDataType
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
-from .functions import BinaryFunction
 from .entity import EntityDataType
 
 if TYPE_CHECKING:
@@ -27,7 +26,7 @@ class RotDataType(DefaultDataType):
 
 class RotType(Type):
     def do_init(self):
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
             Rot(entity): rotation of an entity.
@@ -51,7 +50,7 @@ class RotType(Type):
                     "rotated", "%s %s" % (vertical, horizontal)
                 ))
                 return inst
-        @method_of(self, "face_entity")
+        @cmethod_of(self, "face_entity")
         @axe.chop
         @axe.arg("target", EntityDataType)
         @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
@@ -63,11 +62,11 @@ class RotType(Type):
             return inst
 
     def datatype_hook(self):
-        return RotDataType()
+        return RotDataType(self.compiler)
 
-class Rotation(AcaciaExpr, ImmutableMixin):
+class Rotation(ConstExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(RotDataType(), compiler)
+        super().__init__(RotDataType(compiler), compiler)
         self.context: List["_ExecuteSubcmd"] = []
 
         _abs = self._create_setter("")
@@ -77,9 +76,8 @@ class Rotation(AcaciaExpr, ImmutableMixin):
         float, representing xrot and yrot values. "abs" directly sets
         rotation and "offset" rotates relatively.
         """
-        self.attribute_table.set("abs", BinaryFunction(_abs, self.compiler))
-        self.attribute_table.set(
-            "offset", BinaryFunction(_offset, self.compiler))
+        self.attribute_table.set("abs", cfunction(_abs, compiler))
+        self.attribute_table.set("offset", cfunction(_offset, compiler))
 
     def copy(self):
         res = Rotation(self.compiler)

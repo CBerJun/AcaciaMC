@@ -4,7 +4,7 @@ __all__ = ["EGroupDataType", "EGroupGeneric", "EGroupType", "EntityGroup"]
 
 from typing import TYPE_CHECKING, List
 
-from acaciamc.tools import axe, method_of, resultlib
+from acaciamc.tools import axe, resultlib, method_of, cmethod_of
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 import acaciamc.mccmdgen.cmds as cmds
@@ -48,14 +48,17 @@ class EGroupDataType(Storable):
         return EntityGroup.from_template(self.template, self.compiler)
 
 class EGroupGeneric(BinaryGeneric):
-    @axe.chop_getitem
-    @axe.arg("E", ETemplateDataType, rename="template")
-    def getitem(self, template: "EntityTemplate"):
-        return EGroupType(template, self.compiler)
+    def __init__(self, compiler):
+        super().__init__(compiler)
+        @cmethod_of(self, "__getitem__")
+        @axe.chop
+        @axe.arg("E", ETemplateDataType, rename="template")
+        def _getitem(compiler, template: "EntityTemplate"):
+            return EGroupType(template, compiler)
 
-class EGroupType(ConstructorFunction):
+class EGroupType(ConstExpr, ConstructorFunction):
     def __init__(self, template: "EntityTemplate", compiler):
-        super().__init__(TypeDataType(), compiler)
+        super().__init__(TypeDataType(compiler), compiler)
         self.template = template
 
     def initialize(

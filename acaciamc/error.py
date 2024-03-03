@@ -52,8 +52,10 @@ class ErrorType(enum.Enum):
         'must be specified: "{arg}"'
     DUPLICATE_ARG_DEF = 'Duplicate argument "{arg}" in function definition'
     POSITIONED_ARG_AFTER_KEYWORD = 'Positional argument after keyword'
+    NONDEFAULT_ARG_AFTER_DEFAULT = 'Non-default argument after default ' \
+        'argument'
+    INVALID_FUNC_PORT = 'This type of function can\'t use qualifier "{port}"'
     INVALID_VARDEF_STMT = 'Invalid variable definition target'
-    INVALID_BIND_TARGET = 'Invalid bind target'
     # Command Generator
     NAME_NOT_DEFINED = 'Name "{name}" is not defined'
     HAS_NO_ATTRIBUTE = '"{value_type}" objects have no attribute "{attr}"'
@@ -61,19 +63,37 @@ class ErrorType(enum.Enum):
     INVALID_OPERAND = 'Invalid operand(s) for "{operator}": {operand}'
     INVALID_BOOLOP_OPERAND = 'Invalid operand for boolean operator ' \
         '"{operator}": "{operand}"'
-    UNSUPPORTED_VAR_TYPE = 'Can\'t define variables of "{var_type}" type; ' \
-        'Try using "name -> expr" instead'
-    UNSUPPORTED_ARG_TYPE = 'Argument "{arg}" can\'t be "{arg_type}" type'
+    UNSUPPORTED_VAR_TYPE = 'Can\'t define variables of "{var_type}" type'
+    UNSUPPORTED_ARG_TYPE = 'Runtime argument "{arg}" passed by value can\'t ' \
+        'be "{arg_type}" type'
     UNSUPPORTED_RESULT_TYPE = 'Result type can\'t be "{result_type}" type'
     UNSUPPORTED_EFIELD_TYPE = 'Entity field can\'t be "{field_type}" type'
     UNSUPPORTED_SFIELD_TYPE = 'Struct field can\'t be "{field_type}" type'
     UNSUPPORTED_EFIELD_IN_STRUCT = 'Entity field can\'t be struct ' \
         '"{template}" type bacause it contains field of "{field_type}" type'
+    SHADOWED_NAME = 'Shadowed name "{name}"'
     WRONG_ASSIGN_TYPE = 'Can\'t assign "{got}" to variable of "{expect}" type'
+    WRONG_REF_TYPE = 'Specified reference type is "{anno}" but got "{got}"'
+    WRONG_CONST_TYPE = 'Specified const type for "{name}" is "{anno}" but ' \
+        'got "{got}"'
     WRONG_ARG_TYPE = 'Expect "{expect}" type for argument "{arg}", got "{got}"'
     WRONG_RESULT_TYPE = 'Expect "{expect}" type as result, got "{got}"'
     WRONG_IF_CONDITION = '"if" conditions must be "bool", not "{got}"'
     WRONG_WHILE_CONDITION = '"while" conditions must be "bool", not "{got}"'
+    CANT_REF = 'Cannot reference unassignable expression'
+    CANT_REF_ARG = 'Value for reference argument "{arg}" is not assignable'
+    CANT_REF_RESULT = 'Value for reference result is not assignable'
+    NOT_CONST = 'Value for "{name}" in const definition is not a constant'
+    NOT_CONST_EXPR = 'Expression in const function is not a constant'
+    ARG_NOT_CONST = 'Value for const argument "{arg}" is not a constant'
+    NONREF_ARG_DEFAULT_NOT_CONST = 'Default value for non-reference ' \
+        'argument "{arg}" must be a constant'
+    ARG_DEFAULT_NOT_CONST = 'Default value for argument "{arg}" in compile ' \
+        'time function must be a constant'
+    RESULT_NOT_CONST = 'Result is expected to be a constant'
+    ELEMENT_NOT_CONST = 'Element in list or map must be a constant'
+    MULTIPLE_RESULTS = 'Multiple "result" statements in inline function that' \
+        ' uses const or reference result'
     ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
         'always evaluates to True'
     INVALID_TYPE_SPEC = 'Expecting a type specifier, got "{got}"'
@@ -90,12 +110,6 @@ class ErrorType(enum.Enum):
     SELF_OUT_OF_SCOPE = 'Found "self" out of entity method'
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
-    SUBSCRIPT_ARG_LEN = 'Expecting {expect} argument(s) for subscript, ' \
-        'got {got}'
-    SUBSCRIPT_ARG_TYPE = 'Expect "{expect}" type for subscript argument ' \
-        '"{arg}", got "{got}"'
-    SETITEM_VALUE_TYPE = 'Expect "{expect}" type for subscript set item ' \
-        'value, got "{got}"'
     UNCALLABLE = '"{expr_type}" is not callable'
     NOT_ITERABLE = '"{type_}" is not iterable'
     NO_GETITEM = '"{type_}" is not subscriptable'
@@ -129,14 +143,16 @@ class ErrorType(enum.Enum):
         '"override", not "{got}"'
     NOT_OVERRIDING = 'Method "{name}" is marked as "override" but did not ' \
         'actually override a virtual method'
-    POS_OFFSET_ALREADY_SET = '"{axis}" set already'
+    UNINITIALIZED_CONST = 'Uninitialized variable in compile time function'
+    INVALID_CONST_STMT = 'Invalid statement in compile time function'
+    POS_OFFSET_CTOR_ARG = 'At most one of the arguments "{axis}" and "{axis}' \
+        '_abs" can be float'
     INVALID_POS_ALIGN = 'Invalid position alignment "{align}"'
     LIST_INDEX_OUT_OF_BOUNDS = 'List with length {length} got out of ' \
         'bounds index {index}'
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
     LIST_MULTIMES_NON_LITERAL = 'List can only be multiplied by literal int'
-    RESULT_UNDEFINED = '"result" accessed before it gets defined'
     RESULT_BIND_OUT_OF_SCOPE = "Can't bind to result when out of function " \
         "or inside non-inline function"
     NEVER_RESULT = "The function should have set its result but didn't"
@@ -170,15 +186,15 @@ class Error(Exception):
 
     def full_msg(self) -> str:
         return (
-            "compiler error:" +
-            ("\n" if self.frames else " ") +
-            "".join(
-                "  %s: %s" % (frame.location, frame.msg) +
-                ("\n    %s" % frame.note if frame.note else "") +
-                "\n"
+            "compiler error:"
+            + ("\n" if self.frames else " ")
+            + "".join(
+                "  %s: %s" % (frame.location, frame.msg)
+                + ("\n    %s" % frame.note if frame.note else "")
+                + "\n"
                 for frame in reversed(self.frames)
-            ) +
-            "%s" % str(self)
+            )
+            + str(self)
         )
 
     def add_frame(self, frame: ErrFrame):

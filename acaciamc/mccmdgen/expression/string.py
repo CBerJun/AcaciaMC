@@ -8,9 +8,9 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 class StringDataType(DefaultDataType):
     name = 'str'
 
-class String(AcaciaExpr):
+class String(ConstExpr):
     def __init__(self, value: str, compiler):
-        super().__init__(StringDataType(), compiler)
+        super().__init__(StringDataType(compiler), compiler)
         self.value = value
 
     def map_hash(self):
@@ -24,3 +24,8 @@ class String(AcaciaExpr):
         if isinstance(other, String):
             return String(self.value + other.value, self.compiler)
         return NotImplemented
+
+    def ciadd(self, other: ConstExpr):
+        if isinstance(other, String):
+            return String(self.value + other.value, self.compiler)
+        raise TypeError

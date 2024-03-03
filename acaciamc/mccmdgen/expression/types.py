@@ -19,12 +19,12 @@ if TYPE_CHECKING:
 class TypeDataType(DefaultDataType):
     name = "type"
 
-class Type(AcaciaCallable, metaclass=ABCMeta):
+class Type(ConstExpr, AcaciaCallable, metaclass=ABCMeta):
     """Base class for type of a variable that represents a type.
     (e.g. type of builtin "int" is `IntType`).
     """
     def __init__(self, compiler: "Compiler"):
-        super().__init__(TypeDataType(), compiler)
+        super().__init__(TypeDataType(compiler), compiler)
         self.func_repr = str(self.datatype_hook())
         self.do_init()
 

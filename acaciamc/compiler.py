@@ -98,7 +98,6 @@ class Compiler:
         self._interface_paths: Dict[str, SourceLocation] = {}
         self._score_max = 0  # max id of score allocated
         self._scoreboard_max = 0  # max id of scoreboard allocated
-        self._entity_max = 0  # max id of entity name allocated
         self._entity_tag_max = 0  # max id of entity tag allocated
         self._free_tmp_score = []  # free tmp scores (see `allocate_tmp`)
         self._current_file = None  # str; Path of current parsing file
@@ -107,7 +106,6 @@ class Compiler:
         self._before_finish_cbs = []  # callbacks to run before finish
 
         # --- BUILTINS ---
-        self.builtins = SymbolTable()
         self.base_template = EntityTemplate(
             name="Entity",
             field_types={}, field_metas={}, methods={},
@@ -118,26 +116,9 @@ class Compiler:
             field_types={}, field_metas={}, methods={},
             method_qualifiers={}, parents=[], metas={}, compiler=self
         )
-        # builtin types
-        for name, cls in (
-            ('int', IntType),
-            ('bool', BoolType),
-            ('Pos', PosType),
-            ('Rot', RotType),
-            ('Offset', PosOffsetType),
-            ('Engroup', EGroupGeneric),
-            ('Enfilter', EFilterType),
-            ('list', ListType),
-            ('map', MapType),
-            ('AbsPos', AbsPosType),
-            ('ExternEngroup', ExternEGroupGeneric),
-        ):
-            self.builtins.set(name, cls(self))
-        # builtin names
-        for name, value in (
-            ('Entity', self.base_template),
-        ):
-            self.builtins.set(name, value)
+        self.builtins = SymbolTable.from_other(
+            self.get_module(ModuleMeta("builtins")).attribute_table
+        )
 
         # --- START COMPILE ---
         ## start
@@ -184,7 +165,8 @@ class Compiler:
             )
 
     def raise_error(self, error: Error):
-        self.current_generator.fix_error_location(error)
+        if self.current_generator is not None:
+            self.current_generator.fix_error_location(error)
         error.location.file = self._current_file
         raise error
 
@@ -238,11 +220,6 @@ class Compiler:
     def add_scoreboard(self) -> str:
         """Apply for a new scoreboard"""
         return self.output_mgr.add_scoreboard()
-
-    def allocate_entity_name(self) -> str:
-        """Return a new entity name."""
-        self._entity_max += 1
-        return Config.entity_name + str(self._entity_max)
 
     def allocate_entity_tag(self) -> str:
         """Return a new entity tag."""

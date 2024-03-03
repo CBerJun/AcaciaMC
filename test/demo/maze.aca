@@ -70,26 +70,27 @@
 import world
 import schedule
 
-ORIGIN -> AbsPos(0, -50, 0)
-HEIGHT -> 2  # Height of wall of maze
-SIZE -> 10
-DUMMY_ENTITY -> "armor_stand"
-# Block used for final maze:
-BLOCK -> world.Block("concrete", {"color": "white"})
-# Blocks for _:
-BLOCK_VISITED -> world.Block("concrete", {"color": "green"})
-BLOCK_UNVISITED -> world.Block("concrete", {"color": "blue"})
-# Blcoks for ?:
-BLOCK_UNKNOWN -> world.Block("concrete", {"color": "cyan"})
-BLOCK_PATH -> world.Block("concrete", {"color": "yellow"})
-BLOCK_WALL -> world.Block("concrete", {"color": "red"})
-# Other constants
-OFFSET_TABLE -> {{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+const ORIGIN = AbsPos(0, -50, 0)
+const HEIGHT = 2  # Height of wall of maze
+const SIZE = 10
+const DUMMY_ENTITY = "armor_stand"
+const (
+    # Block used for final maze:
+    BLOCK = world.Block("concrete", {"color": "white"}),
+    # Blocks for _:
+    BLOCK_VISITED = world.Block("concrete", {"color": "green"}),
+    BLOCK_UNVISITED = world.Block("concrete", {"color": "blue"}),
+    # Blcoks for ?:
+    BLOCK_UNKNOWN = world.Block("concrete", {"color": "cyan"}),
+    BLOCK_PATH = world.Block("concrete", {"color": "yellow"}),
+    BLOCK_WALL = world.Block("concrete", {"color": "red"})
+)
+const OFFSET_TABLE = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
 
 entity Dummy:
     @type: DUMMY_ENTITY
 
-    inline def __init__(pos: Pos) -> None:
+    inline def __init__(const pos: Pos) -> None:
         world.tp(self, pos)
         world.effect_give(
             self, "invisibility", duration=int.MAX, particle=False
@@ -105,8 +106,8 @@ def visit(pos: Dummy):
     world.setblock(Pos(pos).offset(y=-1), BLOCK_VISITED)
     # For adjacent cells:
     for offset in OFFSET_TABLE:
-        neighbor -> Pos(pos).offset(x=offset[0], z=offset[1])
-        neighbor_block -> neighbor.offset(y=-1)
+        const neighbor = Pos(pos).offset(x=offset[0], z=offset[1])
+        const neighbor_block = neighbor.offset(y=-1)
         neighbor_frontier := Engroup[Frontier]()
         neighbor_frontier.select(Enfilter().distance_from(neighbor, max=0.1))
         # Only handle undetermined neighbors
@@ -118,12 +119,12 @@ def visit(pos: Dummy):
             else:
                 world.kill(neighbor_frontier)
                 world.setblock(neighbor_block, BLOCK_WALL)
-                world.fill(neighbor, Offset().offset(y=HEIGHT-1), BLOCK)
+                world.fill(neighbor, Offset(y=HEIGHT-1), BLOCK)
 
 def choose(frontier: Frontier):
     world.setblock(Pos(frontier).offset(y=-1), BLOCK_PATH)
     for offset in OFFSET_TABLE:
-        neighbor -> Pos(frontier).offset(x=offset[0], z=offset[1])
+        const neighbor = Pos(frontier).offset(x=offset[0], z=offset[1])
         if world.is_block(neighbor.offset(y=-1), BLOCK_UNVISITED):
             e := Dummy(pos=neighbor)
             visit(e)
@@ -134,7 +135,7 @@ def tick():
     if frontiers.is_empty():
         if last_tick_run:
             # Finished!
-            world.fill(ORIGIN, Offset().offset(x=2*SIZE, z=2*SIZE), BLOCK)
+            world.fill(ORIGIN, Offset(x=2*SIZE, z=2*SIZE), BLOCK)
             last_tick_run = False
     else:
         choose(
@@ -148,21 +149,23 @@ def tick():
 schedule.register_loop(tick)
 
 interface start:
-    world.fill(ORIGIN, Offset().offset(x=2*SIZE, y=HEIGHT, z=2*SIZE),
+    world.fill(ORIGIN, Offset(x=2*SIZE, y=HEIGHT, z=2*SIZE),
                BLOCK, replacement="hollow")
     world.fill(ORIGIN.offset(x=1, y=HEIGHT, z=1),
-               Offset().offset(x=2*SIZE-2, z=2*SIZE-2),
+               Offset(x=2*SIZE-2, z=2*SIZE-2),
                world.Block("air"))
     world.fill(ORIGIN.offset(x=1, z=1),
-               Offset().offset(x=2*SIZE-2, z=2*SIZE-2),
+               Offset(x=2*SIZE-2, z=2*SIZE-2),
                BLOCK_UNKNOWN)
     for i in list.range(SIZE):
         for j in list.range(SIZE):
             world.setblock(ORIGIN.offset(x=2*i+1, z=2*j+1), BLOCK_UNVISITED)
     for i in list.range(SIZE-1):
         for j in list.range(SIZE-1):
-            pos -> ORIGIN.offset(x=2*i+2, z=2*j+2)
-            world.fill(pos, Offset().offset(y=HEIGHT), BLOCK)
+            world.fill(
+                ORIGIN.offset(x=2*i+2, z=2*j+2),
+                Offset(y=HEIGHT), BLOCK
+            )
     e := Dummy(ORIGIN.offset(+1, +1, +1))
     visit(e)
     world.kill(e)

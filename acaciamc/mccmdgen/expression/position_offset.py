@@ -7,16 +7,14 @@ For instance, "~ ~5 ~" is a position offset, while
 
 __all__ = ["PosOffsetType", "PosOffsetDataType", "PosOffset", "CoordinateType"]
 
-from typing import Set, List
+from typing import List
 from enum import Enum
 
 from acaciamc.error import *
-from acaciamc.tools import axe, method_of
-from acaciamc.constants import XYZ
+from acaciamc.tools import axe, cmethod_of
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from .base import *
 from .types import Type
-from .functions import BinaryFunction
 
 class CoordinateType(Enum):
     ABSOLUTE = ""
@@ -28,12 +26,46 @@ class PosOffsetDataType(DefaultDataType):
 
 class PosOffsetType(Type):
     def do_init(self):
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         @axe.chop
-        def _new(compiler):
-            """Offset(): New object with no offset (~ ~ ~)."""
-            return PosOffset(compiler)
-        @method_of(self, "local")
+        @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("z", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.star
+        @axe.arg("x_abs", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("y_abs", axe.Nullable(axe.LiteralFloat()), default=None)
+        @axe.arg("z_abs", axe.Nullable(axe.LiteralFloat()), default=None)
+        def _new(compiler, x, y, z, x_abs, y_abs, z_abs):
+            """
+            const def __new__(
+                x = None, y = None, z = None,
+                *,
+                x_abs = None, y_abs = None, z_abs = None
+            ) -> Offset
+            Return a new Offset object. All the parameters are either
+            None or float. At most one of * and *_abs should be float
+            for each of x, y, z. The created object will use
+            relative coordinate if * is used, absolute for *_abs, or
+            relative with value 0.0 if neither is given.
+            Consider AbsPos if all three of them are absolute.
+            """
+            res = PosOffset(compiler)
+            if x is not None and x_abs is not None:
+                raise Error(ErrorType.POS_OFFSET_CTOR_ARG, axis="x")
+            if y is not None and y_abs is not None:
+                raise Error(ErrorType.POS_OFFSET_CTOR_ARG, axis="y")
+            if z is not None and z_abs is not None:
+                raise Error(ErrorType.POS_OFFSET_CTOR_ARG, axis="z")
+            if x is None:
+                x = 0.0
+            if y is None:
+                y = 0.0
+            if z is None:
+                z = 0.0
+            res._set(CoordinateType.RELATIVE, x, y, z)
+            res._set(CoordinateType.ABSOLUTE, x_abs, y_abs, z_abs)
+            return res
+        @cmethod_of(self, "local")
         @axe.chop
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
         @axe.arg("up", axe.LiteralFloat(), default=0.0)
@@ -45,27 +77,30 @@ class PosOffsetType(Type):
             return PosOffset.local(left, up, front, compiler)
 
     def datatype_hook(self):
-        return PosOffsetDataType()
+        return PosOffsetDataType(self.compiler)
 
-class PosOffset(AcaciaExpr):
+class PosOffset(ConstExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(PosOffsetDataType(), compiler)
+        super().__init__(PosOffsetDataType(compiler), compiler)
         self.values: List[float] = [0.0, 0.0, 0.0]
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]
-        self.already_set: Set[int] = set()
+        @cmethod_of(self, "abs")
         @axe.chop
         @axe.arg("x", axe.Nullable(axe.PosXZ()), default=None)
         @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
         @axe.arg("z", axe.Nullable(axe.PosXZ()), default=None)
-        def _abs(compiler, x, y, z):
+        @transform_immutable(self)
+        def _abs(self: PosOffset, compiler, x, y, z):
             self._set(CoordinateType.ABSOLUTE, x, y, z)
             return self
+        @cmethod_of(self, "offset")
         @axe.chop
         @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
         @axe.arg("y", axe.Nullable(axe.LiteralFloat()), default=None)
         @axe.arg("z", axe.Nullable(axe.LiteralFloat()), default=None)
-        def _offset(compiler, x, y, z):
+        @transform_immutable(self)
+        def _offset(self: PosOffset, compiler, x, y, z):
             self._set(CoordinateType.RELATIVE, x, y, z)
             return self
         """
@@ -75,10 +110,6 @@ class PosOffset(AcaciaExpr):
         while "abs" sets them to use absolute coordinate.
         "abs" rounds integer x and z value to block center.
         """
-        self.attribute_table.set(
-            "offset", BinaryFunction(_offset, self.compiler))
-        self.attribute_table.set(
-            "abs", BinaryFunction(_abs, self.compiler))
 
     def __str__(self) -> str:
         return " ".join(
@@ -87,13 +118,12 @@ class PosOffset(AcaciaExpr):
         )
 
     def _set(self, coord_type: CoordinateType, x, y, z):
-        for i, arg in enumerate((x, y, z)):
-            if arg is not None:
-                if i in self.already_set:
-                    raise Error(ErrorType.POS_OFFSET_ALREADY_SET,
-                                axis=XYZ[i])
-                self.already_set.add(i)
-                self.set(i, arg, coord_type)
+        if x is not None:
+            self.set(0, x, coord_type)
+        if y is not None:
+            self.set(1, y, coord_type)
+        if z is not None:
+            self.set(2, z, coord_type)
 
     @classmethod
     def local(cls, left: float, up: float, front: float, compiler):
@@ -101,7 +131,6 @@ class PosOffset(AcaciaExpr):
         inst.set(0, left, CoordinateType.LOCAL)
         inst.set(1, up, CoordinateType.LOCAL)
         inst.set(2, front, CoordinateType.LOCAL)
-        inst.already_set.update((0, 1, 2))
         return inst
 
     def set(self, index: int, value: float, type_: CoordinateType):

@@ -22,27 +22,32 @@ import print
 import math
 import world
 
-UPDATE_INTERVAL -> 8  # ticks
-WIDTH -> 10
-HEIGHT -> 20
-ORIGIN_POS -> AbsPos(0, -50, 0)
-BLOCK_EMPTY -> world.Block("concrete", {"color": "black"})
-PLAYER_POS -> ORIGIN_POS.offset(x=WIDTH/2, y=+20, z=HEIGHT/2)
+const (
+    UPDATE_INTERVAL = 8,  # ticks
+    WIDTH = 10, HEIGHT = 20,
+    ORIGIN_POS = AbsPos(0, -50, 0),
+    PLAYER_POS = ORIGIN_POS.offset(x=WIDTH/2, y=+20, z=HEIGHT/2),
+    BLOCK_EMPTY = world.Block("concrete", {"color": "black"})
+)
 
-SHAPE_I -> 0
-SHAPE_L -> 1
-SHAPE_O -> 2
-SHAPE_T -> 3
-SHAPE_S -> 4
-SHAPE_Z -> 5
-SHAPE_J -> 6
+const (
+    SHAPE_I = 0,
+    SHAPE_L = 1,
+    SHAPE_O = 2,
+    SHAPE_T = 3,
+    SHAPE_S = 4,
+    SHAPE_Z = 5,
+    SHAPE_J = 6
+)
 
-ROT_NONE -> 0
-ROT_CLOCKWISE -> 1
-ROT_180 -> 2
-ROT_CCLOCKWISE -> 3
+const (
+    ROT_NONE = 0,
+    ROT_CLOCKWISE = 1,
+    ROT_180 = 2,
+    ROT_CCLOCKWISE = 3
+)
 
-SHAPE_COLORS -> {
+const SHAPE_COLORS = {
     SHAPE_I: "cyan",
     SHAPE_L: "orange",
     SHAPE_O: "yellow",
@@ -51,7 +56,7 @@ SHAPE_COLORS -> {
     SHAPE_Z: "red",
     SHAPE_J: "blue"
 }
-SHAPE_SIZES -> {
+const SHAPE_SIZES = {
     # width, height (when not rotated)
     SHAPE_I: {4, 1},
     SHAPE_L: {3, 2},
@@ -61,7 +66,7 @@ SHAPE_SIZES -> {
     SHAPE_Z: {3, 2},
     SHAPE_J: {3, 2}
 }
-SHAPE_ROTATE_MOVE -> {
+const SHAPE_ROTATE_MOVE = {
     # (Shapes not in this list does not move when rotated)
     {SHAPE_I}: {  # 1x4
         ROT_NONE: {+2, -1}, ROT_CLOCKWISE: {-2, +2},
@@ -72,7 +77,7 @@ SHAPE_ROTATE_MOVE -> {
         ROT_180: {0, -1}, ROT_CCLOCKWISE: {0, 0}
     }
 }
-SHAPE_PATTERNS_360 -> {
+const SHAPE_PATTERNS_360 = {
     SHAPE_L: {
         ROT_NONE: {{0, 1}, {1, 1}, {2, 1}, {2, 0}},
         ROT_CLOCKWISE: {{0, 0}, {0, 1}, {0, 2}, {1, 2}},
@@ -92,7 +97,7 @@ SHAPE_PATTERNS_360 -> {
         ROT_CCLOCKWISE: {{1, 0}, {1, 1}, {1, 2}, {0, 2}}
     }
 }
-SHAPE_PATTERNS_180 -> {
+const SHAPE_PATTERNS_180 = {
     SHAPE_S: {
         {{0, 1}, {1, 1}, {1, 0}, {2, 0}},  # no rotation
         {{0, 0}, {0, 1}, {1, 1}, {1, 2}},  # 90 degrees
@@ -106,7 +111,7 @@ SHAPE_PATTERNS_180 -> {
         {{0, 0}, {0, 1}, {0, 2}, {0, 3}}
     }
 }
-SHAPE_PATTERNS_90 -> {
+const SHAPE_PATTERNS_90 = {
     SHAPE_O: {{0, 0}, {0, 1}, {1, 1}, {1, 0}}
 }
 
@@ -124,7 +129,7 @@ entity PosDummy:
             self, "invisibility", duration=int.MAX, particle=False
         )
 
-    inline def move(row: int = 0, col: int = 0):
+    inline def move(const row: int = 0, const col: int = 0):
         #* Move the dummy. *#
         world.move(self, z=row, x=col)
 
@@ -154,38 +159,38 @@ def get_dummy() -> PosDummy:
     Get the dummy entity which only exists when game is running.
     We should have `dummy_group.size() == 1 and running`.
     *#
-    result = dummy_group.to_single()
+    result dummy_group.to_single()
 
 def get_shape_size(shape: int, rotation: int) -> Size:
     #* Get real shape size, with rotation considered. *#
     for s in SHAPE_SIZES:
         if shape == s:
-            size_arr -> SHAPE_SIZES[s]
+            const size = SHAPE_SIZES[s]
             if rotation == ROT_CLOCKWISE or rotation == ROT_CCLOCKWISE:
                 # When rotated, width is height, vice versa
-                result.height = size_arr[0]
-                result.width = size_arr[1]
+                result Size(height=size[0], width=size[1])
             else:
-                result.width = size_arr[0]
-                result.height = size_arr[1]
+                result Size(width=size[0], height=size[1])
 
-inline def traverse_shape(dummy: PosDummy, shape: int, rotation: int, action):
+inline def traverse_shape(
+    dummy: PosDummy, shape: int, rotation: int, const action
+):
     #*
     Find all blocks in a shape (relative to `dummy`'s position) and
     execute function `action` with each position of block as argument.
     *#
-    inline def do_action(list2d):
+    inline def do_action(const list2d):
         for xz in list2d:
             action(Pos(dummy).offset(x=xz[0], z=xz[1]))
     for s in SHAPE_PATTERNS_360:
         if shape == s:
-            shape_def -> SHAPE_PATTERNS_360[s]
+            const shape_def = SHAPE_PATTERNS_360[s]
             for r in shape_def:
                 if rotation == r:
                     do_action(shape_def[r])
     for s in SHAPE_PATTERNS_180:
         if shape == s:
-            shape_def -> SHAPE_PATTERNS_180[s]
+            const shape_def = SHAPE_PATTERNS_180[s]
             if rotation == ROT_NONE or rotation == ROT_180:
                 do_action(shape_def[0])
             else:
@@ -196,10 +201,10 @@ inline def traverse_shape(dummy: PosDummy, shape: int, rotation: int, action):
 
 def draw_shape(dummy: PosDummy, shape: int, rotation: int):
     #* Render current shape at `dummy`. *#
-    inline def place_block(pos: Pos):
+    inline def place_block(const pos: Pos):
         for s in SHAPE_COLORS:
             if shape == s:
-                block -> world.Block(
+                const block = world.Block(
                     "concrete", {"color": SHAPE_COLORS[s]}
                 )
                 world.setblock(pos, block)
@@ -207,7 +212,7 @@ def draw_shape(dummy: PosDummy, shape: int, rotation: int):
 
 def clear_shape(dummy: PosDummy, shape: int, rotation: int):
     #* Clear the shape (i.e. place empty block). *#
-    inline def empty_block(pos: Pos):
+    inline def empty_block(const pos: Pos):
         world.setblock(pos, BLOCK_EMPTY)
     traverse_shape(dummy, shape, rotation, action=empty_block)
 
@@ -216,15 +221,15 @@ def will_collide(dummy: PosDummy, shape: int, rotation: int) -> bool:
     Whether the shape with given rotation will collide with other
     blocks at dummy.
     *#
-    result = False
-    res -> result
-    inline def check(pos: Pos):
+    res := False
+    inline def check(const pos: Pos):
         res = res or not world.is_block(pos, BLOCK_EMPTY)
     traverse_shape(dummy, shape, rotation, action=check)
+    result res
 
 def game_over():
     running = False
-    world.kill(get_dummy())
+    world.kill(dummy_group)
     print.title("Game Over!", player_group)
     print.title(print.format("Lines: %0", score), player_group,
                 mode=print.SUBTITLE)
@@ -270,7 +275,7 @@ def check_completion(shape_height: int):
                         dest=ORIGIN_POS.offset(z=+1), mode="force")
             # 2. fill the top line with empty
             world.fill(
-                origin=ORIGIN_POS, offset=Offset().offset(x=WIDTH-1),
+                origin=ORIGIN_POS, offset=Offset(x=WIDTH-1),
                 block=BLOCK_EMPTY
             )
         y += 1
@@ -320,8 +325,7 @@ def rotate():
     *#
     # Rotation IDs are 1, 2, 3, 4; when 5 is reached, modulo by 4 to
     # get back to 1.
-    new_rotation: int = shape_rotation + 1
-    new_rotation %= 4
+    new_rotation: int = (shape_rotation + 1) % 4
     # Move the shape
     new_col: int = shape_col
     new_row: int = shape_row
@@ -331,10 +335,10 @@ def rotate():
             if type == shape_type:
                 is_contained = True
         if is_contained:
-            rot_def -> SHAPE_ROTATE_MOVE[types]
+            const rot_def = SHAPE_ROTATE_MOVE[types]
             for rotation in rot_def:
                 if rotation == shape_rotation:
-                    rowcol -> rot_def[rotation]
+                    const rowcol = rot_def[rotation]
                     new_col += rowcol[0]
                     new_row += rowcol[1]
     # Make sure the shape is not out of game field after rotation
@@ -382,9 +386,11 @@ def right():
 def check_input():
     #* Check player input. *#
     if running:
-        pos_left -> PLAYER_POS.offset(x=-1.05)
-        pos_right -> PLAYER_POS.offset(x=1.05)
-        pos_front -> PLAYER_POS.offset(z=-1.05)
+        const (
+            pos_left = PLAYER_POS.offset(x=-1.05),
+            pos_right = PLAYER_POS.offset(x=1.05),
+            pos_front = PLAYER_POS.offset(z=-1.05)
+        )
         player := player_group.to_single()
         if world.is_entity(player, Enfilter().distance_from(pos_left, max=1)):
             left()
@@ -406,12 +412,11 @@ interface start:
     player_group.select(Enfilter().is_type("player").nearest_from(PLAYER_POS))
     print.title("Tetris Game!!!", target=player_group,
                 fade_in=0, fade_out=0, stay_time=50)
-    world.fill(ORIGIN_POS, Offset().offset(x=WIDTH-1, z=HEIGHT-1), BLOCK_EMPTY)
+    world.fill(ORIGIN_POS, Offset(x=WIDTH-1, z=HEIGHT-1), BLOCK_EMPTY)
     # Place a block so that player won't fall
     world.setblock(PLAYER_POS.offset(y=-1), world.Block("barrier"))
     # Delay 60 ticks before starting
-    task -> schedule.Task(start)
-    task.after(60)
+    schedule.Task(start).after(60)
 
 interface game_over:
     #* Stop the game at once. *#

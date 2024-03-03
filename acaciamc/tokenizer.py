@@ -8,6 +8,7 @@ import enum
 from acaciamc.error import *
 from acaciamc.constants import COLORS, COLORS_NEW, Config
 
+UNICODE_ESCAPES = {'x': 2, 'u': 4, 'U': 8}
 FONTS = {
     "reset": "r",
     "bold": "l",
@@ -71,6 +72,7 @@ class TokenType(enum.Enum):
     point = '.'
     at = '@'
     walrus = ':='
+    ampersand = '&'
     # expressions
     ## literal
     integer = 'INTEGER'  # value: int
@@ -103,6 +105,7 @@ class TokenType(enum.Enum):
     struct = 'struct'
     virtual = 'virtual'
     override = 'override'
+    const = 'const'
     false = 'False'  # must at end of keyword part
 
 KEYWORDS: Dict[str, TokenType] = {}
@@ -120,10 +123,11 @@ _kw_builder()
 del _kw_builder
 
 BRACKETS = {
-    TokenType.rparen: TokenType.lparen,
-    TokenType.rbracket: TokenType.lbracket,
-    TokenType.rbrace: TokenType.lbrace
+    TokenType.lparen: TokenType.rparen,
+    TokenType.lbracket: TokenType.rbracket,
+    TokenType.lbrace: TokenType.rbrace
 }
+RB2LB = {v: k for k, v in BRACKETS.items()}
 
 class Token:
     def __init__(self, token_type: TokenType,
@@ -374,18 +378,18 @@ class Tokenizer:
                 except ValueError:
                     ## does not match any tokens
                     self.error(ErrorType.INVALID_CHAR,
-                                char=self.current_char)
+                               char=self.current_char)
                 else:
-                    if token_type in BRACKETS.values():
+                    if token_type in BRACKETS:
                         self.bracket_stack.append(_BracketFrame(
                             token_type,
                             (self.current_lineno, self.current_col)
                         ))
-                    elif token_type in BRACKETS.keys():
+                    elif token_type in RB2LB:
                         if not self.bracket_stack:
                             self.error(ErrorType.UNMATCHED_BRACKET,
                                        char=self.current_char)
-                        expect = BRACKETS[token_type]
+                        expect = RB2LB[token_type]
                         got_f = self.bracket_stack.pop()
                         got = got_f.type
                         if got is not expect:
@@ -604,13 +608,13 @@ class Tokenizer:
             return res
         ## NOTE '\n' should be passed directly to MC
         ## because MC use '\n' escape too
-        elif second in 'xuU':  # unicode number
+        elif second in UNICODE_ESCAPES:  # unicode number
             def _err():
                 self.error(ErrorType.INVALID_UNICODE_ESCAPE,
                            escape_char=second)
             self.forward()  # skip '\\'
             code = ''
-            length = {'x': 2, 'u': 4, 'U': 8}[second]
+            length = UNICODE_ESCAPES[second]
             VALID_CHARS = tuple('0123456789ABCDEFabcdef')
             for _ in range(length):
                 if self.current_char not in VALID_CHARS:
@@ -639,7 +643,7 @@ class Tokenizer:
                            lineno=mgr.lineno, col=mgr.col)
             if self.current_char == '\\' and self.peek() == '"':
                 # special escape in strings
-                res += '"'
+                mgr.add_text('"')
                 self.forward()
                 self.forward()
                 continue

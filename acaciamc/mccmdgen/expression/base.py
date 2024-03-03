@@ -2,8 +2,7 @@
 
 __all__ = [
     # Base classes
-    'AcaciaExpr', 'VarValue', 'AcaciaCallable', 'SupportsGetItem',
-    'SupportsSetItem',
+    'AcaciaExpr', 'VarValue', 'AcaciaCallable', 'ConstExpr', 'CTCallable',
     # Utils
     'ArgumentHandler', 'ImmutableMixin', 'transform_immutable',
     # Type checking
@@ -13,13 +12,13 @@ __all__ = [
 from typing import (
     List, Union, Dict, Tuple, Callable, Hashable, Optional, TYPE_CHECKING
 )
-from types import NotImplementedType
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.mccmdgen.symbol import AttributeTable
 from acaciamc.error import *
 
 if TYPE_CHECKING:
+    from types import NotImplementedType  # Python 3.10
     from acaciamc.ast import Operator
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
@@ -123,7 +122,7 @@ class AcaciaExpr:
         raise NotImplementedError
 
     def compare(self, op: "Operator", other: "AcaciaExpr") \
-            -> Union["CompareBase", NotImplementedType]:
+            -> Union["CompareBase", "NotImplementedType"]:
         """
         Implement comparison operators for this expression.
         Return value should either be `NotImplemented` or an
@@ -201,23 +200,18 @@ class VarValue(AcaciaExpr):
     """
     is_temporary = False  # used as a temporary and is read-only
 
-class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
-    """Acacia expressions that are callable."""
+class _CallableBase(AcaciaExpr):
     def __init__(self, type_: "DataType", compiler: "Compiler"):
         super().__init__(type_, compiler)
         self.source = SourceLocation()
         self.func_repr = "<unknown>"
 
-    def call_withframe(
-            self, args: ARGS_T, keywords: KEYWORDS_T,
+    def _wrap_frame(
+            self, call: Callable, args: ARGS_T, keywords: KEYWORDS_T,
             location: Optional[Union[SourceLocation, str]] = None
-        ) -> CALLRET_T:
-        """
-        Call this expression, and add this to error frame if an error
-        occurs.
-        """
+        ):
         try:
-            return self.call(args, keywords)
+            return call(args, keywords)
         except Error as err:
             if location is None:
                 location = SourceLocation()
@@ -232,6 +226,18 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
             ))
             raise
 
+class AcaciaCallable(_CallableBase, metaclass=ABCMeta):
+    """Acacia expressions that are callable."""
+    def call_withframe(
+            self, args: ARGS_T, keywords: KEYWORDS_T,
+            location: Optional[Union[SourceLocation, str]] = None
+        ) -> CALLRET_T:
+        """
+        Call this expression, and add this to error frame if an error
+        occurs.
+        """
+        return self._wrap_frame(self.call, args, keywords, location)
+
     @abstractmethod
     def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         """
@@ -242,21 +248,25 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
         """
         pass
 
-class SupportsGetItem(AcaciaExpr, metaclass=ABCMeta):
-    """Acacia expressions that can be subscripted and be a rvalue."""
+class ConstExpr(AcaciaExpr, metaclass=ABCMeta):
+    """An expression known and only available at compile time."""
+    pass
+
+class CTCallable(ConstExpr, _CallableBase, metaclass=ABCMeta):
     @abstractmethod
-    def getitem(self, subscripts: Tuple[AcaciaExpr]) \
-            -> Union[CALLRET_T, AcaciaExpr]:
-        """Implements subscripting. Return value is same as `call`."""
+    def ccall(self, args: ARGS_T, keywords: KEYWORDS_T) -> ConstExpr:
+        """Call inside const context."""
         pass
 
-class SupportsSetItem(AcaciaExpr, metaclass=ABCMeta):
-    """Acacia expressions that can be subscripted and be a lvalue."""
-    @abstractmethod
-    def setitem(self, subscripts: Tuple[AcaciaExpr],
-                value: AcaciaExpr) -> Optional[CMDLIST_T]:
-        """Implements assignment. Return value is commands to run."""
-        pass
+    def ccall_withframe(
+            self, args: ARGS_T, keywords: KEYWORDS_T,
+            location: Optional[Union[SourceLocation, str]] = None
+        ) -> ConstExpr:
+        """
+        Call this expression (in const context), and add this to error
+        frame if an error occurs.
+        """
+        return self._wrap_frame(self.ccall, args, keywords, location)
 
 class ImmutableMixin:
     """An `AcaciaExpr` that can't be changed and only allows

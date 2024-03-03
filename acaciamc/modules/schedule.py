@@ -72,15 +72,15 @@ class TaskType(Type):
             return Task(target, args, kwds, compiler)
 
     def datatype_hook(self):
-        return TaskDataType()
+        return TaskDataType(self.compiler)
 
-class Task(AcaciaExpr):
+class Task(ConstExpr):
     def __init__(self, target: AcaciaCallable, other_arg, other_kw, compiler):
         """
         target: The function to call
         other_arg & other_kw: Arguments to pass to `target`
         """
-        super().__init__(TaskDataType(), compiler)
+        super().__init__(TaskDataType(compiler), compiler)
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
         self.timer = IntVar.new(compiler)

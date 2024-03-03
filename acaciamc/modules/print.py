@@ -89,6 +89,7 @@ class _FStrParser:
             self.add_text(expr.value)
         elif isinstance(expr, FString):
             self.json.extend(expr.json)
+            self.dependencies.extend(expr.dependencies)
         else:
             raise _FStrError('Type "%s" can not be formatted as a string'
                              % expr.data_type)
@@ -151,12 +152,12 @@ class _FStrParser:
 class FStringDataType(DefaultDataType):
     name = 'fstring'
 
-class FString(AcaciaExpr):
+class FString(ConstExpr):
     """A formatted string in JSON format."""
     def __init__(self, dependencies: List[str], json: List[dict], compiler):
         # dependencies: commands to run before json rawtext is used
         # json: JSON rawtext without {"rawtext": ...}
-        super().__init__(FStringDataType(), compiler)
+        super().__init__(FStringDataType(compiler), compiler)
         self.dependencies = dependencies
         self.json = json
 

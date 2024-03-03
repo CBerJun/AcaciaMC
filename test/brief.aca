@@ -3,7 +3,7 @@
  * This file gives you a brief picture of Acacia,
  * while itself is a legal Acacia program.
  *
- * Acacia is written in Python and version 3.6+ is required.
+ * Acacia is written in Python and version 3.6.1+ is required.
  * No third-party Python package is needed.
  * Compile this (i.e. turn it into MC behavior pack functions) with:
  *   cd path/to/acacia
@@ -37,19 +37,22 @@ number = (x % -2) * (x + 3)
 # Boolean operations: and or not
 boolean := y and (x > 10) or (x < 0)
 
-#* Binding *#
-scoreboard -> "scb"
+#* Constants *#
 # Some values in Acacia are not representable in Minecraft and are only
-# for your convenience (e.g. strings). "=" Assignments really creates
-# and modifies the values in Minecraft, so its unavailable for these
-# kinds of values. "->" Bindings tells the compiler what a symbol stands
-# for.
-# `x: int` actually does `x -> <A newly created integer variable>`,
-# which tells compiler "x is a variable". A variable can be assigned
-# to: `x = 20`, and this operation is done by Minecraft when you run
-# your program, instead of compiler. `x -> 20`, however, is done by
-# compiler and tells it "x stands for the constant literal integer 20".
-player -> "@a[tag=player]"
+# for your convenience (e.g. strings). "v: t" and ":=" variable
+# declaration really creates a value in Minecraft, and "=" assignment is
+# also done in Minecraft at runtime. Thus, those values cannot be
+# handled using those syntax.
+const scoreboard = "scb"
+# `const` keyword in Acacia defines constants that are known at compile
+# time, and values of constants are held by compiler instead of
+# Minecraft. It is similar to "constexpr" in C++ and "comptime" in Zig.
+const player_name = "CBerJun"
+# Integers and many other types can also be constants:
+const CONST10 = 10
+# Arithmetic operations are guaranteed to happen at compile time if both
+# operands are constants.
+const CONST20 = 2 * CONST10
 
 #* Control statements *#
 ## If statement
@@ -79,32 +82,13 @@ for i in {1, 2, 3}:
 x += 1
 x += 2
 x += 3
-# Lists can contain variables, too:
-m := 10
-n := 20
-q := 30
-# Since lists are compile time only, we use binding instead of
-# assignment to store them.
-my_list -> {m, n, q}
-# Values from iterator are *bound* to variable so it's possible to do:
-# (This will increase `m`, `n` and `q` by 10.)
-for i in my_list:
-    # `i` is local in the for-in scope and can't be accessed from
-    # outside.
-    i += 10
-# Set element 0 (first element) to `x`. Note that the list is compile
-# time object, so we still use binding to change its elements.
-my_list[0] -> x
-# But assignment works too if the object accessed is assignable (In this
-# case `my_list[0]` is `x`, so this is valid and same as `x = 10`, which
-# assigns 10 to `x` (the list didn't change)).
-my_list[0] = 10
-# Assign value of element 0 in `my_list` (`x`) to `n`.
-n = my_list[0]
+# Since lists are compile time only, we have to use "const".
+const my_list = {33, 44, 55}
+# Assign value of element 0 in `my_list` (33) to `n`.
+n := my_list[0]
 # Common bisection algorithm implemented with this feature:
 y_length := 23
-bisection_arr -> list.geometric(1, ratio=2, length=5)
-bisection_arr.reverse()
+const bisection_arr = {128, 64, 32, 16, 8, 4, 2, 1}
 for i in bisection_arr:
     if y_length >= i:
         y_length -= i
@@ -124,17 +108,13 @@ for i in list.repeat(x, 10):
 
 #* Compile time map *#
 # Map is similar to list since it is also compile time only.
-# Its keys can only be several literal types (e.g. int literal or
+# Its keys can only be several literal types (e.g. int literal and
 # string).
-mp -> {
+const mp = {
     0: "zero", 1: "one",
     2: "two", 3: "three"
 }
 # Subscripting a map accesses its value according to given key.
-# You can update value or add new pair to map:
-# (Note this is a compile time operation, so use ->, not =)
-mp[0] -> "none"  # Update value at key 0 to "none"
-mp[4] -> "four"  # New pair 4: "four"
 i := 0  # calculate `i`...
 # Using for-in on maps will iterate through its keys.
 for num in mp:
@@ -210,7 +190,7 @@ entity Subtemplate extends Test:
 # Subtemplate's base.
 # You can assign entity variables of Subtemplate template to those of
 # Test template, but not the other way around.
-test_entity := Subtemplate()
+test_entity = Subtemplate()
 # A function can take arguments of entity type by specifying template:
 def kill(test: Test):
     world.msg_say(test, "I'm killed")  # Let `test` shout "I'm killed"
@@ -274,13 +254,15 @@ world.move(player_group, y=-2)
 ## Position and rotation
 # Position and rotation are pretty simple.
 Pos(10, 10.5, 10)  # absolute position 10, 10.5, 10
-pos -> Pos(test_entity)  # position of test entity
-pos -> pos.offset(y=-5)  # 5 blocks under test entity
-# Move `pos` by 3 blocks in the (xrot=90, yrot=0) direction.
-pos -> pos.local(Rot(90, 0), front=3)
-# Move `pos` towards test entity by 2 blocks
-pos -> pos.local(Rot.face_entity(test_entity), front=2)
-pos -> pos.dim("the_end")  # convert `pos` to position in The End
+const pos = (
+    Pos(test_entity)  # position of test entity
+        .offset(y=-5)  # 5 blocks under test entity
+        # Move it by 3 blocks in the (xrot=90, yrot=0) direction.
+        .local(Rot(90, 0), front=3)
+        # Move it towards test entity by 2 blocks
+        .local(Rot.face_entity(test_entity), front=2)
+        .dim("the_end")  # convert it to a position in The End
+)
 # Now let's place a yellow concrete at `pos`:
 world.setblock(pos, world.Block("concrete", {"color": "yellow"}))
 # See it? In command you will have to dabble with /execute context and
@@ -299,15 +281,15 @@ world.setblock(pos, world.Block("concrete", {"color": "yellow"}))
 # This fills 10, 10, 10 to 20, 20, 20 with air:
 world.fill(Pos(10, 10, 10), Offset().abs(20, 20, 20), "air")
 # This does the same thing:
-world.fill(Pos(10, 10, 10), Offset().offset(+10, +10, +10), "air")
+world.fill(Pos(10, 10, 10), Offset(+10, +10, +10), "air")
 # Absolute position and relative offset can mix in `Offset`:
-world.fill(Pos(10, 10, 10), Offset().offset(x=+10, z=+10).abs(y=20), "air")
+world.fill(Pos(10, 10, 10), Offset(x=+10, y_abs=20, z=+10), "air")
 
 ## `AbsPos`
 # An absolute position can be either a `Pos` or an `Offset`. `AbsPos`
 # is compatible with both of them and represents an absolute position.
-pos1 -> AbsPos(10, 10, 10)
-pos2 -> AbsPos(20, 20, 20)
+const pos1 = AbsPos(10, 10, 10)
+const pos2 = AbsPos(20, 20, 20)
 world.fill(pos1, pos2, "diamond_block")
 world.fill(pos2, pos1, "air", replacement="destroy")
 
@@ -318,15 +300,15 @@ def max(a: int, b = int.MAX) -> int:
     #* Return the larger one between a and b *#
     # Result of a function is specified by assigning to `result`.
     if a >= b:
-        result = a
+        result a
         # Unlike "return" in modern languages like Python,
-        # assigning to result do not stop functions!
+        # "result" does not stop functions!
     else:
-        result = b
+        result b
 
 def is_larger(a: int, b: int) -> bool:
     #* Return whether a is larger than b *#
-    result = a > b
+    result a > b
 
 if not is_larger(x, 4):
     x = 2
@@ -341,33 +323,52 @@ else:
 #* Inline functions *#
 #*
  * Inline functions have great differences from normal ones.
- * They are like bindings because they are both just an "alias" to make
- * code simpler.
  * Inline functions are:
  *  1. Expanded when called. Every time they get called, their body is
  *  parsed once. Therefore, type of argument can be omitted.
- *  2. Arguments and result are delivered directly, not assigned. The
- *  arguments and result are sent in the same way as bindings, while
- *  the normal functions do it using assignments. Therefore, the argument
- *  types and result type can be any type you want. The type hint for
- *  arguments and result are optional.
+ *  2. Arguments and result can be delivered in a different way rather
+ *  than assigning (which normal functions do). See below.
  *#
 
-inline def my_print(text="Hello!"):
+# In an inline function, arguments can be annotated with `const` to pass
+# a compile time argument, and therefore type hint for these arguments
+# are optional.
+inline def my_print(const text = "Hello!"):
     #* Print a message from Acacia. *#
     print.tell("Acacia: " + text)
 my_print()  # Acacia: Hello!
 my_print("Inline functions!")  # Acacia: Inline functions!
 
-inline def set_var(x: int):
+# Arguments annotated with `&` accepts a "reference" of a given
+# variable. This means that they can be assigned to!
+inline def set_var(&x: int):
     x = 10
 set_var(x)  # `x` is 10 now
 
-inline def prefix_str(s):
+# Result can be reference or const, too. The type must be specified, and
+# we use `Any` for a type that we cannot represent.
+inline def prefix_str(const s) -> const Any:
     #* Prefix given string `s` with "I like ". *#
-    # Result of an inline function may be specified using binding.
-    result -> "I like " + s
+    result "I like " + s
 my_print(prefix_str("CB!"))  # Acacia: I like CB!
+
+# `const` can also annotate a function. In this case, the function body
+# will be processed at compile time, and no command will be generated.
+# Inside `const def`, many compile time values are mutable (e.g.
+# strings), so we handle them using regular variable declaration and
+# assignment -- without `const` keyword! The only way it communicate
+# with the outside "runtime world" is to use result value.
+const def fact(x: int) -> int:
+    res := 1
+    while x > 1:
+        res *= x
+        x -= 1
+    result res
+# The above function calculates factorial *at compile time*.
+x = fact(6)  # completely same as x = 720
+# Since everything happening inside `const def` are compile time, the
+# arguments are implicitly compile time constants -- `fact(m)` would
+# compile only if `m` is a constant defined with `const`.
 
 #* Structs *#
 # Structs are combination of data. It allows you to create custom
@@ -385,10 +386,9 @@ test_struct.b = test_struct.i < 5
 # This is useful when a function's result has multiple values:
 def result_struct(i: int) -> Struct:
     # You can specify initial values of struct members:
-    result = Struct(i=i)
-    result.b = i < 5
-    # The barline "|" passes arguments when initializing variable.
-    # Different data types accept different arguments.
+    res := Struct(i=i)
+    res.b = i < 5
+    result res
 test_struct = result_struct(10)
 
 #* Exported interfaces *#
@@ -408,15 +408,15 @@ interface b.c:
 #* Compatible with the original command system *#
 ## Accessing scoreboards
 # "|" selector ":" objective "|" is referring to selector's score on objective
-x = |"@p": "score"| + 10
-|"CBerJun": scoreboard| = 3
-x = |player: "data"|
+x = |"spam": "score"| + 10
+|"foo": scoreboard| = 3
+x = |player_name: "data"|
 
 ## Accessing Raw Command
 /say Hello, world!
 # Using binding with commands
-/tp ${player} 11 45 14
-/scoreboard players add ${player} ${scoreboard} 10
+/tp ${player_name} 11 45 14
+/scoreboard players add ${player_name} ${scoreboard} 10
 # Multi-line command:
 /*
 tellraw @a {"rawtext":[

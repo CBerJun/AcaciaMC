@@ -1,18 +1,21 @@
 # Output all the prime numbers less than `MAX`
-# 输出到MAX为止的所有质数
+# 输出所有小于MAX的质数
 
 import print
 
-MAX -> 50
+const MAX = 50
 
 def is_prime(x: int) -> bool:
-    # Test if an integer is a prime number
-    # `x` must >= 2
-    result = True
+    #**
+     * Test if an integer is a prime number.
+     * `x` has to be larger than 1.
+     *#
     mod := 2
-    while mod <= x / 2 and result:
-        result = (x % mod == 0)
+    res := True
+    while mod <= x / 2 and res:
+        res = (x % mod == 0)
         mod += 1
+    result res
 
 i := 2
 while i <= MAX:

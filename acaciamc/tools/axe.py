@@ -5,8 +5,6 @@ __all__ = [
     "chop", "arg", "slash", "star", "star_arg", "kwds",
     # Overload interfaces
     "OverloadChopped", "overload", "overload_versioned",
-    # Subscript interfaces
-    "chop_getitem", "chop_setitem",
     # Converters
     "Converter", "AnyValue", "Typed", "Multityped", "LiteralInt",
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
@@ -438,11 +436,10 @@ class MapOf(Typed):
     def convert(self, origin: acacia.AcaciaExpr) -> dict:
         origin = super().convert(origin)
         assert isinstance(origin, acacia.Map)
-        res = {}
-        for py_key, key in origin.py_key2key.items():
-            res[self.key.convert(key)] = \
-                self.value.convert(origin.dict[py_key])
-        return res
+        return {
+            self.key.convert(key): self.value.convert(value)
+            for key, value in origin.items()
+        }
 
 class PlayerSelector(Selector):
     """Accepts an entity or Engroup with player type and converts it
@@ -868,108 +865,4 @@ def overload_versioned(version: "VersionRequirement"):
     @_parser_component
     def _decorator(building: _BuildingParser):
         return _OverloadMethod(building, version)
-    return _decorator
-
-class _SubscriptChopper:
-    def __init__(self, building: _BuildingParser, is_setter: bool,
-                 value_name: Optional[str],
-                 value_converter: Optional[Converter]):
-        self.is_setter = is_setter
-        self.value_name = value_name
-        self.value_converter = value_converter
-        self.implementation = building.get_target()
-        if any(type_ != _BP_ARG for type_, _ in building):
-            raise ChopError("only arguments are allowed in subscript "
-                            "definitions")
-        arg_defs: List[_Argument] = [arg_def for _, arg_def in building]
-        self.arg_defs = arg_defs
-        self.arg_names = [arg_def.name for arg_def in arg_defs]
-        self.arg_num = len(arg_defs)
-        default_sep = -1
-        for i, arg_def in enumerate(arg_defs):
-            if arg_def.has_default():
-                if default_sep == -1:
-                    default_sep = i
-            elif default_sep != -1:
-                raise ChopError("non-default argument follows "
-                                "default argument")
-        if default_sep == -1:
-            default_sep = self.arg_num
-        _check_repeat(self.arg_names,
-                      [arg_def.rename for arg_def in arg_defs])
-        if is_setter and any(
-            arg_def.rename == value_name for arg_def in arg_defs
-        ):
-            raise ChopError("subscript argument name is same as value name")
-        self.default_sep = default_sep
-        self.defaults = [
-            arg_def.get_default()
-            for arg_def in arg_defs[default_sep:]
-        ]
-
-    def __get__(self, instance, owner: Optional[type] = None) -> PyCallable:
-        return partial(self.call, instance)
-
-    def _fmt_range(self, min_: int, max_: int) -> str:
-        if min_ == max_:
-            return "exactly %d" % min_
-        return "%d to %d" % (min_, max_)
-
-    def call(self, instance, subscripts: Tuple[acacia.AcaciaExpr], *extra):
-        if self.is_setter:
-            if len(extra) != 1:
-                raise ChopError("expecting 1 extra argument, got {!r}"
-                                .format(extra))
-            value = extra[0]
-        elif extra:
-            raise ChopError("extra arguments are not allowed for getitem")
-        res = {}
-        if self.is_setter:
-            try:
-                res[self.value_name] = self.value_converter.convert(value)
-            except _WrongArgTypeError:
-                raise AcaciaError(
-                    ErrorType.SETITEM_VALUE_TYPE,
-                    expect=self.value_converter.get_show_name(),
-                    got=str(value.data_type)
-                )
-        ARG_LEN = len(subscripts)
-        if ARG_LEN < self.default_sep or ARG_LEN > self.arg_num:
-            raise AcaciaError(
-                ErrorType.SUBSCRIPT_ARG_LEN, got=ARG_LEN,
-                expect=self._fmt_range(self.default_sep, self.arg_num)
-            )
-        for arg_def, arg in zip(self.arg_defs, subscripts):
-            try:
-                res[arg_def.rename] = arg_def.converter.convert(arg)
-            except _WrongArgTypeError:
-                raise AcaciaError(
-                    ErrorType.SUBSCRIPT_ARG_TYPE,
-                    expect=arg_def.converter.get_show_name(),
-                    arg=arg_def.name, got=str(arg.data_type)
-                )
-        for arg_def, default in zip(
-            self.arg_defs[ARG_LEN:],
-            self.defaults[ARG_LEN - self.default_sep:]
-        ):
-            res[arg_def.rename] = default
-        return _call_impl(
-            self.implementation, self.arg_names,
-            instance, **res
-        )
-
-@_parser_component
-def chop_getitem(building: _BuildingParser):
-    """Decorator for `SupportsGetItem.getitem` method."""
-    return _SubscriptChopper(building, False, None, None)
-
-def chop_setitem(value_type: _ARG_TYPE, value_name: str = "value"):
-    """
-    Return a decorator for `SupportsSetItem.setitem` method.
-    The value can also be converted by specifying `value_type`.
-    """
-    value_type = _converter(value_type)
-    @_parser_component
-    def _decorator(building: _BuildingParser):
-        return _SubscriptChopper(building, True, value_name, value_type)
     return _decorator

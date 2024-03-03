@@ -2,14 +2,21 @@
 
 __all__ = ['Parser']
 
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Tuple, TYPE_CHECKING
 
 from acaciamc.error import *
-from acaciamc.tokenizer import *
+from acaciamc.tokenizer import TokenType, BRACKETS
 from acaciamc.ast import *
 
+if TYPE_CHECKING:
+    from acaciamc.tokenizer import Tokenizer
+
+NORMAL_FUNC_PORTS = CONST_FUNC_PORTS = (FuncPortType.by_value,)
+INLINE_FUNC_PORTS = (FuncPortType.by_value, FuncPortType.by_reference,
+                     FuncPortType.const)
+
 class Parser:
-    def __init__(self, tokenizer: Tokenizer):
+    def __init__(self, tokenizer: "Tokenizer"):
         self.tokenizer = tokenizer
         self.current_token = self.tokenizer.get_next_token()
         self.next_token = None
@@ -51,9 +58,10 @@ class Parser:
             self.next_token = self.tokenizer.get_next_token()
 
     def _block(self, func: Callable[[], Statement]):
-        """Read a block of structures.
+        """
+        Read an indented block of structures.
         `func` reads the structure and should return the result AST.
-        <func>_block := NEW_LINE INDENT <func>+ DEDENT
+        block{n} := NEW_LINE INDENT n+ DEDENT
         """
         stmts = []
         self.eat(TokenType.new_line)
@@ -66,8 +74,9 @@ class Parser:
         return stmts
 
     def statement_block(self):
-        """Read a block of statements.
-        statement_block := NEW_LINE INDENT statement+ DEDENT
+        """
+        Read a block of statements.
+        statement_block := block{statement}
         """
         return self._block(self.statement)
 
@@ -124,15 +133,9 @@ class Parser:
         self.eat(TokenType.self)
         return Self(**pos)
 
-    def result(self):
-        """result := RESULT"""
-        pos = self.current_pos
-        self.eat(TokenType.result)
-        return Result(**pos)
-
     def list_or_map(self):
         """
-        list := LBRACE (expr COMMA)* expr? RBRACE
+        list := paren_list_of{LBRACE, expr, RBRACE}
         map_item := expr COLON expr
         map := LBRACE ((map_item (COMMA map_item)* COMMA?) | COLON)
           RBRACE
@@ -183,7 +186,6 @@ class Parser:
         """
         level 0 expression := (LPAREN expr RPAREN) | literal
           | identifier | str_literal | raw_score | self | list | map
-          | result
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -205,8 +207,6 @@ class Parser:
             return self.self()
         elif self.current_token.type is TokenType.lbrace:
             return self.list_or_map()
-        elif self.current_token.type is TokenType.result:
-            return self.result()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
 
@@ -215,7 +215,7 @@ class Parser:
         level 1 expression := expr_l0 (
           (POINT IDENTIFIER)
           | call_table
-          | (LBRACKET (expr COMMA)* expr? RBRACKET)
+          | paren_list_of{LBRACKET, expr, RBRACKET}
           | (AT expr_l0)
         )*
         """
@@ -234,15 +234,11 @@ class Parser:
             )
 
         def _subscript(node: Expression):
-            self.eat(TokenType.lbracket)
             subscripts = []
-            while self.current_token.type is not TokenType.rbracket:
-                subscripts.append(self.expr())
-                if self.current_token.type is TokenType.comma:
-                    self.eat()  # eat COMMA
-                else:
-                    break
-            self.eat(TokenType.rbracket)
+            self.paren_list_of(
+                lambda: subscripts.append(self.expr()),
+                lparen=TokenType.lbracket
+            )
             return Subscript(
                 node, subscripts, lineno=node.lineno, col=node.col
             )
@@ -447,28 +443,63 @@ class Parser:
         stmts = self.statement_block()
         return InterfaceDef(path, stmts, **pos)
 
-    def def_stmt(self):
-        """
-        def_stmt := INLINE? DEF IDENTIFIER argument_table
-          (ARROW type_spec)? COLON statement_block
-        """
+    def _func_port_qualifier(self, allowed_ports: Tuple[FuncPortType]) \
+            -> FuncPortType:
+        """func_port_qualifier := (CONST | AMPERSAND)?"""
         pos = self.current_pos
-        is_inline = self.current_token.type is TokenType.inline
-        if is_inline:
-            self.eat()  # eat "inline"
+        if self.current_token.type is TokenType.const:
+            self.eat()
+            res = FuncPortType.const
+        elif self.current_token.type is TokenType.ampersand:
+            self.eat()
+            res = FuncPortType.by_reference
+        else:
+            res = FuncPortType.by_value
+        if res not in allowed_ports:
+            self.error(ErrorType.INVALID_FUNC_PORT, **pos, port=res.value)
+        return res
+
+    def _function_def(self, allowed_ports: Tuple[FuncPortType],
+                      type_required: bool):
+        """
+        function_def := DEF IDENTIFIER argument_table
+          (ARROW func_port_qualifier type_spec)? COLON statement_block
+        """
         self.eat(TokenType.def_)
         name = self.current_token.value
         self.eat(TokenType.identifier)
-        # Inline functions does not require type declaration
-        arg_table = self.argument_table(type_required=(not is_inline))
-        returns = None
+        arg_table = self.argument_table(allowed_ports, type_required)
         if self.current_token.type is TokenType.arrow:
             self.eat()
-            returns = self.type_spec()
+            pos = self.current_pos
+            qualifier = self._func_port_qualifier(allowed_ports)
+            ret_type = self.type_spec()
+            returns = FunctionPort(ret_type, qualifier, **pos)
+        else:
+            returns = None
         self.eat(TokenType.colon)
         stmts = self.statement_block()
-        ast_class = InlineFuncDef if is_inline else FuncDef
-        return ast_class(name, arg_table, stmts, returns, **pos)
+        return name, arg_table, stmts, returns
+
+    def const_def_stmt(self):
+        """const_def_stmt := CONST function_def"""
+        pos = self.current_pos
+        self.eat(TokenType.const)
+        func_data = self._function_def(CONST_FUNC_PORTS, type_required=False)
+        return ConstFuncDef(*func_data, **pos)
+
+    def inline_def_stmt(self):
+        """inline_def_stmt := INLINE function_def"""
+        pos = self.current_pos
+        self.eat(TokenType.inline)
+        func_data = self._function_def(INLINE_FUNC_PORTS, type_required=False)
+        return InlineFuncDef(*func_data, **pos)
+
+    def def_stmt(self):
+        """def_stmt := function_def"""
+        pos = self.current_pos
+        func_data = self._function_def(NORMAL_FUNC_PORTS, type_required=True)
+        return FuncDef(*func_data, **pos)
 
     def _entity_body(self):
         pos = self.current_pos
@@ -502,15 +533,18 @@ class Parser:
             elif self.current_token.type is TokenType.override:
                 self.eat()  # eat "override"
                 qualifier = MethodQualifier.override
-            content = self.def_stmt()
+            if self.current_token.type is TokenType.inline:
+                content = self.inline_def_stmt()
+            else:
+                content = self.def_stmt()
             return EntityMethod(content, qualifier, **pos)
 
     def entity_stmt(self):
         """
         entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
-          (COMMA expr)*)? COLON entity_body_block
+          (COMMA expr)*)? COLON block{entity_body}
         entity_field_decl := IDENTIFIER COLON type_spec
-        method_decl := (VIRTUAL | OVERRIDE)? def_stmt
+        method_decl := (VIRTUAL | OVERRIDE)? (def_stmt | inline_def_stmt)
         meta_decl := AT IDENTIFIER COLON expr
         entity_body := method_decl | (
           (entity_field_decl | meta_decl | pass_stmt) NEW_LINE)
@@ -572,7 +606,7 @@ class Parser:
         last_name = names.pop()
         return ModuleMeta(last_name, leadint_dots, names)
 
-    def alias(self) -> str:
+    def alias(self) -> Optional[str]:
         """Try to read an alias. Return None if no alias is given.
         alias := (AS IDENTIFIER)?
         """
@@ -647,7 +681,7 @@ class Parser:
         struct_field_decl := IDENTIFIER (COLON type_spec)? EQUAL expr
         struct_body := ((struct_field_decl | pass_stmt) NEW_LINE)*
         struct_stmt := STRUCT IDENTIFIER (EXTENDS expr (COMMA expr)*)?
-          COLON struct_body_block
+          COLON block{struct_body}
         """
         pos = self.current_pos
         self.eat(TokenType.struct)
@@ -664,21 +698,73 @@ class Parser:
         body = self._block(self._struct_body)
         return StructDef(name, bases, body, **pos)
 
+    def _constant_decl(self) -> Tuple[str, Optional[TypeSpec], Expression]:
+        """constant_decl := IDENTIFIER (COLON type_spec)? EQUAL expr"""
+        name = self.current_token.value
+        self.eat(TokenType.identifier)
+        if self.current_token.type is TokenType.colon:
+            self.eat()
+            type_ = self.type_spec()
+        else:
+            type_ = None
+        self.eat(TokenType.equal)
+        value = self.expr()
+        return (name, type_, value)
+
+    def _handle_const(self):
+        """
+        constant_def_body := list_of{constant_decl} |
+          paren_list_of{LPAREN, constant_decl, RPAREN}
+        const_statement := const_def_stmt | (CONST constant_def_body NEW_LINE)
+        """
+        self.peek()
+        if self.next_token.type is TokenType.def_:
+            return self.const_def_stmt()
+        pos = self.current_pos
+        self.eat()  # eat CONST
+        names = []
+        types = []
+        values = []
+        def _add_const_decl():
+            name, type_, value = self._constant_decl()
+            names.append(name)
+            types.append(type_)
+            values.append(value)
+        if self.current_token.type is TokenType.lparen:
+            self.paren_list_of(_add_const_decl)
+        else:
+            self.list_of(_add_const_decl)
+        self.eat(TokenType.new_line)
+        return ConstDef(names, types, values, **pos)
+
+    def reference_def_stmt(self):
+        """reference_def_stmt := AMPERSAND constant_decl"""
+        pos = self.current_pos
+        self.eat(TokenType.ampersand)
+        return ReferenceDef(*self._constant_decl(), **pos)
+
+    def result_stmt(self):
+        """result_stmt := RESULT expr"""
+        pos = self.current_pos
+        self.eat(TokenType.result)
+        return Result(self.expr(), **pos)
+
     def statement(self):
         """
         expr_statement := (
           var_def_stmt | auto_var_def_stmt | assign_stmt |
-          aug_assign_stmt | bind_stmt | expr_stmt
+          aug_assign_stmt | expr_stmt
         )
         simple_statement := (
-          pass_stmt | command_stmt | import_stmt | from_import_stmt
+          pass_stmt | command_stmt | import_stmt | from_import_stmt |
+          result_stmt
         )
         embedded_statement := (
           if_stmt | while_stmt | for_stmt | interface_stmt | def_stmt |
-          entity_stmt | struct_stmt
+          entity_stmt | struct_stmt | inline_def_stmt
         )
         statement := ((simple_statement | expr_statement) NEW_LINE) |
-          embedded_statement
+          embedded_statement | const_statement
         """
         # Statements that start with special token
         TOK2STMT_EMBEDDED = {
@@ -686,7 +772,7 @@ class Parser:
             TokenType.while_: self.while_stmt,
             TokenType.interface: self.interface_stmt,
             TokenType.def_: self.def_stmt,
-            TokenType.inline: self.def_stmt,
+            TokenType.inline: self.inline_def_stmt,
             TokenType.entity: self.entity_stmt,
             TokenType.for_: self.for_stmt,
             TokenType.struct: self.struct_stmt
@@ -696,7 +782,11 @@ class Parser:
             TokenType.command_begin: self.command_stmt,
             TokenType.import_: self.import_stmt,
             TokenType.from_: self.from_import_stmt,
+            TokenType.ampersand: self.reference_def_stmt,
+            TokenType.result: self.result_stmt,
         }
+        if self.current_token.type is TokenType.const:
+            return self._handle_const()
         stmt_method = TOK2STMT_SIMPLE.get(self.current_token.type)
         if stmt_method:
             res = stmt_method()
@@ -716,8 +806,6 @@ class Parser:
             TokenType.divide_equal: Operator.divide,
             TokenType.mod_equal: Operator.mod
         }
-        BINDABLE = (Attribute, Identifier, Result, Subscript)
-        VARDEFABLE = (Identifier,)
 
         if self.current_token.type is TokenType.equal:
             # assign_stmt := expr EQUAL expr
@@ -729,17 +817,10 @@ class Parser:
             operator = AUG_ASSIGN[self.current_token.type]
             self.eat()  # eat operator
             node = AugmentedAssign(expr, operator, self.expr(), **pos)
-        elif self.current_token.type is TokenType.arrow:
-            # bind_stmt := bindable ARROW expr
-            self.eat()  # eat arrow
-            if not isinstance(expr, BINDABLE):
-                self.error(ErrorType.INVALID_BIND_TARGET, **pos)
-            right = self.expr()  # get assign value
-            node = Binding(expr, right, **pos)
         elif self.current_token.type is TokenType.colon:
             # var_def_stmt := identifier COLON type_spec (EQUAL expr)?
             self.eat()  # eat colon
-            if not isinstance(expr, VARDEFABLE):
+            if not isinstance(expr, Identifier):
                 self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
             type_ = self.type_spec()
             if self.current_token.type is TokenType.equal:
@@ -747,13 +828,13 @@ class Parser:
                 value = self.expr()
             else:
                 value = None
-            node = VarDef(expr, type_, value, **pos)
+            node = VarDef(expr.name, type_, value, **pos)
         elif self.current_token.type is TokenType.walrus:
             # auto_var_def_stmt := identifier WALRUS expr
             self.eat()  # eat walrus
-            if not isinstance(expr, VARDEFABLE):
+            if not isinstance(expr, Identifier):
                 self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
-            node = AutoVarDef(expr, self.expr(), **pos)
+            node = AutoVarDef(expr.name, self.expr(), **pos)
         else:  # just an expr
             # expr_stmt := expr
             node = ExprStatement(expr, **pos)
@@ -770,46 +851,51 @@ class Parser:
             stmts.append(self.statement())
         return Module(stmts, **pos)
 
-    def argument_table(self, type_required=True):
+    def argument_table(self, allowed_ports: Tuple[FuncPortType],
+                       type_required=True):
         """
         type_decl := COLON type_spec
         default_decl := EQUAL expr
         When `type_required`:
-          arg_decl := IDENTIFIER ((type_decl | default_decl)
-            | (type_decl default_decl))
+          arg_decl := func_port_qualifier IDENTIFIER
+            ((type_decl | default_decl) | (type_decl default_decl))
         Else:
-          arg_decl := IDENTIFIER type_decl? default_decl?
-        argument_table := LPAREN (arg_decl COMMA)* arg_decl? RPAREN
+          arg_decl := func_port_qualifier IDENTIFIER type_decl?
+            default_decl?
+        argument_table := paren_list_of{LPAREN, arg_decl, RPAREN}
         """
         arg_table = ArgumentTable(**self.current_pos)
-        self.eat(TokenType.lparen)
-        while self.current_token.type is TokenType.identifier:
-            name = self.current_token.value
+        got_default = False
+        def _arg_decl():
+            nonlocal got_default
             pos = self.current_pos
+            # read qualifier
+            qualifier = self._func_port_qualifier(allowed_ports)
+            # read name
+            name = self.current_token.value
             self.eat()  # eat identifier
             # read type
             type_ = None
             if self.current_token.type is TokenType.colon:
                 self.eat()
                 type_ = self.type_spec()
+            port = FunctionPort(type_, qualifier, **pos)
             # read default
             default = None
             if self.current_token.type is TokenType.equal:
                 self.eat()
                 default = self.expr()
+                got_default = True
+            elif got_default:
+                self.error(ErrorType.NONDEFAULT_ARG_AFTER_DEFAULT, **pos)
             # check
-            if (not (type_ or default)) and type_required:
+            if (not (port.type or default)) and type_required:
                 self.error(ErrorType.DONT_KNOW_ARG_TYPE, **pos, arg=name)
             if name in arg_table.args:
                 self.error(ErrorType.DUPLICATE_ARG_DEF, **pos, arg=name)
             # add arg
-            arg_table.add_arg(name, type_, default)
-            # eat comma
-            if self.current_token.type is TokenType.comma:
-                self.eat()
-            else:
-                break  # no comma -> end
-        self.eat(TokenType.rparen)
+            arg_table.add_arg(name, port, default)
+        self.paren_list_of(_arg_decl)
         return arg_table
 
     def type_spec(self):
@@ -820,19 +906,19 @@ class Parser:
     def call_table(self):
         """
         arg := (IDENTIFIER EQUAL)? expr
-        call_table := LPAREN (arg COMMA)* arg? RPAREN
+        call_table := paren_list_of{LPAREN, arg, RPAREN}
+        # Note this grammar does not show the fact that all keyword
+        # arguments must be placed after positional arguments.
         """
         pos = self.current_pos
         args, keywords = [], {}
-        self.eat(TokenType.lparen)
-        # Keywords are always after positioned args, so use this flag to
-        # store if a keyword has been read
-        accept_positioned = True
-        while self.current_token.type is not TokenType.rparen:
+        got_keyword = False  # if a keyword argument has been read
+        def _arg():
+            nonlocal got_keyword
             self.peek()
             if self.next_token.type is TokenType.equal:
                 # keyword
-                accept_positioned = False
+                got_keyword = True
                 key = self.current_token.value
                 pos = self.current_pos
                 self.eat(TokenType.identifier)
@@ -843,13 +929,28 @@ class Parser:
                 self.eat(TokenType.equal)
                 keywords[key] = self.expr()
             else:  # positioned
-                if not accept_positioned:
+                if got_keyword:
                     self.error(ErrorType.POSITIONED_ARG_AFTER_KEYWORD)
                 args.append(self.expr())
-            # read comma
+        self.paren_list_of(_arg)
+        return CallTable(args, keywords, **pos)
+
+    def list_of(self, content: Callable[[], None]):
+        """list_of{g} := g (COMMA g)*"""
+        content()
+        while self.current_token.type is TokenType.comma:
+            self.eat()
+            content()
+
+    def paren_list_of(self, content: Callable[[], None],
+                      lparen=TokenType.lparen):
+        """paren_list_of{lp, g, rp} := lp (g COMMA)* g? rp"""
+        self.eat(lparen)
+        rp = BRACKETS[lparen]
+        while self.current_token.type is not rp:
+            content()
             if self.current_token.type is TokenType.comma:
                 self.eat()
             else:
                 break
-        self.eat(TokenType.rparen)
-        return CallTable(args, keywords, **pos)
+        self.eat(rp)

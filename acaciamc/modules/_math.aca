@@ -1,8 +1,6 @@
 #* _math: Internal module used by builtin `math` module *#
 
-# Note that everything here is exported to `math`.
-
-def _mod(x: int, y: int) -> int:
+def mod(x: int, y: int) -> int:
     #**
      * Python-style modulo operator.
      * 10 % 3 == mod(10, 3) == 1
@@ -10,25 +8,33 @@ def _mod(x: int, y: int) -> int:
      * -10 % 3 == -1 while mod(-10, 3) == 2
      * -10 % -3 == mod(-10, -3) == -1
      *#
-    result = (x % y + y) % y
+    result (x % y + y) % y
 
-def _floordiv(x: int, y: int) -> int:
+def floordiv(x: int, y: int) -> int:
     #**
      * Return largest integer less than or equal to `x` divided by `y`.
      * This is Python-style floor division, while `/` operator is
      * C-style integer division (which rounds towards zero).
      *#
-    result = x / y
+    res := x / y
     if (x >= 0) != (y >= 0) and x % y != 0:
-        result -= 1
+        res -= 1
+    result res
 
-def _pow(x: int, y: int) -> int:
+def pow(x: int, y: int) -> int:
     #**
      * Return `x` to the power of `y`.
-     * `y` is treated as 0 when smaller than 0.
+     * The behavior is undefined when `y` is negative
+     * (in this implementation this causes infinite loop).
      * 0 to the power of 0 returns 1.
      *#
-    result = 1
-    while y > 0:
-        result *= x
-        y -= 1
+    if y == 0:
+        result 1
+    else:
+        t := 1
+        while y != 1:
+            if y % 2 == 1:
+                t *= x
+            x *= x
+            y /= 2
+        result x * t

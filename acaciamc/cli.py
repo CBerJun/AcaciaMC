@@ -38,6 +38,12 @@ def build_argparser():
         help="Minecraft version (e.g. 1.19.50)"
     )
     argparser.add_argument(
+        '-e', '--education-edition',
+        action='store_true',
+        help="enable features that require Minecraft's Education Edition"
+             " toggle turned on"
+    )
+    argparser.add_argument(
         '-s', '--scoreboard', metavar='OBJECTIVE',
         help='the scoreboard that Acacia uses to store data (default "acacia")'
     )
@@ -51,10 +57,6 @@ def build_argparser():
         '-m', '--main-file', metavar='NAME',
         help='name of the mcfunction file that executes your program '
              '(default "main")'
-    )
-    argparser.add_argument(
-        '-n', '--entity-name', metavar="NAME",
-        help='entity name prefix'
     )
     argparser.add_argument(
         '-t', '--entity-tag', metavar="TAG",
@@ -136,8 +138,6 @@ def apply_config(args):
     if args.main_file:
         assert_id(args.main_file, '--main-file')
         Config.main_file = args.main_file
-    if args.entity_name:
-        Config.entity_name = args.entity_name
     if args.entity_tag:
         Config.entity_tag = args.entity_tag
     if args.mc_version:
@@ -150,6 +150,8 @@ def apply_config(args):
                 raise ValueError
         except ValueError:
             fatal('invalid Minecraft version: %s' % args.mc_version)
+    if args.education_edition:
+        Config.education_edition = True
     if args.no_optimize:
         Config.optimizer = False
     if args.max_inline_file_size is not None:

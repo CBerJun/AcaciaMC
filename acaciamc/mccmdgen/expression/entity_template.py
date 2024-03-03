@@ -2,7 +2,9 @@
 
 __all__ = ["ETemplateDataType", "EntityTemplate"]
 
-from typing import List, Tuple, Dict, Union, Any, Optional, TYPE_CHECKING
+from typing import (
+    List, Tuple, Dict, Union, Any, Optional, Callable, TYPE_CHECKING
+)
 import itertools
 
 from acaciamc.ast import MethodQualifier
@@ -35,16 +37,11 @@ class _MethodDispatcher:
         self.compiler = compiler
         self.method_name = method_name
         self.bound: List[BoundVirtualMethod] = []
-        self.temp_n_impl: List[Tuple["EntityTemplate", "METHODDEF_T"]] = []
+        self.impls: Dict[
+            "METHODDEF_T",
+            Tuple[List["EntityTemplate"], Optional[Callable[[], TaggedEntity]]]
+        ] = {}
         self.result_var: Union[VarValue, None] = None
-        self.self_tag = compiler.allocate_entity_tag()
-        self.self_var = TaggedEntity(
-            self.self_tag,
-            # When calling a virtual method the object's template is
-            # unknown at compile time, so we just use the base template.
-            self.compiler.base_template,
-            self.compiler
-        )
 
     def register(self, template: "EntityTemplate",
                  implementation: "METHODDEF_T"):
@@ -59,47 +56,55 @@ class _MethodDispatcher:
                     got=str(res_type), expect=str(self.result_var.data_type),
                     name=implementation.name
                 )
-        self.temp_n_impl.append((template, implementation))
+        if isinstance(implementation, InlineFunction):
+            get_self_var = None
+        else:
+            _sv = None
+            def get_self_var():
+                nonlocal _sv
+                if _sv is None:
+                    _sv = TaggedEntity.new_tag(template, self.compiler)
+                return _sv
+        self.impls[implementation] = ([template], get_self_var)
         for bound in self.bound:
-            bound.add_implementation(template, implementation)
+            bound.add_implementation(template, implementation, get_self_var)
 
     def register_inherit(self, template: "EntityTemplate",
                          parent: "EntityTemplate"):
-        for got_template, impl in self.temp_n_impl:
-            if got_template is parent:
-                self.register(template, impl)
+        for impl, (templates, get_self) in self.impls.items():
+            if parent in templates:
+                templates.append(template)
+                for bound in self.bound:
+                    bound.add_implementation(template, impl, get_self)
                 break
         else:
             raise ValueError("Base not found")
 
     def bind_to(self, entity: "_EntityBase"):
         res = BoundVirtualMethod(
-            entity, self.method_name, self.result_var,
-            self.self_var, self.compiler
+            entity, self.method_name, self.result_var, self.compiler
         )
         self.bound.append(res)
-        for template, implementation in self.temp_n_impl:
-            res.add_implementation(template, implementation)
+        for impl, (templates, get_self_var) in self.impls.items():
+            for template in templates:
+                res.add_implementation(template, impl, get_self_var)
         return res
 
     def bind_to_cast(self, entity: "_EntityBase"):
-        candidates = {}
+        best = None
         mro = entity.cast_template.mro_
-        for template, implementation in self.temp_n_impl:
-            if template in mro:
-                candidates[mro.index(template)] = implementation
-        implementation = candidates[min(candidates)]
-        if isinstance(implementation, InlineFunction):
-            self_var_getter = None
-        else:
-            def self_var_getter():
-                return TaggedEntity(
-                    self.self_tag, entity.template,
-                    self.compiler, entity.cast_template
-                )
+        for impl, (templates, get_self_var) in self.impls.items():
+            try:
+                i = mro.index(templates[0])
+            except ValueError:
+                pass
+            else:
+                if best is None or i < best[0]:
+                    best = i, impl, get_self_var
+        _, impl, get_self_var = best
         return BoundMethod(
-            entity, self.method_name, implementation,
-            self_var_getter, self.compiler
+            entity, self.method_name, impl,
+            get_self_var, self.compiler
         )
 
 class _SimpleMethod:
@@ -113,7 +118,7 @@ class _SimpleMethod:
         self.is_inline = isinstance(implementation, InlineFunction)
         self._self_var = None
 
-    def get_self_var(self) -> Optional[TaggedEntity]:
+    def get_self_var(self) -> TaggedEntity:
         # We don't compute this inside __init__ because at that time
         # the template is not fully initialized yet.
         assert not self.is_inline
@@ -142,7 +147,7 @@ def _check_override(implementation: "METHODDEF_T", method: str):
             raise Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
                         name=method, type_=str(res_type))
 
-class EntityTemplate(ConstructorFunction):
+class EntityTemplate(ConstExpr, ConstructorFunction):
     def __init__(self, name: str,
                  field_types: Dict[str, "SupportsEntityField"],
                  field_metas: Dict[str, dict],
@@ -152,7 +157,7 @@ class EntityTemplate(ConstructorFunction):
                  metas: Dict[str, AcaciaExpr],
                  compiler,
                  source=None):
-        super().__init__(ETemplateDataType(), compiler)
+        super().__init__(ETemplateDataType(compiler), compiler)
         self.name = name
         self.func_repr = self.name
         if source is not None:
@@ -177,6 +182,7 @@ class EntityTemplate(ConstructorFunction):
         #  `@type`: str
         #  `@position`: Tuple[List[str], str]  # context, position
         #  `@spawn_event`: str
+        #  `@name`: str
         for name, meta in metas.items():
             if name == "type":
                 if not isinstance(meta, String):
@@ -189,7 +195,7 @@ class EntityTemplate(ConstructorFunction):
                     converted = ([], meta.value)
                 else:
                     _meta_error(name, "str or Pos")
-            elif name == "spawn_event":
+            elif name == "spawn_event" or name == "name":
                 if isinstance(meta, String):
                     converted = meta.value
                 elif meta.data_type.matches_cls(NoneDataType):

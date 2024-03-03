@@ -5,7 +5,7 @@ __all__ = ["PosType", "PosDataType", "Position"]
 from typing import List, TYPE_CHECKING
 
 from acaciamc.error import *
-from acaciamc.tools import axe, method_of
+from acaciamc.tools import axe, cmethod_of
 from acaciamc.constants import DEFAULT_ANCHOR, XYZ
 from acaciamc.mccmdgen.datatype import DefaultDataType
 import acaciamc.mccmdgen.cmds as cmds
@@ -37,7 +37,7 @@ class PosType(Type):
         self.attribute_table.set("X", String("x", self.compiler))
         self.attribute_table.set("Y", String("y", self.compiler))
         self.attribute_table.set("Z", String("z", self.compiler))
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
             Pos(entity, [str]):
@@ -77,14 +77,14 @@ class PosType(Type):
                 return new_inst, cmds
 
     def datatype_hook(self):
-        return PosDataType()
+        return PosDataType(self.compiler)
 
-class Position(AcaciaExpr, ImmutableMixin):
+class Position(ConstExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(PosDataType(), compiler)
+        super().__init__(PosDataType(compiler), compiler)
         self.context: List["_ExecuteSubcmd"] = []
 
-        @method_of(self, "dim")
+        @cmethod_of(self, "dim")
         @axe.chop
         @axe.arg("id", axe.LiteralString(), rename="id_")
         @transform_immutable(self)
@@ -97,7 +97,7 @@ class Position(AcaciaExpr, ImmutableMixin):
         """.abs(...) .offset(...)
         Alias of .apply(Offset().abs/offset(...)).
         """
-        @method_of(self, "local")
+        @cmethod_of(self, "local")
         @axe.chop
         @axe.arg("rot", RotDataType)
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
@@ -115,7 +115,7 @@ class Position(AcaciaExpr, ImmutableMixin):
             new_obj, cmds = (self.attribute_table.lookup("apply")
                              .call([offset], {}))
             return new_obj, cmds
-        @method_of(self, "apply")
+        @cmethod_of(self, "apply")
         @axe.chop
         @axe.arg("offset", PosOffsetDataType)
         @transform_immutable(self)
@@ -123,7 +123,7 @@ class Position(AcaciaExpr, ImmutableMixin):
             """.apply(offset: Offset): Apply offset to current position."""
             self.context.append(cmds.ExecuteEnv("positioned", str(offset)))
             return self
-        @method_of(self, "align")
+        @cmethod_of(self, "align")
         @axe.chop
         @axe.arg("axis", axe.LiteralString(), default="xyz")
         @transform_immutable(self)
@@ -146,9 +146,10 @@ class Position(AcaciaExpr, ImmutableMixin):
     def _create_offset_alias(self, method: str):
         @transform_immutable(self)
         def _offset_alias(self: Position, compiler, args, kwds):
-            offset = PosOffset(compiler)
-            _, cmds = (offset.attribute_table.lookup(method)
-                       .call(args, kwds))
+            offset, cmds = (
+                PosOffset(compiler).attribute_table.lookup(method)
+                .call(args, kwds)
+            )
             new_obj, _cmds = (self.attribute_table.lookup("apply")
                               .call([offset], {}))
             cmds.extend(_cmds)

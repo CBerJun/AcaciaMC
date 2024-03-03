@@ -1,6 +1,6 @@
 """Acacia symbol table."""
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Set, Iterator, Tuple
 
 __all__ = ['SymbolTable', 'ScopedSymbolTable', 'AttributeTable']
 
@@ -10,8 +10,9 @@ class SymbolTable:
     """
     def __init__(self):
         self._table = {}
+        self.ct_assignable = []
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[str, Any]]:
         return iter(self._table.items())
 
     def set(self, name: str, value):
@@ -35,6 +36,14 @@ class SymbolTable:
         """Return whether the name is defined in this table."""
         return name in self._table
 
+    @classmethod
+    def from_other(cls, table: "SymbolTable"):
+        """Construct from another `SymbolTable`."""
+        res = cls()
+        res._table = table._table.copy()
+        res.ct_assignable = table.ct_assignable.copy()
+        return res
+
 class ScopedSymbolTable(SymbolTable):
     """A `ScopedSymbolTable` is created for a new scope.
     (e.g. function definition, etc.)
@@ -48,13 +57,14 @@ class ScopedSymbolTable(SymbolTable):
         assert isinstance(outer, ScopedSymbolTable) or outer is None
         self.outer = outer
         self.builtins = builtins
+        self.no_export: Set[str] = set()
 
     def __iter__(self):
         yield from super().__iter__()
         if self.outer:
             yield from self.outer
 
-    def lookup(self, name: str, use_builtins=True):
+    def lookup(self, name: str, use_builtins=True, use_outer=True):
         res = super().lookup(name)
         if res is not None:
             return res
@@ -62,18 +72,12 @@ class ScopedSymbolTable(SymbolTable):
             res = self.builtins.lookup(name)
             if res is not None:
                 return res
-        if self.outer:
+        if use_outer and self.outer:
             return self.outer.lookup(name, use_builtins=False)
+        return None
 
 class AttributeTable(SymbolTable):
     """An `AttributeTable` is created for an Acacia object to store
     its attributes.
     """
-    @classmethod
-    def from_other(cls, table: SymbolTable):
-        """Convert other SymbolTable to AttributeTable."""
-        if isinstance(table, cls):
-            return table
-        res = cls()
-        res._table = table._table.copy()
-        return res
+    pass

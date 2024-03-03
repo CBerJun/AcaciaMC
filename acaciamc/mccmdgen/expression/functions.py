@@ -1,6 +1,6 @@
 """Builtin callable objects.
 
-There are 6 types of functions:
+There are several types of functions:
 - AcaciaFunction: functions that are written in Acacia
 - InlineFunction: functions written in Acacia that are annotated with
   `inline`
@@ -25,14 +25,20 @@ There are 6 types of functions:
       a.bar()  # BoundVirtualMethod: bar in A or B?
 - ConstructorFunction: a function that produces a new object. This
   exists only for optimization purposes.
-    # `Entity` is a constructor and this code:
+    # `Entity` is a constructor, so in this code:
     x := Entity()
-    # would be equivalent to `x -> Entity()`, so that there is no
-    # temporary entity used during the construction.
+    # there is no temporary entity used during the construction, but
+    # one entity is created and directly bound to `x`.
     # Additionally, this code:
     x = Entity()
     # is optimized too, because `Entity` can reconstruct `x` and set it
     # to a new entity.
+- BinaryCTFunction: functions that are written in Python and only
+  available under const context.
+- BinaryMaybeCTFunction: implements both BinaryFunction and
+  BinaryCTFunction.
+- AcaciaCTFunction: functions written in Acacia that are annotated with
+  `const`.
 """
 
 __all__ = [
@@ -40,7 +46,8 @@ __all__ = [
     'FunctionDataType',
     # Expressions
     'AcaciaFunction', 'InlineFunction', 'BinaryFunction',
-    'BoundMethod', 'BoundVirtualMethod', 'ConstructorFunction'
+    'BoundMethod', 'BoundVirtualMethod', 'ConstructorFunction',
+    'BinaryCTFunction', 'BinaryMaybeCTFunction', 'AcaciaCTFunction',
 ]
 
 from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
@@ -48,29 +55,31 @@ from abc import abstractmethod
 
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
+from acaciamc.ast import FuncPortType
+from acaciamc.mccmdgen.mcselector import MCSelector
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
-from .none import NoneVar
+from .none import NoneLiteral
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
-    from acaciamc.ast import InlineFuncDef
+    from acaciamc.ast import InlineFuncDef, ConstFuncDef
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.mccmdgen.generator import Generator, Context
     from .base import ARGS_T, KEYWORDS_T, CALLRET_T
-    from .entity import _EntityBase
+    from .entity import _EntityBase, TaggedEntity
     from .entity_template import EntityTemplate
 
 class FunctionDataType(DefaultDataType):
     name = 'function'
 
-class AcaciaFunction(AcaciaCallable):
+class AcaciaFunction(ConstExpr, AcaciaCallable):
     def __init__(self, name: str, args: List[str],
                  arg_types: Dict[str, "Storable"],
                  arg_defaults: Dict[str, Union[AcaciaExpr, None]],
                  returns: "Storable", compiler,
                  source=None):
-        super().__init__(FunctionDataType(), compiler)
+        super().__init__(FunctionDataType(compiler), compiler)
         self.name = name
         self.result_type = returns
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
@@ -105,19 +114,22 @@ class AcaciaFunction(AcaciaCallable):
         result.is_temporary = True
         return result, res
 
-class InlineFunction(AcaciaCallable):
-    def __init__(self, node: "InlineFuncDef", args, arg_types, arg_defaults,
-                 returns: Optional["DataType"],
+class InlineFunction(ConstExpr, AcaciaCallable):
+    def __init__(self, node: "InlineFuncDef",
+                 args, arg_types, arg_defaults, arg_ports,
+                 returns: Optional["DataType"], result_port: FuncPortType,
                  context: "Context", owner: "Generator",
                  compiler, source=None):
-        super().__init__(FunctionDataType(), compiler)
+        super().__init__(FunctionDataType(compiler), compiler)
         # We store the InlineFuncDef node directly
         self.node = node
         self.owner = owner
         self.context = context
         self.name = node.name
         self.result_type = returns
+        self.result_port = result_port
         self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
+        self.arg_ports = arg_ports
         # For error hint
         if source is not None:
             self.source = source
@@ -126,7 +138,27 @@ class InlineFunction(AcaciaCallable):
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         return self.owner.call_inline_func(self, args, keywords)
 
-class BinaryFunction(AcaciaCallable):
+def _bin_call(impl, compiler, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
+    res = impl(compiler, args, keywords)
+    if isinstance(res, tuple):  # CALLRET_T
+        return res
+    elif isinstance(res, AcaciaExpr):
+        return res, []
+    elif res is None:
+        return NoneLiteral(compiler), []
+    else:
+        raise ValueError("Invalid return of binary func "
+                         "implementation: {}".format(res))
+
+def _bin_ccall(impl, compiler, args: ARGS_T, keywords: KEYWORDS_T) \
+        -> ConstExpr:
+    res = impl(compiler, args, keywords)
+    if res is None:
+        return NoneLiteral(compiler)
+    assert isinstance(res, ConstExpr)
+    return res
+
+class BinaryFunction(ConstExpr, AcaciaCallable):
     """These are the functions that are written in Python,
     rather than `AcaciaFunction`s which are written in Acacia.
     The arguments passed to `AcaicaFunction` are *assigned* to local
@@ -158,32 +190,62 @@ class BinaryFunction(AcaciaCallable):
         representing commands) or None (returns acacia None and writes
         no command).
         """
-        super().__init__(FunctionDataType(), compiler)
+        super().__init__(FunctionDataType(compiler), compiler)
         self.implementation = implementation
         self.func_repr = "<binary function>"
 
     def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
-        res = self.implementation(self.compiler, args, keywords)
-        if isinstance(res, tuple):  # CALLRET_T
-            return res
-        elif isinstance(res, AcaciaExpr):
-            return res, []
-        elif res is None:
-            return NoneVar(self.compiler), []
-        else:
-            raise ValueError("Invalid return of binary func "
-                             "implementation: {}".format(res))
+        return _bin_call(self.implementation, self.compiler, args, keywords)
+
+class BinaryCTFunction(CTCallable):
+    def __init__(
+        self, implementation: Callable[
+            ["Compiler", "ARGS_T", "KEYWORDS_T"],
+            Optional[ConstExpr]
+        ],
+        compiler
+    ):
+        super().__init__(FunctionDataType(compiler), compiler)
+        self.implementation = implementation
+        self.func_repr = "<binary function>"
+
+    def ccall(self, args: ARGS_T, keywords: KEYWORDS_T) -> ConstExpr:
+        return _bin_ccall(self.implementation, self.compiler, args, keywords)
+
+class BinaryMaybeCTFunction(CTCallable, AcaciaCallable):
+    def __init__(
+        self,
+        normal_impl: Callable[
+            ["Compiler", "ARGS_T", "KEYWORDS_T"],
+            Union["CALLRET_T", AcaciaExpr, None]
+        ],
+        const_impl: Callable[
+            ["Compiler", "ARGS_T", "KEYWORDS_T"],
+            Optional[ConstExpr]
+        ],
+        compiler
+    ):
+        super().__init__(FunctionDataType(compiler), compiler)
+        self.normal_impl = normal_impl
+        self.const_impl = const_impl
+        self.func_repr = "<binary function>"
+
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
+        return _bin_call(self.normal_impl, self.compiler, args, keywords)
+
+    def ccall(self, args: ARGS_T, keywords: KEYWORDS_T) -> ConstExpr:
+        return _bin_ccall(self.const_impl, self.compiler, args, keywords)
 
 METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 
-class _BoundMethod(AcaciaCallable):
+class _BoundMethod(ConstExpr, AcaciaCallable):
     """
     A method bound to an entity, but when called it does not set self
     var. Self var is set by `BoundMethod` and `BoundVirtualMethod`.
     """
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T, compiler):
-        super().__init__(FunctionDataType(), compiler)
+        super().__init__(FunctionDataType(compiler), compiler)
         self.name = method_name
         self.object = object_
         self.definition = definition
@@ -203,16 +265,16 @@ class _BoundMethod(AcaciaCallable):
         # because we are not sure about their result data type
         return result, commands
 
-class BoundMethod(AcaciaCallable):
+class BoundMethod(ConstExpr, AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T,
-                 get_self_var: Optional[Callable[[], "_EntityBase"]],
+                 get_self_var: Optional[Callable[[], "TaggedEntity"]],
                  # Getter of self var is needed to prevent circular
                  # dependency: creating an entity requires binding
                  # methods, binding a method requires self var which is
                  # just an entity, and creating an entity ...
                  compiler):
-        super().__init__(FunctionDataType(), compiler)
+        super().__init__(FunctionDataType(compiler), compiler)
         self.content = _BoundMethod(object_, method_name, definition, compiler)
         self.func_repr = self.content.func_repr
         self.source = self.content.source
@@ -225,38 +287,45 @@ class BoundMethod(AcaciaCallable):
             commands[:0] = self.content.object.export(self.self_var_getter())
         return result, commands
 
-class BoundVirtualMethod(AcaciaCallable):
+class BoundVirtualMethod(ConstExpr, AcaciaCallable):
     def __init__(self, object_: "_EntityBase", method_name: str,
-                 result_var: VarValue, self_var: "_EntityBase", compiler):
-        super().__init__(FunctionDataType(), compiler)
+                 result_var: VarValue, compiler):
+        super().__init__(FunctionDataType(compiler), compiler)
         self.name = method_name
         self.object = object_
         self.impls: \
-            Dict[METHODDEF_T, Tuple[_BoundMethod, List["EntityTemplate"]]] = {}
+            Dict[METHODDEF_T, Tuple[
+                _BoundMethod, List["EntityTemplate"],
+                Optional[Callable[[], "TaggedEntity"]]
+            ]] = {}
         self.files: \
             List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
-        self.self_var = self_var
         self.result_var = result_var
         self.func_repr = self.name
         self.compiler.before_finish(self._generate)
 
-    def add_implementation(self, template: "EntityTemplate",
-                           definition: METHODDEF_T):
+    def add_implementation(
+        self, template: "EntityTemplate", definition: METHODDEF_T,
+        get_self_var: Optional[Callable[[], "TaggedEntity"]]
+    ):
         if definition in self.impls:
-            self.impls[definition][1].append(template)
+            _, templates, _ = self.impls[definition]
+            templates.append(template)
         elif template.is_subtemplate_of(self.object.template):
             bound_method = _BoundMethod(
                 self.object, self.name, definition, self.compiler
             )
-            self.impls[definition] = (bound_method, [template])
+            self.impls[definition] = (bound_method, [template], get_self_var)
 
     def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
         file = cmds.MCFunctionFile()
         self.files.append((args, keywords, file))
         self.compiler.add_file(file)
         return self.result_var, [
-            *self.object.export(self.self_var), 
-            cmds.InvokeFunction(file)
+            cmds.Execute(
+                [cmds.ExecuteEnv("as", self.object.to_str())],
+                cmds.InvokeFunction(file)
+            )
         ]
 
     def _generate(self):
@@ -269,49 +338,86 @@ class BoundVirtualMethod(AcaciaCallable):
             commands.extend(result.export(self.result_var))
             return commands
 
-        LEN_IMPLS = len(self.impls)
+        if len(self.impls) == 1:
+            only_bm, _, _getself = next(iter(self.impls.values()))
+            only_selfvar = None if _getself is None else _getself()
+        else:
+            only_bm = only_selfvar = None
         for args, keywords, file in self.files:
             file.write_debug(
                 "## Virtual method dispatcher for %s.%s()"
                 % (self.object.template.name, self.name)
             )
             # Optimize: only one implementation
-            if LEN_IMPLS == 1:
-                file.write_debug("## Only one implementation found")
-                bound_method, _ = next(iter(self.impls.values()))
-                file.extend(_call_bm(args, keywords, bound_method))
+            if only_bm is not None:
+                file.write_debug("# Only one implementation found")
+                if only_selfvar is not None:
+                    file.extend(only_selfvar.clear())
+                    # XXX direct access to TaggedEntity.tag
+                    file.write("tag @s add %s" % only_selfvar.tag)
+                file.extend(_call_bm(args, keywords, only_bm))
                 continue
             # Fallback
-            impls = tuple(self.impls.values())
-            for bound_method, templates in impls:
+            for impl, (_, templates, get_self_var) in self.impls.items():
                 file.write_debug(
-                    "# implementation for %s"
+                    "# For %s"
                     % (", ".join(template.name for template in templates))
                 )
-                sel = self.self_var.get_selector()
+                sel = MCSelector("s")
                 sel.tag_n(*[template.runtime_tag for template in templates])
                 sel_s = sel.to_str()
-                commands = _call_bm(args, keywords, bound_method)
-                if len(commands) > 10:
-                    # Long commands: dump commands to a new file
-                    f = cmds.MCFunctionFile()
-                    self.compiler.add_file(f)
-                    f.write_debug("## Extra file for virtual method")
-                    f.extend(commands)
-                    file.write(
-                        cmds.Execute(
-                            [cmds.ExecuteCond("entity", sel_s, invert=True)],
-                            runs=cmds.InvokeFunction(f)
-                        )
-                    )
+                commands = _call_bm(args, keywords, impl)
+                if not commands:
+                    continue
+                f = cmds.MCFunctionFile()
+                self.compiler.add_file(f)
+                f.write_debug("## Helper for virtual method dispatcher")
+                f.extend(commands)
+                if get_self_var is None:
+                    file.write(cmds.Execute(
+                        [
+                            cmds.ExecuteCond("entity", sel_s, invert=True),
+                            # Make sure @s is alive:
+                            cmds.ExecuteCond("entity", "@s")
+                        ],
+                        runs=cmds.InvokeFunction(f)
+                    ))
                 else:
-                    file.extend(
-                        cmds.execute(
-                            [cmds.ExecuteCond("entity", sel_s, invert=True)],
-                            runs=cmd
-                        )
-                        for cmd in commands
-                    )
+                    self_var = get_self_var()
+                    # XXX direct access to TaggedEntity.tag
+                    self_tag = self_var.tag
+                    file.extend(self_var.clear())
+                    file.write(cmds.Execute(
+                        [cmds.ExecuteCond("entity", sel_s, invert=True)],
+                        runs="tag @s add %s" % self_tag
+                    ))
+                    file.write(cmds.Execute(
+                        [cmds.ExecuteCond("entity", "@s[tag=%s]" % self_tag)],
+                        runs=cmds.InvokeFunction(f)
+                    ))
+
+class AcaciaCTFunction(CTCallable, AcaciaCallable):
+    def __init__(self, node: "ConstFuncDef",
+                 args, arg_types, arg_defaults,
+                 returns: Optional["DataType"],
+                 context: "Context", owner: "Generator",
+                 compiler, source=None):
+        super().__init__(FunctionDataType(compiler), compiler)
+        self.node = node
+        self.owner = owner
+        self.context = context
+        self.name = node.name
+        self.result_type = returns
+        self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
+        if source is not None:
+            self.source = source
+        self.func_repr = self.name
+
+    def ccall(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> ConstExpr:
+        return self.owner.call_const_func(self, args, keywords)
+
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+        return self.owner.call_const_func(self, args, keywords), []
 
 class ConstructorFunction(AcaciaCallable):
     # `initialize` should initialize a var of `var_type` type.

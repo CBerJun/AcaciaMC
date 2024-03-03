@@ -2,11 +2,11 @@
 
 __all__ = ["EFilterType", "EFilterDataType", "EntityFilter"]
 
-from typing import List, Union, Optional, TYPE_CHECKING
+from typing import List, Union, Optional, NamedTuple, TYPE_CHECKING
 import re
 
 from acaciamc.error import *
-from acaciamc.tools import axe, versionlib, method_of
+from acaciamc.tools import axe, versionlib, cmethod_of
 from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
 from acaciamc.mccmdgen.datatype import DefaultDataType
 import acaciamc.mccmdgen.cmds as cmds
@@ -64,43 +64,27 @@ class EFilterDataType(DefaultDataType):
 
 class EFilterType(Type):
     def do_init(self):
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         @axe.chop
         def _new(compiler):
             return EntityFilter(compiler)
 
     def datatype_hook(self):
-        return EFilterDataType()
+        return EFilterDataType(self.compiler)
 
-class _EFilterData:
-    def __init__(self, tag: Union[str, None], subcmds: List["_ExecuteSubcmd"],
-                 selector: MCSelector):
-        # tag: temporary tag name (is None for last tuple).
-        # subcmds: is list of /execute subcommands.
-        # selector: selector.
-        self.tag = tag
-        self.subcmds = subcmds
-        self.selector = selector
+class _EFilterData(NamedTuple):
+    tag: Union[str, None]  # temporary tag name (None for last tuple)
+    subcmds: List["_ExecuteSubcmd"]
+    selector: MCSelector
 
     def copy(self):
         return _EFilterData(
             self.tag, self.subcmds.copy(), self.selector.copy()
         )
 
-    def __getitem__(self, index: int):
-        if index == 0:
-            return self.tag
-        elif index == 1:
-            return self.subcmds
-        elif index == 2:
-            return self.selector
-        elif isinstance(index, int):
-            raise IndexError(index)
-        raise TypeError
-
-class EntityFilter(AcaciaExpr, ImmutableMixin):
+class EntityFilter(ConstExpr, ImmutableMixin):
     def __init__(self, compiler):
-        super().__init__(EFilterDataType(), compiler)
+        super().__init__(EFilterDataType(compiler), compiler)
         self.context_occupied = False
         self.data: List[_EFilterData] = []
         self._new_data()  # initial data
@@ -108,14 +92,14 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
         self.cleanup: List[str] = []  # cleanup commands
         self.entity_type: Union[str, None] = None
 
-        @method_of(self, "all_players")
+        @cmethod_of(self, "all_players")
         @axe.chop
         @transform_immutable(self)
         def _all_players(self: EntityFilter, compiler):
             self.need_set_selector_var("a")
             self.entity_type = PLAYER
             return self
-        @method_of(self, "random")
+        @cmethod_of(self, "random")
         @axe.chop
         @axe.arg("type", axe.Nullable(axe.LiteralString()), default=None,
                  rename="type_")
@@ -153,7 +137,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             # now (the same for nearest_from and farthest_from):
             self.next_use_new_data = True
             return self
-        @method_of(self, "nearest_from")
+        @cmethod_of(self, "nearest_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
         @axe.arg("limit", axe.RangedLiteralInt(1, None), default=1)
@@ -165,7 +149,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.limit(limit)
             self.next_use_new_data = True  # see `_random` above
             return self
-        @method_of(self, "farthest_from")
+        @cmethod_of(self, "farthest_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
         @axe.arg("limit", axe.RangedLiteralInt(1, None), default=1)
@@ -177,7 +161,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.limit(-limit)
             self.next_use_new_data = True  # see `_random` above
             return self
-        @method_of(self, "has_tag")
+        @cmethod_of(self, "has_tag")
         @axe.chop
         @axe.star_arg("tags", axe.LiteralString())
         @transform_immutable(self)
@@ -185,7 +169,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.last_selector()
             selector.tag(*tags)
             return self
-        @method_of(self, "has_no_tag")
+        @cmethod_of(self, "has_no_tag")
         @axe.chop
         @axe.star_arg("tags", axe.LiteralString())
         @transform_immutable(self)
@@ -193,7 +177,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.last_selector()
             selector.tag_n(*tags)
             return self
-        @method_of(self, "distance_from")
+        @cmethod_of(self, "distance_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
         @axe.arg("min", axe.Nullable(axe.LiteralFloat()), default=None,
@@ -207,7 +191,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.need_set_context(*origin.context)
             selector.distance(min_, max_)
             return self
-        @method_of(self, "is_type")
+        @cmethod_of(self, "is_type")
         @axe.chop
         @axe.arg("type", axe.LiteralString(), rename="type_")
         @transform_immutable(self)
@@ -216,7 +200,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.type(type_)
             self.entity_type = type_
             return self
-        @method_of(self, "is_not_type")
+        @cmethod_of(self, "is_not_type")
         @axe.chop
         @axe.star_arg("types", axe.LiteralString())
         @transform_immutable(self)
@@ -224,7 +208,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.last_selector()
             selector.type_n(*types)
             return self
-        @method_of(self, "inside")
+        @cmethod_of(self, "inside")
         @axe.chop
         @axe.arg("origin", PosDataType)
         @axe.arg("dx", axe.LiteralFloat(), default=0.0)
@@ -236,7 +220,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.need_set_context(*origin.context)
             selector.volume(dx, dy, dz)
             return self
-        @method_of(self, "rot_vertical")
+        @cmethod_of(self, "rot_vertical")
         @axe.chop
         @axe.arg("min", axe.LiteralFloat(), default=-90.0, rename="min_")
         @axe.arg("max", axe.LiteralFloat(), default=90.0, rename="max_")
@@ -246,7 +230,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.new_if_got("rx", "rxm")
             selector.rot_vertical(min_, max_)
             return self
-        @method_of(self, "rot_horizontal")
+        @cmethod_of(self, "rot_horizontal")
         @axe.chop
         @axe.arg("min", axe.LiteralFloat(), default=-180.0, rename="min_")
         @axe.arg("max", axe.LiteralFloat(), default=180.0, rename="max_")
@@ -256,7 +240,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.new_if_got("ry", "rym")
             selector.rot_horizontal(min_, max_)
             return self
-        @method_of(self, "is_name")
+        @cmethod_of(self, "is_name")
         @axe.chop
         @axe.arg("name", axe.LiteralString())
         @transform_immutable(self)
@@ -264,7 +248,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.new_if_got("name")
             selector.name(name)
             return self
-        @method_of(self, "is_not_name")
+        @cmethod_of(self, "is_not_name")
         @axe.chop
         @axe.star_arg("names", axe.LiteralString())
         @transform_immutable(self)
@@ -272,7 +256,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.last_selector()
             selector.name_n(*names)
             return self
-        @method_of(self, "has_item")
+        @cmethod_of(self, "has_item")
         @axe.chop
         @axe.arg("item", axe.LiteralString())
         @axe.arg("quantity", IntRange(), default="1..")
@@ -289,7 +273,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.last_selector()
             selector.has_item(item, quantity, data, slot_type, slot_num)
             return self
-        @method_of(self, "scores")
+        @cmethod_of(self, "scores")
         @axe.chop
         @axe.arg("objective", axe.LiteralString())
         @axe.arg("range", IntRange(), rename="range_")
@@ -299,7 +283,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector = self.last_selector()
             selector.scores(objective, range_)
             return self
-        @method_of(self, "level")
+        @cmethod_of(self, "level")
         @axe.chop
         @axe.arg("min", axe.Nullable(axe.LiteralInt()),
                  default=None, rename="min_")
@@ -312,7 +296,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.level(min_, max_)
             self.entity_type = PLAYER
             return self
-        @method_of(self, "is_game_mode")
+        @cmethod_of(self, "is_game_mode")
         @axe.chop
         @axe.arg("mode", axe.LiteralString())
         @transform_immutable(self)
@@ -321,7 +305,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.game_mode(mode)
             self.entity_type = PLAYER
             return self
-        @method_of(self, "is_not_game_mode")
+        @cmethod_of(self, "is_not_game_mode")
         @axe.chop
         @axe.star_arg("modes", axe.LiteralString())
         @transform_immutable(self)
@@ -330,7 +314,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.game_mode_n(*modes)
             self.entity_type = PLAYER
             return self
-        @method_of(self, "has_permission")
+        @cmethod_of(self, "has_permission")
         @versionlib.only(versionlib.at_least((1, 19, 80)))
         @axe.chop
         @axe.star_arg("permissions", axe.LiteralString())
@@ -341,7 +325,7 @@ class EntityFilter(AcaciaExpr, ImmutableMixin):
             selector.has_permission(*permissions)
             self.entity_type = PLAYER
             return self
-        @method_of(self, "has_no_permission")
+        @cmethod_of(self, "has_no_permission")
         @versionlib.only(versionlib.at_least((1, 19, 80)))
         @axe.chop
         @axe.star_arg("permissions", axe.LiteralString())

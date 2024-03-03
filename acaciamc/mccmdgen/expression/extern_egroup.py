@@ -42,7 +42,7 @@ __all__ = [
 
 from typing import TYPE_CHECKING
 
-from acaciamc.tools import axe, resultlib
+from acaciamc.tools import axe, resultlib, cmethod_of
 from .base import *
 from .entity_group import *
 from .entity_template import ETemplateDataType
@@ -72,14 +72,17 @@ class ExternEGroupType(EGroupType):
         return ExternEGroupDataType(self.template)
 
 class ExternEGroupGeneric(EGroupGeneric):
-    @axe.chop_getitem
-    @axe.arg("E", ETemplateDataType, rename="template")
-    def getitem(self, template: "EntityTemplate"):
-        return ExternEGroupType(template, self.compiler)
+    def __init__(self, compiler):
+        super().__init__(compiler)
+        @cmethod_of(self, "__getitem__")
+        @axe.chop
+        @axe.arg("E", ETemplateDataType, rename="template")
+        def _getitem(compiler, template: "EntityTemplate"):
+            return ExternEGroupType(template, compiler)
 
-class _ExternEGroupResolve(ConstructorFunction):
+class _ExternEGroupResolve(ConstExpr, ConstructorFunction):
     def __init__(self, owner: "ExternEGroup", compiler: "Compiler"):
-        super().__init__(FunctionDataType(), compiler)
+        super().__init__(FunctionDataType(compiler), compiler)
         self.owner = owner
         self.func_repr = "<resolve of %s>" % str(self.owner.data_type)
 

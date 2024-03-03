@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from .entity_template import EntityTemplate
     from .types import DataType
 
+SUMMON_Y = -75  # must be below -64 so it's not reachable
+SUMMON = "summon {type} ~ {y} ~{rot} {event}{name}"
+
 class EntityDataType(Storable):
     def __init__(self, template: "EntityTemplate"):
         super().__init__(template.compiler)
@@ -113,14 +116,13 @@ class TaggedEntity(_EntityBase, VarValue):
         Element 0: the `TaggedEntity`
         Element 1: initial commands to run
         """
-        # Allocate an entity name to identify it
-        name = compiler.allocate_entity_name()
         # Analyze template meta
         # NOTE meta only works when you create an entity using
         # `Template()` (Since this code is in `from_template` method).
         e_type = Config.entity_type
         e_pos = ([], Config.entity_pos)
         e_event = "*"
+        e_name = ""
         for meta, value in template.metas.items():
             if meta == "type":
                 # Entity type
@@ -128,25 +130,33 @@ class TaggedEntity(_EntityBase, VarValue):
             elif meta == "position":
                 # Position to summon the entity
                 e_pos = value
-            elif meta == "spawn_event":
+            elif meta == "spawn_event" and value is not None:
                 # Entity event to execute on spawn
                 e_event = value
-        if Config.mc_version >= (1, 19, 70):
-            SUMMON = "summon {type} {pos} 0 0 {event} {name}"
-        else:
-            SUMMON = "summon {type} {pos} {event} {name}"
+            elif meta == "name" and value is not None:
+                # Entity name
+                e_name = " %s" % cmds.mc_str(value)
+        e_rot = " 0 0" if Config.mc_version >= (1, 19, 70) else ""
         if _instance is None:
             inst = cls.new_tag(template, compiler)
         else:
             inst = _instance
         return inst, [
-            cmds.Execute(e_pos[0], cmds.Cmd(SUMMON.format(
-                type=e_type, name=name, pos=e_pos[1], event=e_event
-            ))),
-            *inst.clear(),
-            "tag @e[name=%s,tag=!%s] add %s" % (
-                name, template.runtime_tag, inst.tag
+            cmds.Execute(
+                [cmds.ExecuteEnv("at", "@p")],
+                SUMMON.format(
+                    type=e_type, name=e_name, rot=e_rot,
+                    y=SUMMON_Y, event=e_event
+                )
             ),
+            *inst.clear(),
+            cmds.Execute(
+                [cmds.ExecuteEnv("at", "@p")],
+                "tag @e[x=~,y=%d,z=~,dx=0,dy=0,dz=0] add %s" % (
+                    SUMMON_Y, inst.tag
+                )
+            ),
+            cmds.Execute(e_pos[0], "tp %s %s" % (inst.to_str(), e_pos[1])),
             "tag %s add %s" % (inst.to_str(), template.runtime_tag)
         ]
 

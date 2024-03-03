@@ -19,7 +19,7 @@ def arithmetic(start: int, to: int, delta=1) -> int:
      * Return sum of arithmetic sequence that starts with `start`,
      * ends with `to` with common difference `delta`.
      *#
-    result = (start + to) * ((to - start) / delta + 1) / 2
+    result (start + to) * ((to - start) / delta + 1) / 2
 res := arithmetic(-30, 14, delta=2)
 print.tell(print.format("Sum of arithmetic sequence (-30~14, d=2) is %0", res))
 ```
@@ -50,7 +50,7 @@ Running these generated commands will send this message in Minecraft's chat:
 
 **In conclusion, by using Acacia you can create Minecraft projects -- not by writing commands, but by writing Acacia code, which is much more easier to maintain and understand.**
 
-Acacia is written in Python, so Python (3.6 or newer) is required by compiler (i.e. the program that converts your code into commands).
+Acacia is written in Python, so Python (3.6.1 or newer) is required by compiler (i.e. the program that converts your code into commands).
 
 ## What can Acacia do?
 Some real-world examples:
@@ -87,9 +87,10 @@ Function definitions:
 ```python
 def foo(x: int, y = True) -> int:
     # Here is function body code
-    result = x  # return value
+    res := x
     if y:
-        result += 10
+        res += 10
+    result res  # return value
 z: int
 # These are all valid:
 foo(1)
@@ -101,12 +102,13 @@ Flow control statements (selections and loops):
 ```python
 def is_prime(x: int) -> bool:
     #* Test if `x` is a prime number *#
-    result = True
+    res := True
     mod: int = 2
     while mod <= x / 2:
         if x % mod == 0:
-            result = False
+            res = False
         mod += 1
+    result res
 ```
 
 Various builtin modules:
@@ -121,7 +123,7 @@ print.title(print.format("Money: %0", money), mode=print.ACTIONBAR)
 ```python
 import music
 # Generate a noteblock music and use 1.2x speed.
-m -> music.Music("music_score.mid", speed=1.2)
+const m = music.Music("music_score.mid", speed=1.2)
 m.play()
 ```
 
@@ -130,12 +132,14 @@ Use of constants and `for` to avoid repetitive code:
 import world
 
 # Place concretes of different colors according to value of an variable
-COLORS -> {
+const COLORS = {
     0: "cyan", 1: "orange", 2: "yellow",
     3: "purple", 4: "lime", 5: "red", 6: "blue"
 }
 i := 0  # Calculate `i`...
 for c in COLORS:
+    # `for` instructs the compiler to generate the following code
+    # repetitively for you!
     if c == i:
         world.setblock(
             Pos(0, -50, 0),
@@ -147,8 +151,8 @@ Position and entity system:
 ```python
 import world
 
-ORIGIN -> AbsPos(0, -50, 0)
-world.fill(ORIGIN, Offset().offset(x=5, z=5),
+const ORIGIN = AbsPos(0, -50, 0)
+world.fill(ORIGIN, Offset(x=5, z=5),
            world.Block("concrete", {"color": "red"}))
 
 entity Test:

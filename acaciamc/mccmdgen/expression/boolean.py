@@ -124,7 +124,7 @@ class SupportsAsExecute(AcaciaExpr, metaclass=ABCMeta):
         """
         pass
 
-class BoolLiteral(AcaciaExpr):
+class BoolLiteral(ConstExpr):
     """Literal boolean."""
     def __init__(self, value: bool, compiler):
         super().__init__(BoolDataType(compiler), compiler)
@@ -139,12 +139,11 @@ class BoolLiteral(AcaciaExpr):
     def map_hash(self):
         return self.value
 
-    def copy(self) -> "BoolLiteral":
-        return BoolLiteral(value=self.value, compiler=self.compiler)
-
     def compare(self, op, other):
         if not (op is Operator.equal_to or op is Operator.unequal_to):
             return NotImplemented
+        if not self.data_type.is_type_of(other):
+            return NotImplemented  # not a boolean
         # For a boolean expression b, b == True is equivalent to "b"
         # b == False is equivalent to "not b"; != is the opposite
         if self.value == (op is Operator.equal_to):
@@ -158,9 +157,7 @@ class BoolLiteral(AcaciaExpr):
 
     # Unary operator
     def not_(self):
-        res = self.copy()
-        res.value = not res.value
-        return res
+        return BoolLiteral(not self.value, self.compiler)
 
 class BoolVar(VarValue, SupportsAsExecute):
     """Boolean stored as a score on scoreboard."""
@@ -343,12 +340,6 @@ class WildBool(SupportsAsExecute):
         subcmds = self.subcmds + _ranges2subcmds(self.ranges)
         return self.dependencies.copy(), subcmds
 
-    def copy(self):
-        return WildBool(
-            self.subcmds.copy(), self.dependencies.copy(),
-            self.compiler, self.ranges.copy()
-        )
-
     compare = _bool_compare
 
     # Unary operator
@@ -376,12 +367,6 @@ class NotWildBool(AcaciaExpr):
         res = self.dependencies.copy()
         res.extend(_export_bool(subcmds, var, invert=True))
         return res
-
-    def copy(self):
-        return NotWildBool(
-            self.subcmds.copy(), self.dependencies.copy(),
-            self.compiler, self.ranges.copy()
-        )
 
     compare = _bool_compare
 

@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 class StructTemplateDataType(DefaultDataType):
     name = "struct_template"
 
-class StructTemplate(ConstructorFunction):
+class StructTemplate(ConstExpr, ConstructorFunction):
     def __init__(self, name: str, field: Dict[str, "Storable"],
                  bases: List["StructTemplate"], compiler, source=None):
-        super().__init__(StructTemplateDataType(), compiler)
+        super().__init__(StructTemplateDataType(compiler), compiler)
         self.name = name
         self.bases = bases
         self.field_types = field
@@ -47,8 +47,8 @@ class StructTemplate(ConstructorFunction):
         return any(base.is_subtemplate_of(template) for base in self.bases)
 
     def initialize(
-            self, instance: "Struct", args: "ARGS_T", keywords: "KEYWORDS_T"
-        ) -> "CALLRET_T":
+        self, instance: "Struct", args: "ARGS_T", keywords: "KEYWORDS_T"
+    ):
         decorators = [axe.chop, axe.star]
         for name, type_ in self.field_types.items():
             decorators.append(axe.arg(name, type_, default=None))

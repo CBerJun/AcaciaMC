@@ -8,6 +8,6 @@ from .base import *
 class GenericDataType(DefaultDataType):
     name = 'generic'
 
-class BinaryGeneric(SupportsGetItem):
+class BinaryGeneric(ConstExpr):
     def __init__(self, compiler):
-        super().__init__(GenericDataType(), compiler)
+        super().__init__(GenericDataType(compiler), compiler)

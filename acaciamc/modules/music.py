@@ -246,9 +246,9 @@ class MusicType(Type):
             )
 
     def datatype_hook(self):
-        return MusicDataType()
+        return MusicDataType(self.compiler)
 
-class Music(AcaciaExpr):
+class Music(ConstExpr):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
     # tick.
 
@@ -256,7 +256,7 @@ class Music(AcaciaExpr):
                  note_offset: int, chunk_size: int, speed: float,
                  volume: float, channel_volume: Dict[int, float],
                  instrument: Dict[int, str], compiler):
-        super().__init__(MusicDataType(), compiler)
+        super().__init__(MusicDataType(compiler), compiler)
         self.midi = midi
         self.listener_str = listener_str
         self.note_offset = note_offset
