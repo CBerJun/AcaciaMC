@@ -2,7 +2,7 @@
 
 __all__ = ["StructDataType", "Struct"]
 
-from typing import TYPE_CHECKING, List, Dict, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple
 
 from .base import *
 from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
@@ -68,8 +68,16 @@ class Struct(VarValue):
             vars_[name] = var
         return cls(template, vars_, compiler)
 
-    def export(self, other_struct: "Struct") -> List[str]:
+    def export(self, other_struct: "Struct") -> CMDLIST_T:
         res = []
         for name in other_struct.vars:
             res.extend(self.vars[name].export(other_struct.vars[name]))
+        return res
+
+    def swap(self, other: "Struct") -> CMDLIST_T:
+        res = []
+        for name in other.vars:
+            res.extend(self.compiler.swap_exprs(
+                self.vars[name], other.vars[name]
+            ))
         return res

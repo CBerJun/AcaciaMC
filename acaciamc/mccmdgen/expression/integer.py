@@ -267,6 +267,9 @@ class IntVar(VarValue):
             )
         return IntCompare(self, op, other, self.compiler)
 
+    def swap(self, other: "IntVar"):
+        return [cmds.ScbOperation(cmds.ScbOp.SWAP, self.slot, other.slot)]
+
     ## UNARY OPERATORS
 
     def __pos__(self):

@@ -85,6 +85,10 @@ class AcaciaExpr:
         self.data_type = type_
         self.attribute_table = AttributeTable()
 
+    def is_assignable(self) -> bool:
+        """Return whether this expression is a lvalue at runtime."""
+        return False
+
     def export(self, var: "VarValue") -> CMDLIST_T:
         """Return the commands that assigns value of `self` to `var`.
         Since we need a `VarValue` here, only "storable" types need
@@ -199,6 +203,12 @@ class VarValue(AcaciaExpr):
     e.g. bool -> Type -> Unassignable
     """
     is_temporary = False  # used as a temporary and is read-only
+
+    def swap(self, other: "VarValue") -> CMDLIST_T:
+        raise NotImplementedError
+
+    def is_assignable(self) -> bool:
+        return not self.is_temporary
 
 class _CallableBase(AcaciaExpr):
     def __init__(self, type_: "DataType", compiler: "Compiler"):

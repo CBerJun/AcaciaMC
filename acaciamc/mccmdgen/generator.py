@@ -129,9 +129,6 @@ class Generator(ASTVisitor):
         err.location.linecol = (node.lineno, node.col)
         self.error(err)
 
-    def is_assignable(self, value: AcaciaExpr) -> bool:
-        return isinstance(value, VarValue) and not value.is_temporary
-
     def register_symbol(self, name: str, value: AcaciaExpr):
         v = self.ctx.scope.lookup(name, use_outer=False, use_builtins=False)
         if v is not None:
@@ -275,7 +272,7 @@ class Generator(ASTVisitor):
             self.current_file.extend(value.export(var))
 
     def _assign(self, target: AcaciaExpr, value_node: Expression):
-        if not self.is_assignable(target):
+        if not target.is_assignable():
             self.error_c(ErrorType.INVALID_ASSIGN_TARGET)
         value_type: Optional[DataType] = None
         value: Optional[AcaciaExpr] = None
@@ -368,7 +365,7 @@ class Generator(ASTVisitor):
             self._ct_set(node.target, newv)
             return
         # visit nodes
-        if not self.is_assignable(target):
+        if not target.is_assignable():
             self.error_c(ErrorType.INVALID_ASSIGN_TARGET)
         # call target's methods
         self.current_file.extend(self._wrap_method_op(
@@ -384,7 +381,7 @@ class Generator(ASTVisitor):
             if not dt.matches(value.data_type):
                 self.error_c(ErrorType.WRONG_REF_TYPE,
                              anno=str(dt), got=str(value.data_type))
-        if not self.is_assignable(value):
+        if not value.is_assignable():
             self.error_node(node.value, ErrorType.CANT_REF)
         self.register_symbol(node.name, value)
 
@@ -674,7 +671,7 @@ class Generator(ASTVisitor):
             if default is None:
                 continue
             if arg_ports[arg] is FuncPortType.by_reference:
-                if not self.is_assignable(default):
+                if not default.is_assignable():
                     self.error_node(node.arg_table.default[arg],
                                     ErrorType.CANT_REF_ARG, arg=arg)
             else:
@@ -966,7 +963,7 @@ class Generator(ASTVisitor):
             elif p is FuncPortType.by_reference:
                 if self.ctx.inline_result is not None:
                     self.error_c(ErrorType.MULTIPLE_RESULTS)
-                if not self.is_assignable(value):
+                if not value.is_assignable():
                     self.error_c(ErrorType.CANT_REF_RESULT)
                 self.ctx.inline_result = value
             else:
@@ -1221,7 +1218,7 @@ class Generator(ASTVisitor):
             for arg, value in arg2value.items():
                 port = func.arg_ports[arg]
                 if port is FuncPortType.by_reference:
-                    if not self.is_assignable(value):
+                    if not value.is_assignable():
                         self.error_c(ErrorType.CANT_REF_ARG, arg=arg)
                     self.register_symbol(arg, value)
                 elif port is FuncPortType.by_value:

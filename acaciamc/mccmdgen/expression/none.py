@@ -16,6 +16,9 @@ class NoneVar(VarValue):
     def __init__(self, compiler):
         super().__init__(NoneDataType(compiler), compiler)
 
+    def swap(self, other: "NoneVar"):
+        return []
+
     def export(self, var: "NoneVar"):
         return []
 

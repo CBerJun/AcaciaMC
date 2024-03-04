@@ -329,6 +329,20 @@ class Compiler:
                 return True
         return False
 
+    def swap_exprs(self, x: VarValue, y: VarValue) -> CMDLIST_T:
+        """Swap two `VarValue`s that are assignable to each other."""
+        try:
+            res = x.swap(y)
+        except NotImplementedError:
+            # Fall back
+            tmp = x.data_type.new_var()
+            res = [
+                *x.export(tmp),
+                *y.export(x),
+                *tmp.export(y)
+            ]
+        return res
+
     @contextmanager
     def _load_generator(self, path: str):
         """Load the Generator of an Acacia source and store it at

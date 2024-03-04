@@ -187,6 +187,9 @@ class BoolVar(VarValue, SupportsAsExecute):
         invert = op is Operator.unequal_to
         return ScbEqualCompare(self.slot, other.slot, self.compiler, invert)
 
+    def swap(self, other: "BoolVar"):
+        return [cmds.ScbOperation(cmds.ScbOp.SWAP, self.slot, other.slot)]
+
     # Unary operator
     def not_(self):
         return NotBoolVar(self.slot, self.compiler)
