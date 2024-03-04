@@ -230,7 +230,9 @@ class NotBoolVar(AcaciaExpr):
 
     # Unary operator
     def not_(self):
-        return BoolVar(self.slot, self.compiler)
+        res = BoolVar(self.slot, self.compiler)
+        res.is_temporary = True
+        return res
 
 class CompareBase(SupportsAsExecute, metaclass=ABCMeta):
     def __init__(self, compiler: "Compiler"):
