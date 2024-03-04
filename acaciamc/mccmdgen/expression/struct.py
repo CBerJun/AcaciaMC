@@ -19,7 +19,7 @@ class StructDataType(Storable, SupportsEntityField):
         super().__init__(template.compiler)
 
     def __str__(self) -> str:
-        return "struct(%s)" % self.template.name
+        return self.template.name
 
     @classmethod
     def name_no_generic(self) -> str:
