@@ -7,7 +7,7 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
-from acaciamc.constants import Config, COLORS, COLORS_NEW
+from acaciamc.constants import COLORS, COLORS_NEW
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -255,7 +255,7 @@ def _with_font(compiler, text: FString, color: str,
     When this function is used, it is not recommended to use formatting
     code (\u00A7, section sign; \# escape in Acacia) manually.
     """
-    if color in COLORS_NEW and Config.mc_version < (1, 19, 80):
+    if color in COLORS_NEW and compiler.cfg.mc_version < (1, 19, 80):
         raise axe.ArgumentError(
             "color", "%r is only available in MC 1.19.80+" % color
         )

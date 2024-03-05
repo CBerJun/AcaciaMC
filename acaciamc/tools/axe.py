@@ -27,7 +27,6 @@ import inspect
 from acaciamc.mccmdgen import expression as acacia
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.error import Error as AcaciaError, ErrorType
-from acaciamc.constants import Config
 from acaciamc.tools.versionlib import format_version
 
 if TYPE_CHECKING:
@@ -816,7 +815,7 @@ class OverloadChopped(type):
                     res[arg_def.rename] = converted
             else:
                 version = implementation.version
-                if not version or version.validate(Config.mc_version):
+                if not version or version.validate(compiler.cfg.mc_version):
                     return _call_impl(
                         implementation,
                         [arg_def.name for arg_def in arg_defs],
@@ -829,7 +828,7 @@ class OverloadChopped(type):
                                 "Minecraft version %s; expecting %s"
                         % (
                             _create_signature(arg_defs),
-                            format_version(Config.mc_version),
+                            format_version(compiler.cfg.mc_version),
                             version.to_str()
                         )
                     )
@@ -859,7 +858,7 @@ def overload(building: _BuildingParser):
 
 def overload_versioned(version: "VersionRequirement"):
     """Return a decorator that is same as @overload, but decorated
-    implementation will only be available when Config.mc_version
+    implementation will only be available when compiler.cfg.mc_version
     satifies given requirements.
     """
     @_parser_component

@@ -16,6 +16,8 @@ from acaciamc.parser import Parser
 from acaciamc.error import *
 from acaciamc.ast import AST
 
+MC_VERSION = (1, 19, 80)
+
 class ASTVisualizer:
     _fields_cache: Dict[PyType[AST], List[str]] = {}
 
@@ -80,7 +82,7 @@ class ASTVisualizer:
 
 def test_tokenize(src: str):
     print('===TOKENIZER===')
-    tk = Tokenizer(io.StringIO(src))
+    tk = Tokenizer(io.StringIO(src), MC_VERSION)
     while True:
         token = tk.get_next_token()
         print(repr(token))
@@ -89,7 +91,7 @@ def test_tokenize(src: str):
 
 def test_parser(src: str):
     print('===PARSER===')
-    parser = Parser(Tokenizer(io.StringIO(src)))
+    parser = Parser(Tokenizer(io.StringIO(src), MC_VERSION))
     visualizer = ASTVisualizer(parser.module())
     print(visualizer.get_string())
 

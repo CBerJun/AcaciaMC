@@ -4,7 +4,6 @@ __all__ = ['EntityDataType', 'TaggedEntity', 'EntityReference']
 
 from typing import Tuple, TYPE_CHECKING, List, Optional
 
-from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
@@ -119,8 +118,8 @@ class TaggedEntity(_EntityBase, VarValue):
         # Analyze template meta
         # NOTE meta only works when you create an entity using
         # `Template()` (Since this code is in `from_template` method).
-        e_type = Config.entity_type
-        e_pos = ([], Config.entity_pos)
+        e_type = compiler.cfg.entity_type
+        e_pos = ([], compiler.cfg.entity_pos)
         e_event = "*"
         e_name = ""
         for meta, value in template.metas.items():
@@ -136,7 +135,7 @@ class TaggedEntity(_EntityBase, VarValue):
             elif meta == "name" and value is not None:
                 # Entity name
                 e_name = " %s" % cmds.mc_str(value)
-        e_rot = " 0 0" if Config.mc_version >= (1, 19, 70) else ""
+        e_rot = " 0 0" if compiler.cfg.mc_version >= (1, 19, 70) else ""
         if _instance is None:
             inst = cls.new_tag(template, compiler)
         else:

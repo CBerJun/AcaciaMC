@@ -19,7 +19,7 @@ class MyOpt(optimizer.Optimizer):
             for file in self.files
         ))
 
-project = MyOpt()
+project = MyOpt("scb")
 f1 = cmds.MCFunctionFile("test/path1")
 f2 = cmds.MCFunctionFile("test/path2")
 f3 = cmds.MCFunctionFile("test/path3")

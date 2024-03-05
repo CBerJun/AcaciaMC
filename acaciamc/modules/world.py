@@ -243,7 +243,6 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.tools import axe, resultlib, method_of
 from acaciamc.tools.versionlib import edu_only
-from acaciamc.constants import Config
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -340,7 +339,7 @@ class Block(ConstExpr):
             return '"%s"' % value
 
     def to_str(self, fmt: str = "{id} {states}") -> str:
-        if Config.mc_version >= (1, 20, 10):
+        if self.compiler.cfg.mc_version >= (1, 20, 10):
             EQ = "="
         else:
             EQ = ":"
@@ -691,15 +690,15 @@ def spread(compiler, target: "MCSelector", center: Position,
 @axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
 @axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
 @axe.arg("rot", RotDataType, default=None)
-def summon(compiler, type_: str, pos: Position, rot: Optional[Rotation],
-           event: Optional[str], name: Optional[str]):
+def summon(compiler: "Compiler", type_: str, pos: Position,
+           rot: Optional[Rotation], event: Optional[str], name: Optional[str]):
     if event is None:
         event = "*"
     if name is None:
         suffix = ""
     else:
         suffix = " %s" % cmds.mc_str(name)
-    if Config.mc_version >= (1, 19, 70):
+    if compiler.cfg.mc_version >= (1, 19, 70):
         if rot is None:
             ctx = pos.context
             rot_s = "0 0"

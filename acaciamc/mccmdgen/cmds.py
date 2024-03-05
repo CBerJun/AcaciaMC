@@ -5,8 +5,6 @@ from enum import Enum
 from typing import List, NamedTuple, Optional, Union, Iterable, Callable, Dict
 import json
 
-from acaciamc.constants import Config
-
 _TERMINATOR_CHARS = frozenset(" ,@~^/$&\"'!#%+*=[{]}\\|<>`\n")
 
 def mc_str(s: str) -> str:
@@ -520,19 +518,21 @@ class TitlerawClear(Command):
         return "titleraw %s clear" % self.player
 
 class FunctionsManager:
-    EXTRA_OBJ = "{scb}{id}"
+    EXTRA_OBJ = "%s{id}"
 
-    def __init__(self):
+    def __init__(self, scoreboard: str):
+        self.scoreboard = scoreboard
         self.files: List["MCFunctionFile"] = []
         self._alloc_id = 0
         self._int_consts: Dict[int, ScbSlot] = {}
         self._scb_id = 0
+        self._extra_obj = self.EXTRA_OBJ % scoreboard
 
     def generate_init(self) -> List[Command]:
         res = []
         # Default scoreboard
         res.append(Comment('# Register scoreboard'))
-        res.append(ScbObjAdd(Config.scoreboard))
+        res.append(ScbObjAdd(self.scoreboard))
         # Constants
         if self._int_consts:
             res.append(Comment('# Load constants'))
@@ -544,14 +544,14 @@ class FunctionsManager:
         if self._scb_id >= 1:
             res.append(Comment('# Additional scoreboards'))
             res.extend([
-                ScbObjAdd(self.EXTRA_OBJ.format(scb=Config.scoreboard, id=i))
+                ScbObjAdd(self._extra_obj.format(id=i))
                 for i in range(1, self._scb_id + 1)
             ])
         return res
 
     def allocate(self) -> ScbSlot:
         self._alloc_id += 1
-        return ScbSlot("acacia%d" % self._alloc_id, Config.scoreboard)
+        return ScbSlot("acacia%d" % self._alloc_id, self.scoreboard)
 
     def add_file(self, file: "MCFunctionFile"):
         self.files.append(file)
@@ -563,4 +563,4 @@ class FunctionsManager:
 
     def add_scoreboard(self) -> str:
         self._scb_id += 1
-        return self.EXTRA_OBJ.format(scb=Config.scoreboard, id=self._scb_id)
+        return self._extra_obj.format(id=self._scb_id)

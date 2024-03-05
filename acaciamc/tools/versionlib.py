@@ -13,7 +13,6 @@ __all__ = [
 from typing import Callable, Tuple, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
-from acaciamc.constants import Config
 from acaciamc.error import Error as AcaciaError, ErrorType
 
 if TYPE_CHECKING:
@@ -91,13 +90,13 @@ def only(version: VersionRequirement):
     """
     def _decorator(func: Callable):
         def _decorated(compiler: "Compiler", args, kwds):
-            if version.validate(Config.mc_version):
+            if version.validate(compiler.cfg.mc_version):
                 return func(compiler, args, kwds)
             raise AcaciaError(
                 ErrorType.ANY,
                 message="The function is not available for Minecraft "
                         "version %s; expecting %s"
-                % (format_version(Config.mc_version), version.to_str())
+                % (format_version(compiler.cfg.mc_version), version.to_str())
             )
         return _decorated
     return _decorator
@@ -108,7 +107,7 @@ def edu_only(func: Callable):
     Education Edition features are enabled.
     """
     def _decorated(compiler: "Compiler", args, kwds):
-        if not Config.education_edition:
+        if not compiler.cfg.education_edition:
             raise AcaciaError(
                 ErrorType.ANY,
                 message="Education Edition features must be enabled to"

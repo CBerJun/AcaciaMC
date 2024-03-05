@@ -37,21 +37,3 @@ COLORS_NEW = {
     "material_lapis": "t",
     "material_amethyst": "u",
 }
-
-class Config:
-    debug_comments = False  # generate debug comments in .mcfunction files
-    root_folder = ''  # output root folder (relative to "functions" folder)
-    internal_folder = '_acacia'  # name of the folder of internal mcfunctions
-    main_file = 'main'  # name of mcfunction file that executes the program
-    scoreboard = 'acacia'  # prefix of scoreboard that Acacia uses to hold data
-    entity_type = 'armor_stand'  # default type of entity
-    entity_pos = '~ ~ ~'  # which place to summon entity
-    entity_tag = 'acacia'  # prefix of entity tags
-    mc_version = (1, 20, 20)  # Mineraft version
-    education_edition = False  # Education edition features
-    split_init = False  # split initialization commands from main file
-    init_file = 'init'  # name of init file (ignored if split_init is False)
-    optimizer = True  # enable optimizer
-    # Max size for a function that is called with /execute
-    # condtions to be inlined:
-    max_inline_file_size = 20

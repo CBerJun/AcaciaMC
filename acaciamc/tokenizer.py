@@ -2,11 +2,16 @@
 
 __all__  = ['TokenType', 'Token', 'Tokenizer']
 
-from typing import Union, List, TextIO, Tuple, Dict, Optional, NamedTuple
+from typing import (
+    Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, TYPE_CHECKING
+)
 import enum
 
 from acaciamc.error import *
-from acaciamc.constants import COLORS, COLORS_NEW, Config
+from acaciamc.constants import COLORS, COLORS_NEW
+
+if TYPE_CHECKING:
+    from acaciamc.tools.versionlib import VERSION_T
 
 UNICODE_ESCAPES = {'x': 2, 'u': 4, 'U': 8}
 FONTS = {
@@ -216,9 +221,10 @@ class _BracketFrame(NamedTuple):
     str_fexpr: bool = False
 
 class Tokenizer:
-    def __init__(self, src: TextIO):
+    def __init__(self, src: TextIO, mc_version: "VERSION_T"):
         """src: source code"""
         self.src = src
+        self.mc_version = mc_version
         self.current_char = ''
         self.current_lineno = 0
         self.current_col = 0
@@ -596,7 +602,7 @@ class Tokenizer:
                     if word in COLORS:
                         res += COLORS[word]
                     elif (word in COLORS_NEW
-                          and Config.mc_version >= (1, 19, 80)):
+                          and self.mc_version >= (1, 19, 80)):
                         res += COLORS_NEW[word]
                     elif word in FONTS:
                         res += FONTS[word]

@@ -1,15 +1,17 @@
-"""The main compiler of Acacia.
-It assembles files and classes together and write output.
+"""
+The main compiler of Acacia.
+It assembles files and classes together and writes output.
 """
 
-__all__ = ['Compiler']
+__all__ = ['Compiler', 'Config']
 
-from typing import Tuple, Union, Optional, Callable, Dict
+from typing import (
+    Tuple, Union, Optional, Callable, Dict, NamedTuple, TYPE_CHECKING
+)
 import os
 from contextlib import contextmanager
 
 from acaciamc.ast import ModuleMeta
-from acaciamc.constants import Config
 from acaciamc.error import *
 from acaciamc.tokenizer import Tokenizer
 from acaciamc.parser import Parser
@@ -19,24 +21,21 @@ from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.optimizer import Optimizer
 import acaciamc.mccmdgen.cmds as cmds
 
-TICK_FILE = "tick"
+if TYPE_CHECKING:
+    from acaciamc.tools.versionlib import VERSION_T
 
 class OutputManager(cmds.FunctionsManager):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cfg: "Config"):
+        super().__init__(cfg.scoreboard)
+        self._cfg = cfg
         self._lib_count = 0
+        sep = '' if not cfg.root_folder else "/"
+        self._mcfp_template = f"{cfg.root_folder}{sep}%s"
+        self.tick_file_path = f"{self._cfg.internal_folder}/tick"
+        self.tick_file_full_path = self.mcfunction_path(self.tick_file_path)
 
-    @staticmethod
-    def mcfunction_path(path: str) -> str:
-        if Config.root_folder.endswith("/") or not Config.root_folder:
-            return "%s%s" % (Config.root_folder, path)
-        else:
-            return "%s/%s" % (Config.root_folder, path)
-
-    def tick_file_name(self) -> str:
-        return self.mcfunction_path(
-            "%s/%s" % (Config.internal_folder, TICK_FILE)
-        )
+    def mcfunction_path(self, path: str) -> str:
+        return self._mcfp_template % path
 
     def new_file(self, file: cmds.MCFunctionFile, path: str):
         file.set_path(self.mcfunction_path(path))
@@ -44,36 +43,75 @@ class OutputManager(cmds.FunctionsManager):
 
     def add_lib(self, file: cmds.MCFunctionFile):
         self._lib_count += 1
-        self.new_file(
-            file, "%s/acalib%d" % (Config.internal_folder, self._lib_count)
-        )
+        fname = f"{self._cfg.internal_folder}/acalib{self._lib_count}"
+        self.new_file(file, fname)
 
 class OutputOptimized(OutputManager, Optimizer):
     def entry_files(self):
-        internal = self.mcfunction_path(Config.internal_folder) + "/"
+        internal = self.mcfunction_path(self._cfg.internal_folder) + "/"
         for file in self.files:
             path = file.get_path()
-            if (not path.startswith(internal)) or path.endswith(TICK_FILE):
+            if (
+                not path.startswith(internal)
+                or path == self.tick_file_full_path
+            ):
                 yield file
 
     @property
     def max_inline_file_size(self) -> int:
-        return Config.max_inline_file_size
+        return self._cfg.max_inline_file_size
 
     def dont_inline_execute_call(self, file: cmds.MCFunctionFile) -> bool:
         # Expanding /execute function calls in tick.mcfunction can
         # decrease performance badly.
-        return file.get_path() == self.tick_file_name()
+        return file.get_path() == self.tick_file_full_path
+
+class Config(NamedTuple):
+    # Generate debug comments in .mcfunction files
+    debug_comments: bool = False
+    # Subpath of "functions" in a behavior pack where Acacia would put
+    # all mcfunctions into. Must be a sequence of Acacia identifiers
+    # joined with "/", or an empty string. Redundant slashes are NOT
+    # allowed.
+    root_folder: str = ''
+    # Name of the folder that contains internal mcfunctions
+    internal_folder: str = '_acacia'
+    # Name of mcfunction file that executes the program
+    main_file: str = 'main'
+    # Prefix of scoreboard that Acacia uses to hold data
+    scoreboard: str = 'acacia'
+    # Default type of entity spawned)
+    entity_type: str = 'armor_stand'
+    # Default position to spawn entity
+    entity_pos: str = '~ ~ ~'
+    # Prefix of entity tags
+    entity_tag: str = 'acacia'
+    # Minecraft version
+    mc_version: "VERSION_T" = (1, 20, 20)
+    # Minecraft Education Edition features
+    education_edition: bool = False
+    # Split initialization commands from main file
+    split_init: bool = False
+    # Name of init file (ignored if split_init is False)
+    init_file: str = 'init'
+    # Enable optimizer
+    optimizer: bool = True
+    # Maximum lines of commands an mcfunction can have to be inlined
+    # even if it is called with /execute condition (ignored if optimizer
+    # is False)
+    max_inline_file_size: int = 20
+    # Encoding of input and output files
+    encoding: Optional[str] = None
 
 class Compiler:
     """Start compiling the project
     A Compiler manage the resources in the compile task and
     connect the steps to compile: Tokenizer -> Parser -> Generator.
     """
-    def __init__(self, main_path: str, open_args={}):
+    def __init__(self, main_path: str, cfg: Optional[Config] = None):
         """
         main_path: path of main source file
-        open_args: args to pass to builtin `open`.
+        cfg: optional `Config` object
         """
         self.main_dir, _ = os.path.split(main_path)
         self.main_dir = os.path.realpath(self.main_dir)
@@ -82,16 +120,16 @@ class Compiler:
             os.path.join(ACACIA, 'modules'),  # buitlin modules
             self.main_dir  # find in program entry (main file)
         ]  # modules will be found in these directories
-        self.OPEN_ARGS = open_args
-        if Config.optimizer:
-            self.output_mgr = OutputOptimized()
+        self.cfg = Config() if cfg is None else cfg
+        if self.cfg.optimizer:
+            self.output_mgr = OutputOptimized(self.cfg)
         else:
-            self.output_mgr = OutputManager()
+            self.output_mgr = OutputManager(self.cfg)
         self.file_main = cmds.MCFunctionFile()  # load program
         self.file_tick = cmds.MCFunctionFile()  # runs every tick
-        self.output_mgr.new_file(self.file_main, Config.main_file)
+        self.output_mgr.new_file(self.file_main, self.cfg.main_file)
         self.output_mgr.new_file(
-            self.file_tick, self.output_mgr.tick_file_name()
+            self.file_tick, self.output_mgr.tick_file_path
         )
         self.current_generator = None  # the Generator that is running
         # vars to record the resources that are applied
@@ -129,9 +167,9 @@ class Compiler:
             cb()
         ## init
         init = self.output_mgr.generate_init()
-        if Config.split_init:
+        if self.cfg.split_init:
             init_file = cmds.MCFunctionFile()
-            self.output_mgr.new_file(init_file, Config.init_file)
+            self.output_mgr.new_file(init_file, self.cfg.init_file)
             init_file.write_debug(
                 '## Usage: Initialize Acacia, only need to be ran ONCE',
                 '## Execute this before running anything from Acacia!!!'
@@ -152,7 +190,7 @@ class Compiler:
         """
         Output result to `path`.
         e.g. when `path` is "a/b", main file is generated at
-        "a/b/<Config.root_folder>/main.mcfunction".
+        "a/b/{self.cfg.root_folder}/main.mcfunction".
         """
         # Mcfunctions
         for file in self.output_mgr.files:
@@ -160,7 +198,7 @@ class Compiler:
         # tick.json
         if self.file_tick.has_content():
             self._write_file(
-                '{"values": ["%s"]}' % self.output_mgr.tick_file_name(),
+                '{"values": ["%s"]}' % self.output_mgr.tick_file_full_path,
                 os.path.join(path, 'tick.json')
             )
 
@@ -173,7 +211,7 @@ class Compiler:
     def add_file(self, file: cmds.MCFunctionFile, path: Optional[str] = None):
         """
         Add a new file to the project.
-        `path` is the path relative to the Config.root_folder.
+        `path` is the path relative to the self.cfg.root_folder.
         If `path` is None, the file will be added as an internal lib.
         """
         if path is None:
@@ -224,7 +262,7 @@ class Compiler:
     def allocate_entity_tag(self) -> str:
         """Return a new entity tag."""
         self._entity_tag_max += 1
-        return Config.entity_tag + str(self._entity_tag_max)
+        return self.cfg.entity_tag + str(self._entity_tag_max)
 
     # -- End allocation --
 
@@ -319,9 +357,9 @@ class Compiler:
 
     def is_reserved_path(self, path: str) -> bool:
         """Return if a mcfunction path is reserved (not for user)."""
-        checks = [Config.main_file, Config.internal_folder]
-        if Config.split_init:
-            checks.append(Config.init_file)
+        checks = [self.cfg.main_file, self.cfg.internal_folder]
+        if self.cfg.split_init:
+            checks.append(self.cfg.init_file)
         path = path.lower()
         for check in checks:
             check = check.lower()
@@ -358,7 +396,7 @@ class Compiler:
         self._current_file = path
         self._loading_files.append(path)
         try:
-            node = Parser(Tokenizer(src_file)).module()
+            node = Parser(Tokenizer(src_file, self.cfg.mc_version)).module()
         except Error as err:
             if not err.location.file_set():
                 err.location.file = path
@@ -378,7 +416,7 @@ class Compiler:
 
     def _open_file(self, path: str):
         try:
-            return open(path, 'r', **self.OPEN_ARGS)
+            return open(path, 'r', encoding=self.cfg.encoding)
         except Exception as err:
             self.raise_error(Error(ErrorType.IO, message=str(err)))
 
@@ -397,7 +435,7 @@ class Compiler:
         """Write `content` to `path`."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
-            with open(path, 'w', **self.OPEN_ARGS) as f:
+            with open(path, 'w', encoding=self.cfg.encoding) as f:
                 f.write(content)
         except Exception as err:
             self.raise_error(Error(ErrorType.IO, message=str(err)))
@@ -408,6 +446,6 @@ class Compiler:
         "a/b/a.mcfunction".
         """
         self._write_file(
-            content=file.to_str(debugging=Config.debug_comments),
+            content=file.to_str(debugging=self.cfg.debug_comments),
             path=os.path.join(path, file.get_path() + '.mcfunction')
         )

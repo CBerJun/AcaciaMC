@@ -1,15 +1,14 @@
 """Command line interface of Acacia."""
 
-__all__ = ["build_argparser", "apply_config", "run", "main"]
+__all__ = ["build_argparser", "get_config", "run", "main"]
 
 import argparse
 import os
 import shutil
 import sys
 
-from acaciamc.constants import Config
 from acaciamc.error import Error as CompileError
-from acaciamc.compiler import Compiler
+from acaciamc.compiler import Compiler, Config
 
 DESCRIPTION = (
     'Compiler of Acacia, a programming language that runs in Minecraft '
@@ -119,62 +118,62 @@ def assert_id(name: str, option: str):
     except ValueError as e:
         fatal('option %s: %s' % (option, e.args[0]))
 
-def apply_config(args):
-    """Apply arguments to `Config`."""
-    if args.debug_comments:
-        Config.debug_comments = True
+def get_config(args) -> Config:
+    """Create a `Config` object from `args`."""
+    kwds = {
+        'debug_comments': bool(args.debug_comments),
+        'education_edition': bool(args.education_edition),
+        'optimizer': not bool(args.no_optimize),
+        'encoding': args.encoding
+    }
     if args.scoreboard:
         assert_id(args.scoreboard, '--scoreboard')
-        Config.scoreboard = args.scoreboard
+        kwds["scoreboard"] = args.scoreboard
     if args.function_folder:
         path = [p for p in args.function_folder.split("/") if p]
         for p in path:
             try:
                 check_id(p)
             except ValueError as e:
-                fatal('option --function-folder: invalid name %r: %s'
+                fatal('invalid name %r in function folder path: %s'
                       % (p, e.args[0]))
-        Config.root_folder = args.function_folder
+        kwds["root_folder"] = '/'.join(path)
     if args.main_file:
         assert_id(args.main_file, '--main-file')
-        Config.main_file = args.main_file
+        kwds["main_file"] = args.main_file
     if args.entity_tag:
-        Config.entity_tag = args.entity_tag
+        kwds["entity_tag"] = args.entity_tag
     if args.mc_version:
         numlist = args.mc_version.split(".")
         try:
-            Config.mc_version = tuple(map(int, numlist))
-            if len(Config.mc_version) <= 1:
+            t = tuple(map(int, numlist))
+            if len(t) <= 1:
                 raise ValueError
-            if any(v < 0 for v in Config.mc_version):
+            if any(v < 0 for v in t):
                 raise ValueError
         except ValueError:
             fatal('invalid Minecraft version: %s' % args.mc_version)
-    if args.education_edition:
-        Config.education_edition = True
-    if args.no_optimize:
-        Config.optimizer = False
+        kwds["mc_version"] = t
     if args.max_inline_file_size is not None:
         if args.max_inline_file_size < 0:
             fatal('max inline file size must >= 0: %s'
                   % args.max_inline_file_size)
-        Config.max_inline_file_size = args.max_inline_file_size
+        kwds["max_inline_file_size"] = args.max_inline_file_size
     if args.init_file:
-        Config.split_init = True
+        kwds["split_init"] = True
         if args.init_file is not _NOTGIVEN:
             assert_id(args.init_file, '--init-file')
-            Config.init_file = args.init_file
+            kwds["init_file"] = args.init_file
     if args.internal_folder:
         assert_id(args.internal_folder, '--internal-folder')
-        Config.internal_folder = args.internal_folder
+        kwds["internal_folder"] = args.internal_folder
+    return Config(**kwds)
 
 def run(args):
     if not os.path.exists(args.file):
         fatal('file not found: %s' % args.file)
     if not os.path.isfile(args.file):
         fatal('not a file: %s' % args.file)
-
-    encoding = args.encoding
 
     if args.out:
         out_path = os.path.realpath(args.out)
@@ -183,19 +182,22 @@ def run(args):
         out_path = os.path.realpath(out_path)
         out_path += '.acaout'
 
+    cfg = get_config(args)
+
     if args.override_old:
         # remove old output directory
-        rm_path = os.path.join(out_path, Config.root_folder)
+        rm_path = os.path.join(out_path, cfg.root_folder)
         if os.path.exists(rm_path):
             shutil.rmtree(rm_path)
 
     if not os.path.exists(out_path):
+        out_up = os.path.dirname(out_path)
+        if not os.path.exists(out_up):
+            fatal('output directory not found: %s' % out_up)
         os.mkdir(out_path)
 
-    apply_config(args)
-
     try:
-        compiler = Compiler(args.file, open_args={'encoding': encoding})
+        compiler = Compiler(args.file, cfg)
         compiler.output(out_path)
     except CompileError as err:
         fatal(err.full_msg())
