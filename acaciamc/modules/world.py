@@ -61,8 +61,9 @@ msg_say(sender: entity, message: str)
 spread(target: Selector, center: Pos, range: float, interval=0.0)
 /summon (pending)
 # Consider using Acacia's entity system first.
-summon(type: str, pos: Pos, rot [1.19.70+]: Rot = Rot(0, 0),
-       event: None | str = None, name: None | str = None)
+summon(type: str, pos: Pos,
+       event: None | str = None, name: None | str = None,
+       rot [1.19.70+]: Rot = Rot(0, 0))
 /tag (pending)
 # Consider using Acacia's entity system first.
 tag_add(target: Selector, tag: str)
@@ -683,51 +684,39 @@ def spread(compiler, target: "MCSelector", center: Position,
     )
     return resultlib.commands([cmd], compiler)
 
-if Config.mc_version >= (1, 19, 70):
-    @_register("summon")
-    @axe.chop
-    @axe.arg("type", axe.LiteralString(), rename="type_")
-    @axe.arg("pos", PosDataType)
-    @axe.arg("rot", RotDataType, default=None)
-    @axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
-    @axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
-    def summon(compiler, type_: str, pos: Position, rot: Optional[Rotation],
-               event: Optional[str], name: Optional[str]):
+@_register("summon")
+@axe.chop
+@axe.arg("type", axe.LiteralString(), rename="type_")
+@axe.arg("pos", PosDataType)
+@axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
+@axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
+@axe.arg("rot", RotDataType, default=None)
+def summon(compiler, type_: str, pos: Position, rot: Optional[Rotation],
+           event: Optional[str], name: Optional[str]):
+    if event is None:
+        event = "*"
+    if name is None:
+        suffix = ""
+    else:
+        suffix = " %s" % cmds.mc_str(name)
+    if Config.mc_version >= (1, 19, 70):
         if rot is None:
-            rot = Rotation(compiler)
-            rot.context.append(cmds.ExecuteEnv("rotated", "0 0"))
-        if event is None:
-            event = "*"
-        if name is None:
-            suffix = ""
+            ctx = pos.context
+            rot_s = "0 0"
         else:
-            suffix = " %s" % cmds.mc_str(name)
+            ctx = pos.context + rot.context
+            rot_s = "~ ~"
         cmd = cmds.Execute(
-            pos.context + rot.context,
-            runs="summon %s ~ ~ ~ ~ ~ %s%s" % (
-                type_, event, suffix
-            )
+            ctx,
+            runs="summon %s ~ ~ ~ %s %s%s" % (type_, rot_s, event, suffix)
         )
-        return resultlib.commands([cmd], compiler)
-else:
-    @_register("summon")
-    @axe.chop
-    @axe.arg("type", axe.LiteralString(), rename="type_")
-    @axe.arg("pos", PosDataType)
-    @axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
-    @axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
-    def summon(compiler, type_: str, pos: Position,
-               event: Optional[str], name: Optional[str]):
-        if event is None:
-            event = "*"
-        if name is None:
-            suffix = ""
-        else:
-            suffix = " %s" % cmds.mc_str(name)
+    else:
+        if rot is not None:
+            raise axe.ArgumentError("rot", "available only in MC 1.19.70+")
         cmd = cmds.Execute(
             pos.context, runs="summon %s ~ ~ ~ %s%s" % (type_, event, suffix)
         )
-        return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd], compiler)
 
 @_register("tag_add")
 @axe.chop
