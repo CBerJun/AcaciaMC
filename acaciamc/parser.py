@@ -615,9 +615,12 @@ class Parser:
 
     def from_import_stmt(self):
         """
-        from_import_stmt := FROM module_meta IMPORT (STAR | (
-          IDENTIFIER alias (COMMA IDENTIFIER alias)*
-        ))
+        id_alias := IDENTIFIER alias
+        from_import_stmt := FROM module_meta IMPORT (
+          STAR
+          | list_of{id_alias}
+          | paren_list_of{LPAREN, id_alias, RPAREN}
+        )
         """
         pos = self.current_pos
         self.eat(TokenType.from_)
@@ -626,16 +629,17 @@ class Parser:
         if self.current_token.type is TokenType.star:
             self.eat()
             return FromImportAll(meta, **pos)
-        else:
-            names = [self.current_token.value]
+        names = []
+        aliases = []
+        def _id_alias():
+            names.append(self.current_token.value)
             self.eat(TokenType.identifier)
-            aliases = [self.alias()]
-            while self.current_token.type is TokenType.comma:
-                self.eat()
-                names.append(self.current_token.value)
-                self.eat(TokenType.identifier)
-                aliases.append(self.alias())
-            return FromImport(meta, names, aliases, **pos)
+            aliases.append(self.alias())
+        if self.current_token.type is TokenType.lparen:
+            self.paren_list_of(_id_alias)
+        else:
+            self.list_of(_id_alias)
+        return FromImport(meta, names, aliases, **pos)
 
     def for_stmt(self):
         """
