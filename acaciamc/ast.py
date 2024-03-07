@@ -431,13 +431,6 @@ class BoolOp(Expression):  # and, or
         self.operator = operator
         self.operands = operands
 
-class RawScore(Expression):  # directly get the score on a scoreboard
-    def __init__(self, objective: Expression,
-                 selector: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.objective = objective
-        self.selector = selector
-
 class ListDef(Expression):  # a literal compile time list
     def __init__(self, items: _List[Expression], lineno, col):
         super().__init__(lineno, col)

@@ -40,7 +40,6 @@ class TokenType(enum.Enum):
     rbracket = ']'
     lbrace = '{'
     rbrace = '}'
-    bar = '|'
     colon = ':'
     comma = ','
     end_marker = 'END_MARKER'  # end of file

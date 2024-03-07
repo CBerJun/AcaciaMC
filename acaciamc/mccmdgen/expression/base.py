@@ -198,8 +198,8 @@ class VarValue(AcaciaExpr):
     a temporary (with `is_temporary` set to `True`, in which case it
     cannot be assigned).
     e.g. 1 + 2 -> IntLiteral(3) -> Unassignable
-    e.g. a -> IntVar("acacia", "acacia3") -> Assignable
-    e.g. |"x": "y"| -> IntVar("y", "x") -> Assignable
+    e.g. a -> IntVar(ScbSlot("acacia3", "acacia")) -> Assignable
+    e.g. scb("x", "scb") -> IntVar(ScbSlot("x", "scb")) -> Assignable
     e.g. bool -> Type -> Unassignable
     """
     is_temporary = False  # used as a temporary and is read-only

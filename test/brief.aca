@@ -407,10 +407,11 @@ interface b.c:
 
 #* Compatible with the original command system *#
 ## Accessing scoreboards
-# "|" selector ":" objective "|" is referring to selector's score on objective
-x = |"spam": "score"| + 10
-|"foo": scoreboard| = 3
-x = |player_name: "data"|
+# `scb(selector, objective)` refers to selector's score on objective,
+# where selector is a string or entity and objective is a string.
+x = scb("spam", "score") + 10
+scb("foo", scoreboard) = 3
+x = scb(player_name, "data")
 
 ## Accessing Raw Command
 /say Hello, world!

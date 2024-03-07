@@ -1043,24 +1043,6 @@ class Generator(ASTVisitor):
             )
         return res
 
-    def visit_RawScore(self, node: RawScore):
-        objective = self.visit(node.objective)
-        selector = self.visit(node.selector)
-        if not isinstance(objective, String):
-            self.error_c(ErrorType.INVALID_RAWSCORE_OBJECTIVE,
-                         got=str(objective.data_type))
-        if isinstance(selector, String):
-            selector_str = selector.value
-        elif selector.data_type.matches_cls(EntityDataType):
-            selector_str = selector.get_selector().to_str()
-        else:
-            self.error_c(ErrorType.INVALID_RAWSCORE_SELECTOR,
-                         got=str(selector.data_type))
-        return IntVar(
-            cmds.ScbSlot(selector_str, objective.value),
-            compiler=self.compiler
-        )
-
     # operators
 
     def _wrap_op(self, operator: str, impl: Callable, *operands: AcaciaExpr):

@@ -131,10 +131,6 @@ b -> "money":"@p"
 a.b.c *= 5 % b
 '''
 
-score_test = '''
-x = |"@p": "score"| + 10
-'''
-
 backslash_test = '''
 a = \\
     3

@@ -22,7 +22,7 @@ interface input:
     if guess <= MAX_ANSWER / 10:
         # Make sure the input value is not larger than MAX_ANSWER
         guess *= 10
-        guess += |"input": "numguess"|
+        guess += scb("input", "numguess")
 
 interface delete:
     #* Delete 1 digit. *#

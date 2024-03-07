@@ -1,11 +1,13 @@
-from typing import TYPE_CHECKING
+from typing import Union, TYPE_CHECKING
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.tools import axe, resultlib
+import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.expression.entity import _EntityBase
 
 class AnyDataType(DataType):
     def __str__(self) -> str:
@@ -26,7 +28,7 @@ class AnyType(Type):
 @axe.arg("x", axe.AnyValue())
 @axe.arg("y", axe.AnyValue())
 @axe.slash
-def _swap(compiler: "Compiler", x: AcaciaExpr, y: AcaciaExpr):
+def swap(compiler: "Compiler", x: AcaciaExpr, y: AcaciaExpr):
     """
     swap(&x, &y, /)
     Swap values of two variables.
@@ -41,6 +43,18 @@ def _swap(compiler: "Compiler", x: AcaciaExpr, y: AcaciaExpr):
             ' (got "%s" and "%s")' % (x.data_type, y.data_type)
         )
     return resultlib.commands(compiler.swap_exprs(x, y), compiler)
+
+@axe.chop
+@axe.arg("target", axe.AnyOf(axe.LiteralString(), axe.Typed(EntityDataType)))
+@axe.arg("objective", axe.LiteralString())
+def scb(compiler, target: Union["_EntityBase", str], objective: str):
+    """
+    scb(target: str | entity, objective: str) -> &int
+    Return a reference to the score of `target` on `objective`. This is
+    used to interact with scores on scoreboard.
+    """
+    tg = target if isinstance(target, str) else target.to_str()
+    return IntVar(cmds.ScbSlot(tg, objective), compiler)
 
 def acacia_build(compiler: "Compiler"):
     res = {}
@@ -62,5 +76,6 @@ def acacia_build(compiler: "Compiler"):
         res[name] = cls(compiler)
     # builtin names
     res['Entity'] = compiler.base_template
-    res['swap'] = BinaryFunction(_swap, compiler)
+    res['swap'] = BinaryFunction(swap, compiler)
+    res['scb'] = BinaryFunction(scb, compiler)
     return res

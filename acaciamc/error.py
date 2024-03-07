@@ -116,8 +116,6 @@ class ErrorType(enum.Enum):
     NO_SETITEM = '"{type_}" does not support item write access'
     INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_FEXPR = 'Invalid formatted expression'
-    INVALID_RAWSCORE_SELECTOR = 'Invalid raw score selector of "{got}" type'
-    INVALID_RAWSCORE_OBJECTIVE = 'Invalid raw score objective of "{got}" type'
     INVALID_CAST_ENTITY = 'Cast object should be an entity, not "{got}"'
     INVALID_CAST = 'Cast object should be an instance of the target template'
     INVALID_BIN_FUNC_ARG = 'Invalid argument "{arg}" for binary function: ' \

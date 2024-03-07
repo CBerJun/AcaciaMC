@@ -117,16 +117,6 @@ class Parser:
         self.eat(TokenType.identifier)
         return Identifier(token.value, **pos)
 
-    def raw_score(self):
-        """raw_score := BAR expr COLON expr BAR"""
-        pos = self.current_pos
-        self.eat(TokenType.bar)
-        selector = self.expr()
-        self.eat(TokenType.colon)
-        objective = self.expr()
-        self.eat(TokenType.bar)
-        return RawScore(objective, selector, **pos)
-
     def self(self):
         """self := SELF"""
         pos = self.current_pos
@@ -185,7 +175,7 @@ class Parser:
     def expr_l0(self):
         """
         level 0 expression := (LPAREN expr RPAREN) | literal
-          | identifier | str_literal | raw_score | self | list | map
+          | identifier | str_literal | self | list | map
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -201,8 +191,6 @@ class Parser:
             node = self.expr()
             self.eat(TokenType.rparen)
             return node
-        elif self.current_token.type is TokenType.bar:
-            return self.raw_score()
         elif self.current_token.type is TokenType.self:
             return self.self()
         elif self.current_token.type is TokenType.lbrace:
