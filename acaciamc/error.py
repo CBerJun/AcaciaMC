@@ -132,9 +132,6 @@ class ErrorType(enum.Enum):
     MRO = 'Invalid base templates (failed to create MRO)'
     OVERRIDE_RESULT_MISMATCH = 'Override method "{name}" should have same ' \
         'result type "{expect}" as its parent, not "{got}"'
-    OVERRIDE_RESULT_UNKNOWN = 'Virtual/override inline method "{name}" ' \
-        'must have its result specified; explicitly specify None if it ' \
-        'doesn\'t produce a meaningful result'
     OVERRIDE_RESULT_UNSTORABLE = 'Virtual/override inline method "{name}" ' \
         'can not use "{type_}" as result type'
     OVERRIDE_QUALIFIER = 'Override method "{name}" should have qualifier ' \
@@ -151,8 +148,6 @@ class ErrorType(enum.Enum):
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
     LIST_MULTIMES_NON_LITERAL = 'List can only be multiplied by literal int'
-    RESULT_BIND_OUT_OF_SCOPE = "Can't bind to result when out of function " \
-        "or inside non-inline function"
     NEVER_RESULT = "The function should have set its result but didn't"
     RESERVED_INTERFACE_PATH = 'Reserved interface path: {path}'
     DUPLICATE_INTERFACE = 'Multiple definitions of interface: {path}'

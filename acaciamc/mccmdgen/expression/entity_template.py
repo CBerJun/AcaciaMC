@@ -140,10 +140,7 @@ def _check_override(implementation: "METHODDEF_T", method: str):
     """
     if isinstance(implementation, InlineFunction):
         res_type = implementation.result_type
-        if res_type is None:
-            raise Error(ErrorType.OVERRIDE_RESULT_UNKNOWN,
-                        name=method)
-        elif not isinstance(res_type, Storable):
+        if not isinstance(res_type, Storable):
             raise Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
                         name=method, type_=str(res_type))
 

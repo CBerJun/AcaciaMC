@@ -117,7 +117,7 @@ class AcaciaFunction(ConstExpr, AcaciaCallable):
 class InlineFunction(ConstExpr, AcaciaCallable):
     def __init__(self, node: "InlineFuncDef",
                  args, arg_types, arg_defaults, arg_ports,
-                 returns: Optional["DataType"], result_port: FuncPortType,
+                 returns: "DataType", result_port: FuncPortType,
                  context: "Context", owner: "Generator",
                  compiler, source=None):
         super().__init__(FunctionDataType(compiler), compiler)
@@ -399,7 +399,7 @@ class BoundVirtualMethod(ConstExpr, AcaciaCallable):
 class AcaciaCTFunction(CTCallable, AcaciaCallable):
     def __init__(self, node: "ConstFuncDef",
                  args, arg_types, arg_defaults,
-                 returns: Optional["DataType"],
+                 returns: "DataType",
                  context: "Context", owner: "Generator",
                  compiler, source=None):
         super().__init__(FunctionDataType(compiler), compiler)
