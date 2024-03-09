@@ -9,7 +9,6 @@ const MAX = 114514
 a := 0
 b := 1
 while b <= MAX:
-    new_b := a + b
-    a = b
-    b = new_b
+    swap(a, b)
+    b += a
     print.tell(print.format("%0", a))
