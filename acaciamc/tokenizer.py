@@ -511,7 +511,7 @@ class Tokenizer:
 
     def handle_number(self):
         """Read an INTEGER or a FLOAT token."""
-        res = ''
+        res = []
         ln, col = self.current_lineno, self.current_col
         ## decide base
         base = 10
@@ -532,7 +532,7 @@ class Tokenizer:
         valid_chars = '0123456789ABCDEF'[:base]
         while ((self.current_char is not None)
                and (self.current_char.upper() in valid_chars)):
-            res += self.current_char
+            res.append(self.current_char)
             self.forward()
         ## convert string to number
         if (self.current_char == "."
@@ -540,31 +540,41 @@ class Tokenizer:
             and self._isdecimal(self.peek())
         ):  # float
             self.forward()
-            res += "."
+            res.append(".")
             while self._isdecimal(self.current_char):
-                res += self.current_char
+                res.append(self.current_char)
                 self.forward()
-            value = float(res)
+            value = float(''.join(res))
             return Token(TokenType.float_, value=value, lineno=ln, col=col)
         else:  # integer
             if not res:
                 self.error(ErrorType.INTEGER_REQUIRED, base=base)
-            value = int(res, base=base)
+            value = int(''.join(res), base=base)
             return Token(TokenType.integer, value=value, lineno=ln, col=col)
 
     def handle_name(self):
         """Read a keyword or an IDENTIFIER token."""
-        name = ''
+        chars = []
         ln, col = self.current_lineno, self.current_col
         while ((self.current_char is not None)
                and (self.current_char.isalnum() or self.current_char == '_')):
-            name += self.current_char
+            chars.append(self.current_char)
             self.forward()
+        name = ''.join(chars)
         token_type = KEYWORDS.get(name)
         if token_type is None:  # IDENTIFIER
             return Token(TokenType.identifier, value=name, lineno=ln, col=col)
         # Keyword
         return Token(token_type, lineno=ln, col=col)
+
+    def _font2char(self, word: str) -> Optional[str]:
+        if word in COLORS:
+            return COLORS[word]
+        if word in COLORS_NEW and self.mc_version >= (1, 19, 80):
+            return COLORS_NEW[word]
+        if word in FONTS:
+            return FONTS[word]
+        return None
 
     def _read_escapable_char(self) -> str:
         """Read current char as an escapable one (in string or command)
@@ -572,45 +582,41 @@ class Tokenizer:
         """
         first = self.current_char
         self.forward()
-        second = self.current_char
         # not escapable
         if first != '\\':
             return first
         # escapable
+        second = self.current_char
         if second == '\\':  # backslash itself
             self.forward()  # skip second backslash
             return second
         elif second == '#':  # font
             self.forward()  # skip '#'
-            third = self.current_char
+            if self.current_char != '(':
+                return '\xA7'
             start_ln, start_col = self.current_lineno, self.current_col
-            if third == '(':
-                res = ''
-                spec = ''
-                self.forward()  # skip '('
-                while self.current_char != ')':
-                    if self.current_char is None or self.current_char == '\n':
-                        self.error(ErrorType.UNCLOSED_FONT,
+            res: List[str] = []
+            cur_spec: List[str] = []
+            self.forward()  # skip '('
+            while True:
+                if self.current_char is None or self.current_char == '\n':
+                    self.error(ErrorType.UNCLOSED_FONT,
+                               lineno=start_ln, col=start_col)
+                if self.current_char in (',', ')'):
+                    font = ''.join(cur_spec).strip()
+                    cur_spec.clear()
+                    ch = self._font2char(font)
+                    if ch is None:
+                        self.error(ErrorType.INVALID_FONT, font=font,
                                    lineno=start_ln, col=start_col)
-                    spec += self.current_char
-                    self.forward()
-                self.forward()  # skip ')'
-                for word in spec.split(","):
-                    word = word.strip()
-                    res += '\xA7'
-                    if word in COLORS:
-                        res += COLORS[word]
-                    elif (word in COLORS_NEW
-                          and self.mc_version >= (1, 19, 80)):
-                        res += COLORS_NEW[word]
-                    elif word in FONTS:
-                        res += FONTS[word]
-                    else:
-                        self.error(ErrorType.INVALID_FONT, font=word,
-                                   lineno=start_ln, col=start_col)
-            else:
-                res = '\xA7'
-            return res
+                    res.append(f"\xA7{ch}")
+                    if self.current_char == ')':
+                        break
+                else:
+                    cur_spec.append(self.current_char)
+                self.forward()
+            self.forward()  # skip ')'
+            return ''.join(res)
         ## NOTE '\n' should be passed directly to MC
         ## because MC use '\n' escape too
         elif second in UNICODE_ESCAPES:  # unicode number
@@ -618,19 +624,15 @@ class Tokenizer:
                 self.error(ErrorType.INVALID_UNICODE_ESCAPE,
                            escape_char=second)
             self.forward()  # skip '\\'
-            code = ''
+            code = []
             length = UNICODE_ESCAPES[second]
-            VALID_CHARS = tuple('0123456789ABCDEFabcdef')
+            VALID_CHARS = frozenset('0123456789ABCDEFabcdef')
             for _ in range(length):
                 if self.current_char not in VALID_CHARS:
                     _err()
-                code += self.current_char
+                code.append(self.current_char)
                 self.forward()
-            # get code
-            try:
-                unicode = int(code, base=16)
-            except ValueError:
-                _err()
+            unicode = int(''.join(code), base=16)
             if unicode >= 0x110000:
                 _err()
             return chr(unicode)

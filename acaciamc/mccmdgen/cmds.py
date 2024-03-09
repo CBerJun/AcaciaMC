@@ -461,24 +461,22 @@ def execute(subcmds: List[_ExecuteSubcmd], runs: Union[Command, str]):
 class RawtextOutput(Command):
     def __init__(self, prefix: str, components: List[dict]):
         self.prefix = prefix
-        self.score_components: List[dict] = []
+        self.score_slots: List[ScbSlot] = []
         self.components = []
+        last_text: List[str] = []
         for component in components:
-            self.add_component(component)
-
-    def add_component(self, component: dict):
-        if "text" in component:
-            if self.components and "text" in self.components[-1]:
-                self.components[-1]["text"] += component["text"]
-            elif component["text"]:
-                self.components.append(component)
-            return
-        self.components.append(component)
-        if "score" in component:
-            d = component["score"]
-            if "name" not in d or "objective" not in d:
-                raise ValueError("Invalid score component: %r" % component)
-            self.score_components.append(d)
+            if "text" in component:
+                last_text.append(component["text"])
+                continue
+            if last_text:
+                self.components.append({"text": "".join(last_text)})
+                last_text.clear()
+            self.components.append(component)
+            if "score" in component:
+                d = component["score"]
+                self.score_slots.append(ScbSlot(d["name"], d["objective"]))
+        if last_text:
+            self.components.append({"text": "".join(last_text)})
 
     def resolve(self) -> str:
         return "%s %s" % (
@@ -486,10 +484,7 @@ class RawtextOutput(Command):
         )
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
-        return any(
-            slot.objective == d["objective"] and slot.target == d["name"]
-            for d in self.score_components
-        )
+        return slot in self.score_slots
 
 class TitlerawTimes(Command):
     def __init__(self, player: str, fade_in: int, stay: int, fade_out: int):

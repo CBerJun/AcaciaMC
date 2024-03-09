@@ -39,36 +39,38 @@ class _FStrParser:
         """Parse an fstring with `pattern` and `args` and `keywords`
         as formatted expressions."""
         self.pattern = pattern
+        self.ptr = 0
         self.args = args
         self.keywords = keywords
         self.dependencies = []
         self.json = []  # the result
+        self.text_cache: List[str] = []
 
-    def next_char(self) -> str:
+    def next_char(self) -> Optional[str]:
         """Move to next char."""
-        if not self.pattern:
+        if self.ptr >= len(self.pattern):
             return None
-        ret = self.pattern[0]
-        self.pattern = self.pattern[1:]
-        return ret
+        c = self.pattern[self.ptr]
+        self.ptr += 1
+        return c
+
+    def _dump_text(self):
+        if self.text_cache:
+            self.json.append({"text": "".join(self.text_cache)})
+            self.text_cache.clear()
 
     def add_text(self, text: str):
-        # if the last component in json is text, too,
-        # we add these text to it
-        if (bool(self.json)
-                and "text" in self.json[-1]
-                and not isinstance(self.json[-1], _FontComponent)):
-            self.json[-1]['text'] += text
-        else:  # fallback
-            self.json.append({"text": text})
+        self.text_cache.append(text)
 
     def add_score(self, slot: cmds.ScbSlot):
+        self._dump_text()
         self.json.append({
             "score": {"objective": slot.objective, "name": slot.target}
         })
 
     def add_expr(self, expr: AcaciaExpr):
         """Format an expression to string."""
+        self._dump_text()
         if expr.data_type.matches_cls(IntDataType):
             if isinstance(expr, IntLiteral):
                 # optimize for literals
@@ -129,15 +131,15 @@ class _FStrParser:
             # 1. Parse which expression is being used here
             if second == '{':
                 # read until }
-                expr_str = ''
+                expr_str = []
                 expr_char = self.next_char()
                 while expr_char != '}':
                     if expr_char is None:
                         raise _FStrError('Unclosed "{" in fstring')
-                    expr_str += expr_char
+                    expr_str.append(expr_char)
                     expr_char = self.next_char()
                 # expr is integer or an identifier
-                expr = self.expr_from_id(expr_str)
+                expr = self.expr_from_id(''.join(expr_str))
             elif second.isdecimal():
                 # %1 is the alias to %{1}
                 expr = self.expr_from_id(second)
@@ -147,6 +149,7 @@ class _FStrParser:
                 continue
             # 3. Handle the `expr` we got
             self.add_expr(expr)
+        self._dump_text()
         return self.dependencies, self.json
 
 class FStringDataType(DefaultDataType):
@@ -234,7 +237,7 @@ COLOR_DEFAULT = "default"
 @axe.arg("bold", axe.LiteralBool(), default=False)
 @axe.arg("italic", axe.LiteralBool(), default=False)
 @axe.arg("obfuscated", axe.LiteralBool(), default=False)
-def _with_font(compiler, text: FString, color: str,
+def _with_font(compiler: "Compiler", text: FString, color: str,
                bold: bool, italic: bool, obfuscated: bool):
     """
     with_font(
@@ -260,19 +263,19 @@ def _with_font(compiler, text: FString, color: str,
             "color", "%r is only available in MC 1.19.80+" % color
         )
     res = text.copy()
-    fmt_code = ""
+    fmts = []
     if color != COLOR_DEFAULT:
         if color in COLORS_NEW:
             color_str = COLORS_NEW[color]
         else:
             color_str = COLORS[color]
-        fmt_code += "\xA7" + color_str
+        fmts.append("\xA7" + color_str)
     if bold:
-        fmt_code += "\xA7l"
+        fmts.append("\xA7l")
     if italic:
-        fmt_code += "\xA7o"
+        fmts.append("\xA7o")
     if obfuscated:
-        fmt_code += "\xA7k"
+        fmts.append("\xA7k")
     scopes: List[Tuple[int, int]] = []  # [start, end)
     start_i = 0
     start_levels = 0
@@ -293,6 +296,7 @@ def _with_font(compiler, text: FString, color: str,
     if start_i != -1:
         scopes.append((start_i, json_len))
     scopes.reverse()
+    fmt_code = "".join(fmts)
     for start_i, end_i in scopes:
         res.json.insert(end_i, _FontComponent("\xA7r", "end"))
         res.json.insert(start_i, _FontComponent(fmt_code, "start"))
