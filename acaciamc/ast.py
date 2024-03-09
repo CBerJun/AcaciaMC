@@ -408,12 +408,6 @@ class Subscript(Expression):  # value[v1, v2]
         self.object = object_
         self.subscripts = subscripts
 
-class EntityCast(Expression):  # Template@some_entity
-    def __init__(self, object_: Expression, template: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.object = object_
-        self.template = template
-
 class CompareOp(Expression):  # ==, !=, >, <, >=, <=
     def __init__(
         self, left: Expression, operators: _List[Operator],

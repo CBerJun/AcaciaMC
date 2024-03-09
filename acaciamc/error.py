@@ -116,8 +116,6 @@ class ErrorType(enum.Enum):
     NO_SETITEM = '"{type_}" does not support item write access'
     INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_FEXPR = 'Invalid formatted expression'
-    INVALID_CAST_ENTITY = 'Cast object should be an entity, not "{got}"'
-    INVALID_CAST = 'Cast object should be an instance of the target template'
     INVALID_BIN_FUNC_ARG = 'Invalid argument "{arg}" for binary function: ' \
         '{message}'
     CANT_CREATE_INSTANCE = 'Can\'t create instance of "{type_}" type'
@@ -148,6 +146,8 @@ class ErrorType(enum.Enum):
     MAP_KEY_NOT_FOUND = 'Map key not found'
     INVALID_MAP_KEY = 'Invalid map key'
     LIST_MULTIMES_NON_LITERAL = 'List can only be multiplied by literal int'
+    INVALID_UPCAST = 'Cast object\'s template "{t1}" is not a subtemplate ' \
+        'of target template "{t2}"'
     NEVER_RESULT = "The function should have set its result but didn't"
     RESERVED_INTERFACE_PATH = 'Reserved interface path: {path}'
     DUPLICATE_INTERFACE = 'Multiple definitions of interface: {path}'

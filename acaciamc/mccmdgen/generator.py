@@ -1256,22 +1256,3 @@ class Generator(ASTVisitor):
         return self.call_function(
             getitem, args, {}, location=self.node_location(node)
         )
-
-    # entity cast
-
-    def visit_EntityCast(self, node: EntityCast):
-        object_ = self.visit(node.object)
-        template = self.visit(node.template)
-        # Make sure `object_` is an entity
-        if not object_.data_type.matches_cls(EntityDataType):
-            self.error_c(ErrorType.INVALID_CAST_ENTITY,
-                         got=str(object_.data_type))
-        # Make sure `template` is a template
-        if not template.data_type.matches_cls(ETemplateDataType):
-            self.error_c(ErrorType.INVALID_ETEMPLATE,
-                         got=str(template.data_type))
-        # Make sure `template` is a super template of `object_`
-        if not object_.template.is_subtemplate_of(template):
-            self.error_c(ErrorType.INVALID_CAST)
-        # Go
-        return object_.cast_to(template)

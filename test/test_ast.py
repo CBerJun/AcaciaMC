@@ -151,7 +151,7 @@ entity X:
 
 entity Y extends X:
     def get():
-        result X@self.get() + 1
+        result upcast(self, X).get() + 1
 '''
 
 decimal_test = '''

@@ -181,7 +181,7 @@ test_entity := Test()
 entity Subtemplate extends Test:
     def __init__():
         # Call __init__ defined in Test:
-        Test@self.__init__()
+        upcast(self, Test).__init__()
         # Then do extra things added by this template:
         print.tell("It's Subtemplate here!")
 # This creates a template that prints a message in chat when any entity

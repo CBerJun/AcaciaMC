@@ -21,7 +21,7 @@ There are several types of functions:
         pass
     def f(a: A):
       a.foo()  # BoundMethod: must be foo in A
-      A@a.bar()  # BoundMethod: must be bar in A
+      upcast(a, A).bar()  # BoundMethod: must be bar in A
       a.bar()  # BoundVirtualMethod: bar in A or B?
 - ConstructorFunction: a function that produces a new object. This
   exists only for optimization purposes.

@@ -204,7 +204,6 @@ class Parser:
           (POINT IDENTIFIER)
           | call_table
           | paren_list_of{LBRACKET, expr, RBRACKET}
-          | (AT expr_l0)
         )*
         """
         node = self.expr_l0()
@@ -231,12 +230,6 @@ class Parser:
                 node, subscripts, lineno=node.lineno, col=node.col
             )
 
-        def _entity_cast(node: Expression):
-            self.eat(TokenType.at)
-            object_ = self.expr_l0()
-            return EntityCast(object_, template=node,
-                              lineno=node.lineno, col=node.col)
-
         # start
         while True:
             if self.current_token.type is TokenType.point:
@@ -245,8 +238,6 @@ class Parser:
                 node = _call(node)
             elif self.current_token.type is TokenType.lbracket:
                 node = _subscript(node)
-            elif self.current_token.type is TokenType.at:
-                node = _entity_cast(node)
             else:
                 return node
 
