@@ -512,8 +512,15 @@ class Parser:
             elif self.current_token.type is TokenType.override:
                 self.eat()  # eat "override"
                 qualifier = MethodQualifier.override
+            elif self.current_token.type is TokenType.static:
+                self.eat()  # eat "static"
+                qualifier = MethodQualifier.static
             if self.current_token.type is TokenType.inline:
                 content = self.inline_def_stmt()
+            elif self.current_token.type is TokenType.const:
+                if qualifier is not MethodQualifier.static:
+                    self.error(ErrorType.NONSTATIC_CONST_METHOD, **pos)
+                content = self.const_def_stmt()
             else:
                 content = self.def_stmt()
             return EntityMethod(content, qualifier, **pos)
@@ -523,7 +530,10 @@ class Parser:
         entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
           (COMMA expr)*)? COLON block{entity_body}
         entity_field_decl := IDENTIFIER COLON type_spec
-        method_decl := (VIRTUAL | OVERRIDE)? (def_stmt | inline_def_stmt)
+        method_decl := (
+          (VIRTUAL | OVERRIDE | STATIC)? (def_stmt | inline_def_stmt)
+          | (STATIC const_def_stmt)
+        )
         meta_decl := AT IDENTIFIER COLON expr
         entity_body := method_decl | (
           (entity_field_decl | meta_decl | pass_stmt) NEW_LINE)

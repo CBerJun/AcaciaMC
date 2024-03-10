@@ -687,7 +687,7 @@ class Generator(ASTVisitor):
             compiler=self.compiler, source=self.node_location(node)
         )
 
-    def visit_FuncDef(self, node: FuncDef):
+    def handle_normal_func(self, node: FuncDef) -> AcaciaFunction:
         func = self._func_expr(node)
         with self._in_noninline_func(func), \
              self.new_mcfunc_file() as body_file:
@@ -704,14 +704,9 @@ class Generator(ASTVisitor):
             func.file = body_file
         else:
             self.write_debug('No commands generated')
-        self.register_symbol(node.name, func)
         return func
 
-    def visit_InlineFuncDef(self, node: InlineFuncDef):
-        func = self.handle_inline_func(node)
-        self.register_symbol(node.name, func)
-
-    def visit_ConstFuncDef(self, node: ConstFuncDef):
+    def handle_const_func(self, node: ConstFuncDef):
         if node.returns is None:
             returns = NoneDataType(self.compiler)
         else:
@@ -723,12 +718,23 @@ class Generator(ASTVisitor):
             if not isinstance(default, ConstExpr):
                 self.error_node(node.arg_table.default[arg],
                                 ErrorType.ARG_DEFAULT_NOT_CONST, arg=arg)
-        func = AcaciaCTFunction(
+        return AcaciaCTFunction(
             node,
             args, arg_types, arg_defaults,
             returns, self.ctx, owner=self,
             compiler=self.compiler, source=self.node_location(node)
         )
+
+    def visit_FuncDef(self, node: FuncDef):
+        func = self.handle_normal_func(node)
+        self.register_symbol(node.name, func)
+
+    def visit_InlineFuncDef(self, node: InlineFuncDef):
+        func = self.handle_inline_func(node)
+        self.register_symbol(node.name, func)
+
+    def visit_ConstFuncDef(self, node: ConstFuncDef):
+        func = self.handle_const_func(node)
         self.register_symbol(node.name, func)
 
     def _parse_module(self, meta: ModuleMeta, lineno: int, col: int):
@@ -793,10 +799,14 @@ class Generator(ASTVisitor):
                 # `res` is (field type, field meta)
                 field_types[decl.name], field_metas[decl.name] = res
             elif isinstance(decl, EntityMethod):
-                # `res` is `AcaciaFunction` or `InlineFunction`
+                # `res` is `AcaciaFunction`, `InlineFunction` or
+                # `AcaciaCTFunction`
                 methods[decl.content.name] = res
                 method_qualifiers[decl.content.name] = decl.qualifier
-                if isinstance(res, AcaciaFunction):
+                if (
+                    isinstance(res, AcaciaFunction)
+                    and decl.qualifier is not MethodQualifier.static
+                ):
                     methods_2ndpass.append((res, decl.content))
             elif isinstance(decl, EntityMeta):
                 # `res` is (meta name, meta value)
@@ -811,7 +821,7 @@ class Generator(ASTVisitor):
             methods, method_qualifiers, parents, metas,
             self.compiler, source=self.node_location(node)
         )
-        # 2nd Pass: parse the non-inline method bodies.
+        # 2nd Pass: parse body of non-inline non-static methods.
         for method, ast in methods_2ndpass:
             with self._in_noninline_func(method):
                 if ast.name in template.method_dispatchers:
@@ -846,13 +856,21 @@ class Generator(ASTVisitor):
     def visit_EntityMethod(self, node: EntityMethod):
         content = node.content
         if isinstance(content, FuncDef):
-            func = self._func_expr(content)
-            # Give this function a file
-            file = cmds.MCFunctionFile()
-            func.file = file
-            self.compiler.add_file(file)
+            if node.qualifier is MethodQualifier.static:
+                func = self.handle_normal_func(content)
+            else:
+                func = self._func_expr(content)
+                # Give this function a file
+                file = cmds.MCFunctionFile()
+                func.file = file
+                self.compiler.add_file(file)
         elif isinstance(content, InlineFuncDef):
             func = self.handle_inline_func(content)
+        else:
+            assert isinstance(content, ConstFuncDef)
+            assert node.qualifier is MethodQualifier.static
+            func = self.handle_const_func(content)
+        func.source = self.node_location(node)
         return func
 
     def visit_EntityMeta(self, node: EntityMeta):

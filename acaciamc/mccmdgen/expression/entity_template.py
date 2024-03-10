@@ -148,7 +148,7 @@ class EntityTemplate(ConstExpr, ConstructorFunction):
     def __init__(self, name: str,
                  field_types: Dict[str, "SupportsEntityField"],
                  field_metas: Dict[str, dict],
-                 methods: Dict[str, "METHODDEF_T"],
+                 methods: Dict[str, AcaciaCallable],
                  method_qualifiers: Dict[str, MethodQualifier],
                  parents: List["EntityTemplate"],
                  metas: Dict[str, AcaciaExpr],
@@ -168,6 +168,7 @@ class EntityTemplate(ConstExpr, ConstructorFunction):
         # method_dispatchers: for virtual methods AND override methods
         self.method_dispatchers: Dict[str, _MethodDispatcher] = {}
         self.simple_methods: Dict[str, _SimpleMethod] = {}
+        self.static_methods: Dict[str, AcaciaCallable] = {}
         self.metas: Dict[str, Any] = {}
         self.mro_: List[EntityTemplate] = [self]  # Method Resolution Order
         # Handle meta
@@ -211,7 +212,7 @@ class EntityTemplate(ConstExpr, ConstructorFunction):
         self.runtime_tag = self.compiler.allocate_entity_tag()
         # Inherit attributes from parents
         ## MRO: We use the same C3 algorithm as Python.
-        merge = []
+        merge: List[List[EntityTemplate]] = []
         for parent in self.parents:
             if parent.mro_:
                 merge.append(parent.mro_.copy())
@@ -260,6 +261,20 @@ class EntityTemplate(ConstExpr, ConstructorFunction):
                         # did not use `override` qualifier. Complain.
                         raise Error(ErrorType.OVERRIDE_QUALIFIER,
                                     name=method, got=qualifier.value)
+                if (
+                    method in parent.simple_methods
+                    and qualifier is MethodQualifier.static
+                ):
+                    # This static method tries to override an
+                    # instance method
+                    raise Error(ErrorType.STATIC_OVERRIDE_INST, name=method)
+                if (
+                    method in parent.static_methods
+                    and qualifier is not MethodQualifier.static
+                ):
+                    # This instance method tries to override a static
+                    # method
+                    raise Error(ErrorType.INST_OVERRIDE_STATIC, name=method)
             else:
                 if qualifier is MethodQualifier.none:
                     # This method is a simple method
@@ -272,23 +287,34 @@ class EntityTemplate(ConstExpr, ConstructorFunction):
                     disp = _MethodDispatcher(method, self.compiler)
                     self.method_dispatchers[method] = disp
                     disp.register(self, implementation)
-                else:
-                    assert qualifier is MethodQualifier.override
+                elif qualifier is MethodQualifier.override:
                     # This method is marked as override, but actually
                     # did not override any virtual method. Complain.
                     raise Error(ErrorType.NOT_OVERRIDING, name=method)
+                else:
+                    assert qualifier is MethodQualifier.static
+                    # This method is a static method
+                    self.static_methods[method] = implementation
+        fields_got = frozenset(itertools.chain(
+            self.method_dispatchers, self.simple_methods, self.static_methods
+        ))
         for parent in self.mro_:
             for method, disp in parent.method_dispatchers.items():
-                if (method not in self.method_dispatchers
-                        and method not in self.simple_methods):
+                if method not in fields_got:
                     # Inherited override methods
                     self.method_dispatchers[method] = disp
                     disp.register_inherit(self, parent)
             for method, mgr in parent.simple_methods.items():
-                if (method not in self.method_dispatchers
-                        and method not in self.simple_methods):
+                if method not in fields_got:
                     # Inherited simple methods
                     self.simple_methods[method] = mgr
+            for method, impl in parent.static_methods.items():
+                if method not in fields_got:
+                    # Inherited static methods
+                    self.static_methods[method] = impl
+        ## Register static methods to attribute table
+        for name, impl in self.static_methods.items():
+            self.attribute_table.set(name, impl)
 
     def datatype_hook(self):
         return EntityDataType(self)
@@ -318,6 +344,9 @@ class EntityTemplate(ConstExpr, ConstructorFunction):
             entity.attribute_table.set(
                 name, type_.new_var_as_field(entity, **meta)
             )
+        # Add static methods
+        for name, impl in template.static_methods.items():
+            entity.attribute_table.set(name, impl)
 
     def initialize(self, instance: "_EntityBase", args, keywords):
         # Calling an entity template summons a new entity, the arguments

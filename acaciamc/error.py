@@ -56,6 +56,7 @@ class ErrorType(enum.Enum):
         'argument'
     INVALID_FUNC_PORT = 'This type of function can\'t use qualifier "{port}"'
     INVALID_VARDEF_STMT = 'Invalid variable definition target'
+    NONSTATIC_CONST_METHOD = "Non-static method can't be compile time function"
     # Command Generator
     NAME_NOT_DEFINED = 'Name "{name}" is not defined'
     HAS_NO_ATTRIBUTE = '"{value_type}" objects have no attribute "{attr}"'
@@ -107,7 +108,7 @@ class ErrorType(enum.Enum):
     SFIELD_MULTIPLE_DEFS = 'Multiple definitions for struct attribute "{attr}"'
     MISSING_ARG = 'Required argument "{arg}" is missing'
     RESULT_OUT_OF_SCOPE = 'Found "result" out of function'
-    SELF_OUT_OF_SCOPE = 'Found "self" out of entity method'
+    SELF_OUT_OF_SCOPE = 'Found "self" out of non-static entity method'
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
     UNCALLABLE = '"{expr_type}" is not callable'
@@ -136,6 +137,10 @@ class ErrorType(enum.Enum):
         '"override", not "{got}"'
     NOT_OVERRIDING = 'Method "{name}" is marked as "override" but did not ' \
         'actually override a virtual method'
+    INST_OVERRIDE_STATIC = 'Non-static method "{name}" has the same name ' \
+        'with a static method in base class'
+    STATIC_OVERRIDE_INST = 'Static method "{name}" has the same name with ' \
+        'a non-static method in base class'
     UNINITIALIZED_CONST = 'Uninitialized variable in compile time function'
     INVALID_CONST_STMT = 'Invalid statement in compile time function'
     POS_OFFSET_CTOR_ARG = 'At most one of the arguments "{axis}" and "{axis}' \

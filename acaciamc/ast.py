@@ -63,6 +63,7 @@ class MethodQualifier(_enum.Enum):
     none = "(none)"
     virtual = "virtual"
     override = "override"
+    static = "static"
 
 class FuncPortType(_enum.Enum):
     """Function port types."""
@@ -239,11 +240,13 @@ class EntityField(Statement):  # entity field definition
         self.type = type_
 
 class EntityMethod(Statement):  # entity method definition
-    def __init__(self, content: _Union[FuncDef, InlineFuncDef],
+    def __init__(self, content: _Union[FuncDef, InlineFuncDef, ConstFuncDef],
                  qualifier: MethodQualifier, lineno, col):
         super().__init__(lineno, col)
         self.content = content
         self.qualifier = qualifier
+        assert (not isinstance(content, ConstFuncDef)
+                or qualifier is MethodQualifier.static)
 
 class EntityMeta(Statement):  # entity meta like @type
     def __init__(self, name: str, value: Expression, lineno, col):
