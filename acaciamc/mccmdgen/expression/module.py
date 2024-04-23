@@ -6,14 +6,19 @@ import importlib.util
 
 from .base import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.symbol import SymbolTable, ScopedSymbolTable
+from acaciamc.mccmdgen.symbol import SymbolTable
+from acaciamc.ctexec.expr import CTDataType
 from acaciamc.error import *
 
 class ModuleDataType(DefaultDataType):
     name = 'module'
 
-class BinaryModule(ConstExpr):
+ctdt_module = CTDataType("module")
+
+class BinaryModule(ConstExprCombined):
     """A binary module that is implemented in Python."""
+    cdata_type = ctdt_module
+
     def __init__(self, path: str, compiler):
         """`path` is .py file path."""
         super().__init__(ModuleDataType(compiler), compiler)
@@ -46,14 +51,12 @@ class BinaryModule(ConstExpr):
     def _module_error(self, message: str):
         raise ValueError(repr(self.path) + ': ' + message)
 
-class AcaciaModule(ConstExpr):
+class AcaciaModule(ConstExprCombined):
     """An Acacia module that is implemented in Acacia."""
+    cdata_type = ctdt_module
+
     def __init__(self, table: SymbolTable, compiler):
         super().__init__(ModuleDataType(compiler), compiler)
-        no_export = (
-            table.no_export if isinstance(table, ScopedSymbolTable)
-            else set()
-        )
-        for name, obj in table:
-            if not (name in no_export or name.startswith('_')):
-                self.attribute_table.set(name, obj)
+        for name in table.all_names():
+            if not (name in table.no_export or name.startswith('_')):
+                self.attribute_table.set(name, table.get_raw(name))

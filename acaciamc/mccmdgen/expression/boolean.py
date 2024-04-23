@@ -33,7 +33,7 @@ __all__ = [
     'to_BoolVar'
 ]
 
-from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
+from typing import List, Tuple, Dict, Optional, Union, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
 from .base import *
@@ -44,16 +44,18 @@ from acaciamc.constants import INT_MAX, INT_MIN
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
+from acaciamc.ctexec.expr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
     from acaciamc.compiler import Compiler
+    from acaciamc.ctexec.expr import CTObj
 
 def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
     """Wildcard `compare` method to compare a bool with a bool."""
     if not (op is Operator.equal_to or op is Operator.unequal_to):
-        return NotImplemented
+        raise TypeError
     dep = []
     invert = op is Operator.unequal_to
     if isinstance(other, BoolVar):
@@ -66,7 +68,7 @@ def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
         dep.extend(_dep)
         slot2 = other_var.slot
     else:
-        return NotImplemented
+        raise TypeError
     _dep, self_var = to_BoolVar(self)
     dep.extend(_dep)
     return ScbEqualCompare(
@@ -109,9 +111,14 @@ class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
         return BoolVar(cmds.ScbSlot(entity.to_str(), meta["scoreboard"]),
                        self.compiler)
 
+ctdt_bool = CTDataType("bool")
+
 class BoolType(Type):
     def datatype_hook(self):
         return BoolDataType(self.compiler)
+
+    def cdatatype_hook(self):
+        return ctdt_bool
 
 class SupportsAsExecute(AcaciaExpr, metaclass=ABCMeta):
     """See `as_execute` method. Should only be used by booleans."""
@@ -124,8 +131,10 @@ class SupportsAsExecute(AcaciaExpr, metaclass=ABCMeta):
         """
         pass
 
-class BoolLiteral(ConstExpr):
+class BoolLiteral(ConstExprCombined):
     """Literal boolean."""
+    cdata_type = ctdt_bool
+
     def __init__(self, value: bool, compiler):
         super().__init__(BoolDataType(compiler), compiler)
         self.value = value
@@ -133,30 +142,32 @@ class BoolLiteral(ConstExpr):
     def export(self, var: "BoolVar"):
         return [cmds.ScbSetConst(var.slot, int(self.value))]
 
-    def cmdstr(self) -> str:
+    def cstringify(self) -> str:
         return "true" if self.value else "false"
 
-    def map_hash(self):
+    def chash(self):
         return self.value
 
-    def compare(self, op, other):
+    def ccompare(self, op: Operator, other: Union[AcaciaExpr, "CTObj"]):
         if not (op is Operator.equal_to or op is Operator.unequal_to):
-            return NotImplemented
-        if not self.data_type.is_type_of(other):
-            return NotImplemented  # not a boolean
+            raise TypeError
         # For a boolean expression b, b == True is equivalent to "b"
         # b == False is equivalent to "not b"; != is the opposite
-        if self.value == (op is Operator.equal_to):
-            return other
+        true = self.value == (op is Operator.equal_to)
+        if isinstance(other, BoolLiteral):
+            return other.value == true
+        elif (isinstance(other, AcaciaExpr)
+              and self.data_type.is_type_of(other)):
+            return other if true else other.unarynot()
         else:
-            return other.not_()
+            raise TypeError
 
     def __str__(self):
         """Return 1 if True, 0 if False."""
         return str(int(self.value))
 
     # Unary operator
-    def not_(self):
+    def cunarynot(self):
         return BoolLiteral(not self.value, self.compiler)
 
 class BoolVar(VarValue, SupportsAsExecute):
@@ -191,7 +202,7 @@ class BoolVar(VarValue, SupportsAsExecute):
         return [cmds.ScbOperation(cmds.ScbOp.SWAP, self.slot, other.slot)]
 
     # Unary operator
-    def not_(self):
+    def unarynot(self):
         return NotBoolVar(self.slot, self.compiler)
 
 class NotBoolVar(AcaciaExpr):
@@ -229,7 +240,7 @@ class NotBoolVar(AcaciaExpr):
         return ScbEqualCompare(self.slot, other.slot, self.compiler, invert)
 
     # Unary operator
-    def not_(self):
+    def unarynot(self):
         res = BoolVar(self.slot, self.compiler)
         res.is_temporary = True
         return res
@@ -246,7 +257,7 @@ class CompareBase(SupportsAsExecute, metaclass=ABCMeta):
     compare = _bool_compare
 
     @abstractmethod
-    def not_(self):
+    def unarynot(self):
         # Boolean expressions should implement "not".
         pass
 
@@ -275,7 +286,7 @@ class ScbMatchesCompare(CompareBase):
         return self.dependencies.copy(), res
 
     # Unary operator
-    def not_(self):
+    def unarynot(self):
         return ScbMatchesCompare(
             self.dependencies.copy(), self.slot, COMPOP_INVERT[self.operator],
             self.literal, self.compiler
@@ -302,14 +313,15 @@ class ScbEqualCompare(CompareBase):
             )]
         )
 
-    def not_(self):
+    def unarynot(self):
         return ScbEqualCompare(
             self.left, self.right, self.compiler, not self.invert,
             self.dependencies
         )
 
-def _ranges2subcmds(ranges: List[Tuple[cmds.ScbSlot, int, int]]) \
-        -> List["_ExecuteSubcmd"]:
+MCRange = Tuple[cmds.ScbSlot, int, int]
+
+def _ranges2subcmds(ranges: List[MCRange]) -> List["_ExecuteSubcmd"]:
     res = []
     for slot, min_, max_ in ranges:
         if min_ == INT_MIN and max_ == INT_MAX:
@@ -327,7 +339,7 @@ class WildBool(SupportsAsExecute):
     def __init__(
         self, subcmds: List["_ExecuteSubcmd"],
         dependencies: CMDLIST_T, compiler,
-        ranges: Optional[List[Tuple[cmds.ScbSlot, int, int]]] = None
+        ranges: Optional[List[MCRange]] = None
     ):
         super().__init__(BoolDataType(compiler), compiler)
         self.subcmds = subcmds
@@ -348,7 +360,7 @@ class WildBool(SupportsAsExecute):
     compare = _bool_compare
 
     # Unary operator
-    def not_(self):
+    def unarynot(self):
         return NotWildBool(
             self.subcmds.copy(), self.dependencies.copy(),
             self.compiler, self.ranges.copy()
@@ -358,7 +370,7 @@ class NotWildBool(AcaciaExpr):
     def __init__(
         self, subcmds: List["_ExecuteSubcmd"],
         dependencies: CMDLIST_T, compiler,
-        ranges: Optional[List[Tuple[cmds.ScbSlot, int, int]]] = None
+        ranges: Optional[List[MCRange]] = None
     ):
         super().__init__(BoolDataType(compiler), compiler)
         self.subcmds = subcmds
@@ -376,7 +388,7 @@ class NotWildBool(AcaciaExpr):
     compare = _bool_compare
 
     # Unary operator
-    def not_(self):
+    def unarynot(self):
         return WildBool(
             self.subcmds.copy(), self.dependencies.copy(),
             self.compiler, self.ranges.copy()
@@ -460,11 +472,11 @@ def new_and_group(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
 def new_or_expression(operands: List[AcaciaExpr], compiler) -> AcaciaExpr:
     """Create an "or" expression."""
     # invert the operands (`a`, `b`, `c` -> `not a`, `not b`, `not c`)
-    inverted_operands = [operand.not_() for operand in operands]
+    inverted_operands = [operand.unarynot() for operand in operands]
     # connect them with `and` (-> `not a and not b and not c`)
     res = new_and_group(operands=inverted_operands, compiler=compiler)
     # invert result (-> `not (not a and not b and not c)`)
-    return res.not_()
+    return res.unarynot()
 
 # Utils
 def to_BoolVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, BoolVar]:

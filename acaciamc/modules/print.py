@@ -5,6 +5,7 @@ from copy import deepcopy
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 from acaciamc.constants import COLORS, COLORS_NEW
@@ -155,8 +156,12 @@ class _FStrParser:
 class FStringDataType(DefaultDataType):
     name = 'fstring'
 
-class FString(ConstExpr):
+ctdt_fstring = CTDataType("fstring")
+
+class FString(ConstExprCombined):
     """A formatted string in JSON format."""
+    cdata_type = ctdt_fstring
+
     def __init__(self, dependencies: List[str], json: List[dict], compiler):
         # dependencies: commands to run before json rawtext is used
         # json: JSON rawtext without {"rawtext": ...}
@@ -168,7 +173,7 @@ class FString(ConstExpr):
         return FString(self.dependencies.copy(),
                        deepcopy(self.json), self.compiler)
 
-    def __add__(self, other):
+    def cadd(self, other):
         # connect strings
         res = self.copy()
         if isinstance(other, String):
@@ -177,11 +182,10 @@ class FString(ConstExpr):
             # connect json
             res.json.extend(other.json)
         else:
-            return NotImplemented
+            raise TypeError
         return res
 
-    def __radd__(self, other):
-        return self.__add__(other)
+    cradd = cadd
 
 ### Functions ###
 
@@ -189,8 +193,8 @@ class FString(ConstExpr):
 
 @axe.chop
 @axe.arg("_pattern", axe.LiteralString(), rename="pattern")
-@axe.star_arg("args", axe.AnyValue())
-@axe.kwds("kwds", axe.AnyValue())
+@axe.star_arg("args", axe.AnyRT())
+@axe.kwds("kwds", axe.AnyRT())
 def _format(compiler, pattern: str, args, kwds):
     """
     format(_pattern: str, *args, **kwargs)
@@ -388,9 +392,9 @@ def _title_clear(compiler, target: Optional["MCSelector"]):
 
 def acacia_build(compiler: "Compiler"):
     return {
-        'format': BinaryFunction(_format, compiler),
-        'translate': BinaryFunction(_translate, compiler),
-        'with_font': BinaryFunction(_with_font, compiler),
+        'format': BinaryCTFunction(_format, compiler),
+        'translate': BinaryCTFunction(_translate, compiler),
+        'with_font': BinaryCTFunction(_with_font, compiler),
         'tell': BinaryFunction(_tell, compiler),
         'title': BinaryFunction(_title, compiler),
         'TITLE': String(_TITLE, compiler),

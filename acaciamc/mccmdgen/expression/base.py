@@ -2,7 +2,8 @@
 
 __all__ = [
     # Base classes
-    'AcaciaExpr', 'VarValue', 'AcaciaCallable', 'ConstExpr', 'CTCallable',
+    'AcaciaExpr', 'VarValue', 'AcaciaCallable',
+    'ConstExpr', 'ConstExprCombined',
     # Utils
     'ArgumentHandler', 'ImmutableMixin', 'transform_immutable',
     # Type checking
@@ -10,12 +11,14 @@ __all__ = [
 ]
 
 from typing import (
-    List, Union, Dict, Tuple, Callable, Hashable, Optional, TYPE_CHECKING
+    List, Union, Dict, Tuple, Callable, Hashable, Optional,
+    Generic, TypeVar, TYPE_CHECKING
 )
 from abc import ABCMeta, abstractmethod
 
-from acaciamc.mccmdgen.symbol import AttributeTable
+from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.error import *
+from acaciamc.ctexec.expr import CTObj
 
 if TYPE_CHECKING:
     from types import NotImplementedType  # Python 3.10
@@ -23,6 +26,7 @@ if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import Command
+    from acaciamc.ctexec.expr import CTExpr
     from .boolean import CompareBase
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
@@ -69,21 +73,21 @@ class AcaciaExpr:
        `IntVar`.
 
     To implement operator for your type, here are some methods:
-     - __add__, __sub__, __mul__, __floordiv__, __mod__: represents
-       binary +, -, *, /, %, respectively. See also __radd__,
-       __rsub__, etc.
-     - __pos__, __neg__, not_: represents unary +, - and "not",
+     - add, sub, mul, div, mod: represents binary +, -, *, /, %,
+       respectively. There are also radd, rsub, rmul, rdiv, rmod,
+       which are similar to those in Python.
+     - unarypos, unaryneg, unarynot: represents unary +, - and "not",
        respectively.
      - iadd, isub, imul, idiv, imod: represents +=, -=, *=, /=, %=
        respectively.
     When you are not satisfied with input operand type, please raise
-    `TypeError`, EXCEPT for binary operators (return `NotImplemented`
-    instead).
+    `TypeError`.
     """
     def __init__(self, type_: "DataType", compiler: "Compiler"):
+        super().__init__()
         self.compiler = compiler
         self.data_type = type_
-        self.attribute_table = AttributeTable()
+        self.attribute_table = SymbolTable()
 
     def is_assignable(self) -> bool:
         """Return whether this expression is a lvalue at runtime."""
@@ -119,7 +123,7 @@ class AcaciaExpr:
         """
         raise NotImplementedError
 
-    def map_hash(self) -> Hashable:
+    def hash(self) -> Hashable:
         """When this expression is used as a map's key, this method
         is called to obtain the hash value.
         """
@@ -134,10 +138,48 @@ class AcaciaExpr:
         """
         return NotImplemented
 
-class ArgumentHandler:
+    def add(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def sub(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def mul(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def div(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def mod(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+
+    def radd(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def rsub(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def rmul(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def rdiv(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+    def rmod(self, other: "AcaciaExpr") -> "AcaciaExpr":
+        raise TypeError
+
+    def unarypos(self) -> "AcaciaExpr":
+        raise TypeError
+    def unaryneg(self) -> "AcaciaExpr":
+        raise TypeError
+    def unarynot(self) -> "AcaciaExpr":
+        raise TypeError
+
+class ConstExpr(AcaciaExpr, metaclass=ABCMeta):
+    @abstractmethod
+    def to_ctexpr(self) -> "CTExpr":
+        pass
+
+T = TypeVar("T")
+DT = TypeVar("DT")
+IT = TypeVar("IT")
+
+class ArgumentHandler(Generic[IT, T, DT]):
     """A tool to match function arguments against a given definition."""
-    def __init__(self, args: List[str], arg_types: Dict[str, "DataType"],
-                 arg_defaults: Dict[str, Union[AcaciaExpr, None]]):
+    def __init__(self, args: List[str], arg_types: Dict[str, Optional[DT]],
+                 arg_defaults: Dict[str, Optional[T]]):
         """`args`, `arg_types` and `arg_defaults` decide the expected
         pattern.
         """
@@ -151,36 +193,38 @@ class ArgumentHandler:
                 del self.arg_defaults[arg]
         self.ARG_LEN = len(self.args)
 
-    def match(self, args: ARGS_T,
-              keywords: KEYWORDS_T) -> Dict[str, AcaciaExpr]:
+    def preconvert(self, arg: str, value: IT) -> T:
+        # Can be omitted if `IT` is same as `T`.
+        return value
+
+    def type_check(self, arg: str, value: T, type_: DT) -> None:
+        raise NotImplementedError
+
+    def __type_check(self, arg: str, value: T, type_: Optional[DT]) -> None:
+        if type_ is not None:
+            self.type_check(arg, value, type_)
+
+    def match(self, args: List[IT], keywords: Dict[str, IT]) -> Dict[str, T]:
         """Match the expected pattern with given call arguments.
         Return a `dict` mapping names to argument value.
         """
         if len(args) > self.ARG_LEN:
             raise Error(ErrorType.TOO_MANY_ARGS)
         res = dict.fromkeys(self.args)
-        # util
-        def _check_arg_type(arg: str, value: AcaciaExpr):
-            # check if `arg` got the correct type of `value`
-            t = self.arg_types[arg]
-            if (t is not None) and (not t.matches(value.data_type)):
-                raise Error(
-                    ErrorType.WRONG_ARG_TYPE, arg=arg,
-                    expect=str(t), got=str(value.data_type)
-                )
         # positioned
         for i, value in enumerate(args):
             arg = self.args[i]
-            _check_arg_type(arg, value)
+            value = self.preconvert(arg, value)
+            self.__type_check(arg, value, self.arg_types[arg])
             res[arg] = value
         # keyword
         for arg, value in keywords.items():
-            # check multiple values of the same var
             if arg not in self.args:
                 raise Error(ErrorType.UNEXPECTED_KEYWORD_ARG, arg=arg)
             if res[arg] is not None:
                 raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=arg)
-            _check_arg_type(arg, value)
+            value = self.preconvert(arg, value)
+            self.__type_check(arg, value, self.arg_types[arg])
             res[arg] = value
         # if any args are missing use default if exists, else error
         for arg, value in res.copy().items():
@@ -210,34 +254,13 @@ class VarValue(AcaciaExpr):
     def is_assignable(self) -> bool:
         return not self.is_temporary
 
-class _CallableBase(AcaciaExpr):
-    def __init__(self, type_: "DataType", compiler: "Compiler"):
-        super().__init__(type_, compiler)
-        self.source = SourceLocation()
+class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
+    """Acacia expressions that are callable."""
+    def __init__(self, *args, **kwds):
+        super().__init__(*args, **kwds)
+        self.source: Optional[SourceLocation] = None
         self.func_repr = "<unknown>"
 
-    def _wrap_frame(
-            self, call: Callable, args: ARGS_T, keywords: KEYWORDS_T,
-            location: Optional[Union[SourceLocation, str]] = None
-        ):
-        try:
-            return call(args, keywords)
-        except Error as err:
-            if location is None:
-                location = SourceLocation()
-            elif isinstance(location, str):
-                location = SourceLocation(file=location)
-            if self.source.file_set():
-                note = "Callee defined at %s" % self.source
-            else:
-                note = None
-            err.add_frame(ErrFrame(
-                location, "Calling %s" % self.func_repr, note
-            ))
-            raise
-
-class AcaciaCallable(_CallableBase, metaclass=ABCMeta):
-    """Acacia expressions that are callable."""
     def call_withframe(
             self, args: ARGS_T, keywords: KEYWORDS_T,
             location: Optional[Union[SourceLocation, str]] = None
@@ -246,7 +269,10 @@ class AcaciaCallable(_CallableBase, metaclass=ABCMeta):
         Call this expression, and add this to error frame if an error
         occurs.
         """
-        return self._wrap_frame(self.call, args, keywords, location)
+        return traced_call(
+            self.call, location, self.source, self.func_repr,
+            args, keywords
+        )
 
     @abstractmethod
     def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
@@ -257,26 +283,6 @@ class AcaciaCallable(_CallableBase, metaclass=ABCMeta):
          2nd element: Commands to run
         """
         pass
-
-class ConstExpr(AcaciaExpr, metaclass=ABCMeta):
-    """An expression known and only available at compile time."""
-    pass
-
-class CTCallable(ConstExpr, _CallableBase, metaclass=ABCMeta):
-    @abstractmethod
-    def ccall(self, args: ARGS_T, keywords: KEYWORDS_T) -> ConstExpr:
-        """Call inside const context."""
-        pass
-
-    def ccall_withframe(
-            self, args: ARGS_T, keywords: KEYWORDS_T,
-            location: Optional[Union[SourceLocation, str]] = None
-        ) -> ConstExpr:
-        """
-        Call this expression (in const context), and add this to error
-        frame if an error occurs.
-        """
-        return self._wrap_frame(self.ccall, args, keywords, location)
 
 class ImmutableMixin:
     """An `AcaciaExpr` that can't be changed and only allows
@@ -296,3 +302,42 @@ def transform_immutable(self: ImmutableMixin):
             return func(self.copy(), *args, **kwds)
         return _decorated
     return _decorator
+
+class ConstExprCombined(ConstExpr, CTObj):
+    def __init_subclass__(cls) -> None:
+        for meth in (
+            'add', 'sub', 'mul', 'div', 'mod',
+            'radd', 'rsub', 'rmul', 'rdiv', 'rmod',
+            'unarypos', 'unaryneg', 'unarynot', 'hash'
+        ):
+            cmeth = f"c{meth}"
+            func = getattr(cls, cmeth)
+            deffunc = getattr(CTObj, cmeth)
+            if func is not deffunc:
+                setattr(cls, meth, func)
+
+    def __init__(self, *args, **kwds):
+        super().__init__(*args, **kwds)
+        self.attributes = self.attribute_table
+
+    def to_ctexpr(self):
+        return self
+
+    def to_rt(self):
+        return self
+
+    def cmdstr(self):
+        try:
+            return self.cstringify()
+        except TypeError:
+            raise NotImplementedError
+
+    def compare(self, op: "Operator", other: AcaciaExpr):
+        try:
+            b = self.ccompare(op, other)
+        except TypeError:
+            return NotImplemented
+        if isinstance(b, bool):
+            from .boolean import BoolLiteral
+            return BoolLiteral(b, self.compiler)
+        return b

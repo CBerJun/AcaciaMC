@@ -10,6 +10,7 @@ import itertools
 from acaciamc.ast import MethodQualifier
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
+from acaciamc.ctexec.expr import CTDataType
 from .base import *
 from .entity import TaggedEntity, EntityDataType
 from .functions import (
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
 
 class ETemplateDataType(DefaultDataType):
     name = 'entity_template'
+
+ctdt_etemplate = CTDataType("entity_template")
 
 class _MethodDispatcher:
     """
@@ -144,7 +147,9 @@ def _check_override(implementation: "METHODDEF_T", method: str):
             raise Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
                         name=method, type_=str(res_type))
 
-class EntityTemplate(ConstExpr, ConstructorFunction):
+class EntityTemplate(ConstExprCombined, ConstructorFunction):
+    cdata_type = ctdt_etemplate
+
     def __init__(self, name: str,
                  field_types: Dict[str, "SupportsEntityField"],
                  field_metas: Dict[str, dict],

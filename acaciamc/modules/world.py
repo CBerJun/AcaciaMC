@@ -241,7 +241,8 @@ import json
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.ctexec.expr import CTDataType
+from acaciamc.tools import axe, resultlib, cmethod_of
 from acaciamc.tools.versionlib import edu_only
 import acaciamc.mccmdgen.cmds as cmds
 
@@ -264,9 +265,11 @@ def _fmt_bool(value: bool):
 class ItemDataType(DefaultDataType):
     name = "Item"
 
+ctdt_item = CTDataType("Item")
+
 class ItemType(Type):
     def do_init(self):
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("id", axe.LiteralString(), rename="id_")
         @axe.arg("data", axe.RangedLiteralInt(0, 32767), default=0)
@@ -292,7 +295,12 @@ class ItemType(Type):
     def datatype_hook(self):
         return ItemDataType(self.compiler)
 
-class Item(ConstExpr):
+    def cdatatype_hook(self):
+        return ctdt_item
+
+class Item(ConstExprCombined):
+    cdata_type = ctdt_item
+
     def __init__(self, id_: str, data: int, components: dict, compiler):
         super().__init__(ItemDataType(compiler), compiler)
         self.id = id_
@@ -306,9 +314,11 @@ class Item(ConstExpr):
 class BlockDataType(DefaultDataType):
     name = "Block"
 
+ctdt_block = CTDataType("Block")
+
 class BlockType(Type):
     def do_init(self):
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("id", axe.LiteralString(), rename="id_")
         @axe.arg("states", axe.MapOf(
@@ -321,7 +331,12 @@ class BlockType(Type):
     def datatype_hook(self):
         return BlockDataType(self.compiler)
 
-class Block(ConstExpr):
+    def cdatatype_hook(self):
+        return ctdt_block
+
+class Block(ConstExprCombined):
+    cdata_type = ctdt_block
+
     def __init__(self, id_: str,
                  states: Dict[str, Union[str, int, bool]], compiler):
         super().__init__(BlockDataType(compiler), compiler)

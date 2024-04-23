@@ -9,13 +9,15 @@ __all__ = ["RotType", "RotDataType", "Rotation"]
 
 from typing import List, TYPE_CHECKING
 
-from acaciamc.tools import axe, cfunction, cmethod_of
+from acaciamc.tools import axe, cmethod_of
 from acaciamc.constants import DEFAULT_ANCHOR
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
 from .entity import EntityDataType
+from .functions import BinaryCTFunction
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
@@ -23,6 +25,8 @@ if TYPE_CHECKING:
 
 class RotDataType(DefaultDataType):
     name = "Rot"
+
+ctdt_rotation = CTDataType("Rot")
 
 class RotType(Type):
     def do_init(self):
@@ -64,7 +68,12 @@ class RotType(Type):
     def datatype_hook(self):
         return RotDataType(self.compiler)
 
-class Rotation(ConstExpr, ImmutableMixin):
+    def cdatatype_hook(self):
+        return ctdt_rotation
+
+class Rotation(ConstExprCombined, ImmutableMixin):
+    cdata_type = ctdt_rotation
+
     def __init__(self, compiler):
         super().__init__(RotDataType(compiler), compiler)
         self.context: List["_ExecuteSubcmd"] = []
@@ -76,8 +85,8 @@ class Rotation(ConstExpr, ImmutableMixin):
         float, representing xrot and yrot values. "abs" directly sets
         rotation and "offset" rotates relatively.
         """
-        self.attribute_table.set("abs", cfunction(_abs, compiler))
-        self.attribute_table.set("offset", cfunction(_offset, compiler))
+        self.attribute_table.set("abs", BinaryCTFunction(_abs, compiler))
+        self.attribute_table.set("offset", BinaryCTFunction(_offset, compiler))
 
     def copy(self):
         res = Rotation(self.compiler)

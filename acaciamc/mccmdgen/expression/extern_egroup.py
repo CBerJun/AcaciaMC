@@ -46,7 +46,9 @@ from acaciamc.tools import axe, resultlib, cmethod_of
 from .base import *
 from .entity_group import *
 from .entity_template import ETemplateDataType
-from .functions import ConstructorFunction, FunctionDataType, BinaryFunction
+from .functions import (
+    ConstructorFunction, FunctionDataType, BinaryFunction, ctdt_function
+)
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -76,11 +78,13 @@ class ExternEGroupGeneric(EGroupGeneric):
         super().__init__(compiler)
         @cmethod_of(self, "__getitem__")
         @axe.chop
-        @axe.arg("E", ETemplateDataType, rename="template")
+        @axe.arg("template", ETemplateDataType)
         def _getitem(compiler, template: "EntityTemplate"):
             return ExternEGroupType(template, compiler)
 
-class _ExternEGroupResolve(ConstExpr, ConstructorFunction):
+class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
+    cdata_type = ctdt_function
+
     def __init__(self, owner: "ExternEGroup", compiler: "Compiler"):
         super().__init__(FunctionDataType(compiler), compiler)
         self.owner = owner

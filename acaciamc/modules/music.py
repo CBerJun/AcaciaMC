@@ -7,12 +7,14 @@ from typing import Dict, TYPE_CHECKING
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 from acaciamc.ast import ModuleMeta
 from acaciamc.error import *
-from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.tools import axe, resultlib, cmethod_of, method_of
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
+    from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
 
 ID2INSTRUMENT = {
@@ -168,6 +170,8 @@ ID2INSTRUMENT = {
 class MusicDataType(DefaultDataType):
     name = "Music"
 
+ctdt_music = CTDataType("music")
+
 class MusicType(Type):
     """
     Music(
@@ -202,7 +206,7 @@ class MusicType(Type):
     example: {127: "note.hat"}.
     """
     def do_init(self):
-        @method_of(self, "__new__")
+        @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("path", axe.LiteralString())
         @axe.arg("looping", axe.LiteralBool(), default=False)
@@ -248,9 +252,14 @@ class MusicType(Type):
     def datatype_hook(self):
         return MusicDataType(self.compiler)
 
-class Music(ConstExpr):
+    def cdatatype_hook(self):
+        return ctdt_music
+
+class Music(ConstExprCombined):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
     # tick.
+
+    cdata_type = ctdt_music
 
     def __init__(self, midi, listener_str: str, looping: int,
                  note_offset: int, chunk_size: int, speed: float,
@@ -346,17 +355,17 @@ class Music(ConstExpr):
                              .export(self.timer))
             return resultlib.commands(commands, compiler)
         # Register this to be called every tick
-        _res, reg_cmds = register_loop.call(
+        _res, init_cmds = register_loop.call(
             args=[BinaryFunction(_gt_loop, self.compiler)],
             keywords={}
         )
+        # XXX Making `Music` instantiatable at compile time relies on
+        # the fact that `register_loop` does not produce any commands
+        # (when interval is 1).
+        assert not init_cmds
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
-        @method_of(self, "__init__")
-        def _init(compiler, args, keywords):
-            """.__init__(): Register dependencies"""
-            return resultlib.commands(reg_cmds, compiler)
         @method_of(self, "play")
         @axe.chop
         @axe.arg("timer", IntDataType, default=IntLiteral(0, self.compiler))
@@ -455,7 +464,7 @@ class Music(ConstExpr):
         ))
         self.cur_chunk_size += 1
 
-def acacia_build(compiler):
+def acacia_build(compiler: "Compiler"):
     global mido, register_loop
     try:
         import mido

@@ -8,6 +8,7 @@ from acaciamc.error import *
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.constants import DEFAULT_ANCHOR, XYZ
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
@@ -24,6 +25,8 @@ if TYPE_CHECKING:
 
 class PosDataType(DefaultDataType):
     name = "Pos"
+
+ctdt_position = CTDataType("Pos")
 
 class PosType(Type):
     def do_init(self):
@@ -79,7 +82,12 @@ class PosType(Type):
     def datatype_hook(self):
         return PosDataType(self.compiler)
 
-class Position(ConstExpr, ImmutableMixin):
+    def cdatatype_hook(self):
+        return ctdt_position
+
+class Position(ConstExprCombined, ImmutableMixin):
+    cdata_type = ctdt_position
+
     def __init__(self, compiler):
         super().__init__(PosDataType(compiler), compiler)
         self.context: List["_ExecuteSubcmd"] = []
@@ -112,9 +120,8 @@ class Position(ConstExpr, ImmutableMixin):
             """
             offset = PosOffset.local(left, up, front, compiler)
             self.context.extend(rot.context)
-            new_obj, cmds = (self.attribute_table.lookup("apply")
-                             .call([offset], {}))
-            return new_obj, cmds
+            self.context.append(cmds.ExecuteEnv("positioned", str(offset)))
+            return self
         @cmethod_of(self, "apply")
         @axe.chop
         @axe.arg("offset", PosOffsetDataType)

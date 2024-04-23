@@ -3,16 +3,21 @@ Most important: it is compatible with both `Pos` and `Offset`.
 """
 
 import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.ctexec.expr import CTDataType
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.constants import XYZ
 from .base import *
 from .types import Type
-from .position import PosDataType, Position
-from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
+from .position import PosDataType, Position, ctdt_position
+from .position_offset import (
+    PosOffsetDataType, PosOffset, CoordinateType, ctdt_posoffset
+)
 from .float_ import Float
 
 class AbsPosDataType(PosDataType, PosOffsetDataType):
     name = "AbsPos"
+
+ctdt_abspos = CTDataType("AbsPos", (ctdt_posoffset, ctdt_position))
 
 class AbsPosType(Type):
     def do_init(self):
@@ -27,7 +32,12 @@ class AbsPosType(Type):
     def datatype_hook(self):
         return AbsPosDataType(self.compiler)
 
+    def cdatatype_hook(self):
+        return ctdt_abspos
+
 class AbsPos(Position, PosOffset):
+    cdata_type = ctdt_abspos
+
     # XXX As you can see the inheritance is a bit weird, we can't even
     # call __init__ properly.
     def __init__(self, x: float, y: float, z: float, compiler):

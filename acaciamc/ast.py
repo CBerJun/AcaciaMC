@@ -1,9 +1,9 @@
 """Abstarct Syntax Tree definitions for Acacia."""
 from typing import (
-    Union as _Union, List as _List, Optional as _Optional, Dict as _Dict
+    Union as _Union, List as _List, Optional as _Optional, Dict as _Dict,
+    Iterable as _Iterable
 )
 import enum as _enum
-import operator as _operator
 
 ####################
 ### AST CONTENTS ###
@@ -32,21 +32,6 @@ class Operator(_enum.Enum):
     and_ = "and"
     or_ = "or"
 
-OP2PYOP = {
-    Operator.positive: _operator.pos,
-    Operator.negative: _operator.neg,
-    Operator.multiply: _operator.mul,
-    Operator.divide: _operator.floordiv,
-    Operator.mod: _operator.mod,
-    Operator.add: _operator.add,
-    Operator.minus: _operator.sub,
-    Operator.equal_to: _operator.eq,
-    Operator.unequal_to: _operator.ne,
-    Operator.greater: _operator.gt,
-    Operator.less: _operator.lt,
-    Operator.greater_equal: _operator.ge,
-    Operator.less_equal: _operator.le
-}
 COMPOP_INVERT = {
     # Used to invert ("not") a comparison
     Operator.greater: Operator.less_equal,
@@ -55,6 +40,15 @@ COMPOP_INVERT = {
     Operator.less_equal: Operator.greater,
     Operator.equal_to: Operator.unequal_to,
     Operator.unequal_to: Operator.equal_to
+}
+COMPOP_SWAP = {
+    # Used to swap the operands of a comparison
+    Operator.greater: Operator.less,
+    Operator.greater_equal: Operator.less_equal,
+    Operator.less: Operator.greater,
+    Operator.less_equal: Operator.greater_equal,
+    Operator.equal_to: Operator.equal_to,
+    Operator.unequal_to: Operator.unequal_to
 }
 
 class MethodQualifier(_enum.Enum):
@@ -74,7 +68,8 @@ class FuncPortType(_enum.Enum):
 
 class ModuleMeta:
     """Specifies a module."""
-    def __init__(self, last_name: str, leading_dots=0, parents=[]):
+    def __init__(self, last_name: str, leading_dots: int = 0,
+                 parents: _Iterable[str] = ()):
         self.leading_dots = leading_dots
         self.last_name = last_name
         self.parents = list(parents)

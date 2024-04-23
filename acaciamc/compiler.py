@@ -17,7 +17,6 @@ from acaciamc.tokenizer import Tokenizer
 from acaciamc.parser import Parser
 from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expression import *
-from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.optimizer import Optimizer
 import acaciamc.mccmdgen.cmds as cmds
 
@@ -154,9 +153,7 @@ class Compiler:
             field_types={}, field_metas={}, methods={},
             method_qualifiers={}, parents=[], metas={}, compiler=self
         )
-        self.builtins = SymbolTable.from_other(
-            self.get_module(ModuleMeta("builtins")).attribute_table
-        )
+        self.builtins = self.get_module(ModuleMeta("builtins")).attribute_table
 
         # --- START COMPILE ---
         ## start

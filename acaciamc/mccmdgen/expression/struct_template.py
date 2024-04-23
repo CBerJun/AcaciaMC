@@ -10,6 +10,7 @@ from .functions import ConstructorFunction, BinaryFunction
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import Storable
@@ -17,7 +18,11 @@ if TYPE_CHECKING:
 class StructTemplateDataType(DefaultDataType):
     name = "struct_template"
 
-class StructTemplate(ConstExpr, ConstructorFunction):
+ctdt_structtemplate = CTDataType("struct_template")
+
+class StructTemplate(ConstExprCombined, ConstructorFunction):
+    cdata_type = ctdt_structtemplate
+
     def __init__(self, name: str, field: Dict[str, "Storable"],
                  bases: List["StructTemplate"], compiler, source=None):
         super().__init__(StructTemplateDataType(compiler), compiler)

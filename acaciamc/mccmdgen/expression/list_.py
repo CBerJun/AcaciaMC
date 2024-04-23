@@ -8,9 +8,9 @@ Therefore, many of the functions about lists only accepts literal
 expressions that can be calculated in compile time.
 """
 
-__all__ = ["ListType", "ListDataType", "AcaciaList"]
+__all__ = ["ListType", "ListDataType", "AcaciaList", "CTConstList", "CTList"]
 
-from typing import List, Union, Iterable
+from typing import TYPE_CHECKING, List, Union, Iterable
 from itertools import repeat
 
 from .base import *
@@ -19,9 +19,16 @@ from .integer import IntDataType, IntLiteral
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTObj, CTObjPtr, CTDataType
+
+if TYPE_CHECKING:
+    from acaciamc.ctexec.expr import CTExpr
 
 class ListDataType(DefaultDataType):
-    name = "list"
+    name = "const_list"
+
+ctdt_constlist = CTDataType("const_list")
+ctdt_list = CTDataType("list", (ctdt_constlist,))
 
 class ListType(Type):
     def do_init(self):
@@ -77,6 +84,12 @@ class ListType(Type):
     def datatype_hook(self):
         return ListDataType(self.compiler)
 
+    def cdatatype_hook(self):
+        return ctdt_constlist
+
+def list2ct(x: Iterable[ConstExpr]) -> List[CTObj]:
+    return [i.to_ctexpr() for i in x]
+
 class AcaciaList(ConstExpr):
     def __init__(self, items: Iterable[ConstExpr], compiler):
         super().__init__(ListDataType(compiler), compiler)
@@ -124,43 +137,6 @@ class AcaciaList(ConstExpr):
         @axe.chop
         def _size(compiler):
             return IntLiteral(len(self.items), compiler)
-        @cmethod_of(self, "extend", runtime=False)
-        @axe.chop
-        @axe.arg("value", axe.Iterator())
-        @axe.slash
-        def _extend(compiler, value: ITERLIST_T):
-            self.items.extend(value)
-        @cmethod_of(self, "append", runtime=False)
-        @axe.chop
-        @axe.arg("value", axe.AnyValue())
-        @axe.slash
-        def _append(compiler, value: AcaciaExpr):
-            self.items.append(value)
-        @cmethod_of(self, "insert", runtime=False)
-        @axe.chop
-        @axe.arg("index", axe.LiteralInt())
-        @axe.arg("value", axe.AnyValue())
-        @axe.slash
-        def _insert(compiler, index: int, value: AcaciaExpr):
-            self._validate_index(index)
-            self.items.insert(index, value)
-        @cmethod_of(self, "reverse", runtime=False)
-        @axe.chop
-        def _reverse(compiler):
-            self.items.reverse()
-        @cmethod_of(self, "pop", runtime=False)
-        @axe.chop
-        @axe.arg("index", axe.LiteralInt())
-        def _pop(compiler, index: int):
-            self._validate_index(index)
-            self.items.pop(index)
-        @cmethod_of(self, "__setitem__", runtime=False)
-        @axe.chop
-        @axe.arg("index", axe.LiteralInt())
-        @axe.arg("value", axe.AnyValue())
-        def _setitem(compiler, index: int, value: AcaciaExpr):
-            self._validate_index(index)
-            self.items[index] = value
 
     def _validate_index(self, index: int):
         length = len(self.items)
@@ -171,20 +147,133 @@ class AcaciaList(ConstExpr):
     def iterate(self) -> ITERLIST_T:
         return self.items
 
-    def map_hash(self):
-        return tuple(x.map_hash() for x in self.items)
+    def hash(self):
+        return tuple(x.hash() for x in self.items)
 
-    def __add__(self, other):
+    def add(self, other):
         if isinstance(other, AcaciaList):
             return AcaciaList(self.items + other.items, self.compiler)
-        return NotImplemented
+        raise TypeError
 
-    def __radd__(self, other):
-        return self.__add__(other)
-
-    def __mul__(self, other: AcaciaExpr):
+    def mul(self, other: AcaciaExpr):
         if isinstance(other, IntLiteral):
             return AcaciaList(self.items * other.value, self.compiler)
         if other.data_type.matches_cls(IntDataType):
             raise Error(ErrorType.LIST_MULTIMES_NON_LITERAL)
-        return NotImplemented
+        raise TypeError
+
+    def to_ctexpr(self):
+        return CTConstList(list2ct(self.items), self.compiler)
+
+class CTConstList(CTObj):
+    cdata_type = ctdt_constlist
+
+    def __init__(self, items: Iterable["CTExpr"], compiler):
+        super().__init__()
+        self.ptrs = list(map(self._new_element, items))
+        self.compiler = compiler
+
+        @cmethod_of(self, "__ct_getitem__", compiler)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        def _getitem(compiler, index: int):
+            self._validate_index(index)
+            return abs(self.ptrs[index])
+        @cmethod_of(self, "copy", compiler)
+        @axe.chop
+        def _copy(compiler):
+            return CTList(self.ptrs, compiler)
+        @cmethod_of(self, "slice", compiler)
+        class _slice(metaclass=axe.OverloadChopped):
+            @classmethod
+            def _impl(cls, *args: Union[int, None]):
+                return CTList(self.ptrs[slice(*args)], self.compiler)
+
+            @axe.overload
+            @axe.arg("stop", axe.LiteralInt())
+            def stop_only(cls, compiler, stop: int):
+                return cls._impl(stop)
+
+            @axe.overload
+            @axe.arg("start", axe.Nullable(axe.LiteralInt()))
+            @axe.arg("stop", axe.Nullable(axe.LiteralInt()))
+            def start_stop(cls, compiler, start, stop):
+                return cls._impl(start, stop)
+
+            @axe.overload
+            @axe.arg("start", axe.Nullable(axe.LiteralInt()))
+            @axe.arg("stop", axe.Nullable(axe.LiteralInt()))
+            @axe.arg("step", axe.LiteralInt())
+            def full(cls, compiler, start, stop, step: int):
+                return cls._impl(start, stop, step)
+        @cmethod_of(self, "cycle", compiler)
+        @axe.chop
+        @axe.arg("times", axe.RangedLiteralInt(0, None))
+        def _cycle(compiler, times: int):
+            return CTList(self.ptrs * times, compiler)
+        @cmethod_of(self, "size", compiler)
+        @axe.chop
+        def _size(compiler):
+            return IntLiteral(len(self.ptrs), compiler)
+
+    def _new_element(self, element: "CTExpr") -> CTObjPtr:
+        return CTObjPtr(abs(element))
+
+    def _validate_index(self, index: int):
+        length = len(self.ptrs)
+        if not -length <= index < length:
+            raise Error(ErrorType.LIST_INDEX_OUT_OF_BOUNDS,
+                        length=length, index=index)
+
+    def citerate(self):
+        return self.ptrs
+
+    def chash(self):
+        return tuple(abs(x).chash() for x in self.ptrs)
+
+    def to_rt(self):
+        return AcaciaList([abs(x).to_rt() for x in self.ptrs], self.compiler)
+
+class CTList(CTConstList):
+    cdata_type = ctdt_list
+
+    def __init__(self, items: Iterable["CTExpr"], compiler):
+        super().__init__(items, compiler)
+
+        # Methods that modify the list
+        @cmethod_of(self, "__ct_getitem__", compiler, runtime=False)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        def _getitem(compiler, index: int):
+            self._validate_index(index)
+            return self.ptrs[index]
+        @cmethod_of(self, "extend", compiler, runtime=False)
+        @axe.chop
+        @axe.arg("values", axe.CTIterator())
+        @axe.slash
+        def _extend(compiler, values: List["CTExpr"]):
+            self.ptrs.extend(map(self._new_element, values))
+        @cmethod_of(self, "append", compiler, runtime=False)
+        @axe.chop
+        @axe.arg("value", axe.Constant())
+        @axe.slash
+        def _append(compiler, value: CTObj):
+            self.ptrs.append(self._new_element(value))
+        @cmethod_of(self, "insert", compiler, runtime=False)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        @axe.arg("value", axe.Constant())
+        @axe.slash
+        def _insert(compiler, index: int, value: CTObj):
+            self._validate_index(index)
+            self.ptrs.insert(index, self._new_element(value))
+        @cmethod_of(self, "reverse", compiler, runtime=False)
+        @axe.chop
+        def _reverse(compiler):
+            self.ptrs.reverse()
+        @cmethod_of(self, "pop", compiler, runtime=False)
+        @axe.chop
+        @axe.arg("index", axe.LiteralInt())
+        def _pop(compiler, index: int):
+            self._validate_index(index)
+            return self.ptrs.pop(index)

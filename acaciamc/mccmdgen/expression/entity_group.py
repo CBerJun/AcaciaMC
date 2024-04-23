@@ -16,7 +16,7 @@ from .boolean import WildBool
 from .integer import IntOpGroup, IntOp
 from .functions import BinaryFunction, ConstructorFunction
 from .generic import BinaryGeneric
-from .types import TypeDataType
+from .types import TypeDataType, ctdt_type
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -52,11 +52,13 @@ class EGroupGeneric(BinaryGeneric):
         super().__init__(compiler)
         @cmethod_of(self, "__getitem__")
         @axe.chop
-        @axe.arg("E", ETemplateDataType, rename="template")
+        @axe.arg("template", ETemplateDataType)
         def _getitem(compiler, template: "EntityTemplate"):
             return EGroupType(template, compiler)
 
-class EGroupType(ConstExpr, ConstructorFunction):
+class EGroupType(ConstExprCombined, ConstructorFunction):
+    cdata_type = ctdt_type
+
     def __init__(self, template: "EntityTemplate", compiler):
         super().__init__(TypeDataType(compiler), compiler)
         self.template = template

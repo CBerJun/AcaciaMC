@@ -6,7 +6,7 @@ from acaciamc.mccmdgen.expression.integer import (
     IntRandom, IntCmdOp, IntOpSelf, IntOpVar, IntOp, STR2SCBOP
 )
 from acaciamc.ast import ModuleMeta
-from acaciamc.tools import axe, cfunction
+from acaciamc.tools import axe
 from acaciamc.constants import INT_MIN, INT_MAX
 
 if TYPE_CHECKING:
@@ -183,9 +183,9 @@ def acacia_build(compiler: "Compiler"):
     _math = compiler.get_module(ModuleMeta("_math"))
     return {
         'randint': BinaryFunction(_randint, compiler),
-        'pow': cfunction(_pow, compiler),
-        'min': cfunction(_min, compiler),
-        'max': cfunction(_max, compiler),
-        'mod': cfunction(_mod, compiler),
-        'floordiv': cfunction(_floordiv, compiler),
+        'pow': BinaryCTFunction(_pow, compiler),
+        'min': BinaryCTFunction(_min, compiler),
+        'max': BinaryCTFunction(_max, compiler),
+        'mod': BinaryCTFunction(_mod, compiler),
+        'floordiv': BinaryCTFunction(_floordiv, compiler),
     }

@@ -1,8 +1,8 @@
 """Error definition for Acacia."""
 
-__all__ = ['SourceLocation', 'ErrorType', 'Error', 'ErrFrame']
+__all__ = ['SourceLocation', 'ErrorType', 'Error', 'ErrFrame', 'traced_call']
 
-from typing import Optional, Tuple, NamedTuple, List
+from typing import Optional, Tuple, NamedTuple, List, Callable, Union
 import enum
 
 class SourceLocation:
@@ -85,7 +85,12 @@ class ErrorType(enum.Enum):
     CANT_REF_ARG = 'Value for reference argument "{arg}" is not assignable'
     CANT_REF_RESULT = 'Value for reference result is not assignable'
     NOT_CONST = 'Value for "{name}" in const definition is not a constant'
-    NOT_CONST_EXPR = 'Expression in const function is not a constant'
+    NOT_CONST_NAME = 'Identifier "{name}" of type "{type_}" from outer ' \
+        'runtime scope is not a constant and thus cannot be used in compile ' \
+        'time functions'
+    NOT_CONST_ATTR = 'Attribute "{attr}" of "{primary}" object is of type ' \
+        '"{type_}" and is not a constant and thus cannot be used in compile ' \
+        'time functions'
     ARG_NOT_CONST = 'Value for const argument "{arg}" is not a constant'
     NONREF_ARG_DEFAULT_NOT_CONST = 'Default value for non-reference ' \
         'argument "{arg}" must be a constant'
@@ -95,6 +100,13 @@ class ErrorType(enum.Enum):
     ELEMENT_NOT_CONST = 'Element in list or map must be a constant'
     MULTIPLE_RESULTS = 'Multiple "result" statements in inline function that' \
         ' uses const or reference result'
+    NON_RT_RESULT = 'The result of this function call (of type "{got}") is ' \
+        'only available at compile time and thus cannot be called at runtime'
+    NON_RT_NAME = 'The name "{name}" (of type "{type_}") is only available ' \
+        'at compile time and thus cannot be used at runtime'
+    NON_RT_ATTR = 'The attribute "{attr}" of "{primary}" object is of type ' \
+        '"{type_}" and is only available at compile time and thus cannot be ' \
+        'used at runtime'
     ENDLESS_WHILE_LOOP = 'The "while" loop never ends because the conditon ' \
         'always evaluates to True'
     INVALID_TYPE_SPEC = 'Expecting a type specifier, got "{got}"'
@@ -114,7 +126,6 @@ class ErrorType(enum.Enum):
     UNCALLABLE = '"{expr_type}" is not callable'
     NOT_ITERABLE = '"{type_}" is not iterable'
     NO_GETITEM = '"{type_}" is not subscriptable'
-    NO_SETITEM = '"{type_}" does not support item write access'
     INVALID_ASSIGN_TARGET = 'Invalid assignment target'
     INVALID_FEXPR = 'Invalid formatted expression'
     INVALID_BIN_FUNC_ARG = 'Invalid argument "{arg}" for binary function: ' \
@@ -197,3 +208,22 @@ class Error(Exception):
 
     def add_frame(self, frame: ErrFrame):
         self.frames.append(frame)
+
+def traced_call(
+    func: Callable, location: Union[SourceLocation, str, None],
+    source: Optional[SourceLocation], func_repr: str,
+    *args, **kwds
+):
+    try:
+        return func(*args, **kwds)
+    except Error as err:
+        if location is None:
+            location = SourceLocation()
+        elif isinstance(location, str):
+            location = SourceLocation(file=location)
+        if source is not None and source.file_set():
+            note = "Callee defined at %s" % source
+        else:
+            note = None
+        err.add_frame(ErrFrame(location, "Calling %s" % func_repr, note))
+        raise

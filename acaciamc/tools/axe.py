@@ -10,6 +10,8 @@ __all__ = [
     "LiteralFloat", "LiteralString", "LiteralBool", "Nullable", "AnyOf",
     "Iterator", "Selector", "LiteralIntEnum", "LiteralStringEnum", "ListOf",
     "MapOf", "PlayerSelector", "RangedLiteralInt", "Callable", "PosXZ",
+    "CTConverter", "UConverter", "CTTyped", "CTIterator", "CTReference",
+    "Constant", "AnyRT",
     # Exception
     "ChopError", "ArgumentError"
 ]
@@ -25,9 +27,9 @@ import inspect
 # `import acaciamc.mccmdgen.expression as acacia` won't work in 3.6
 # because of a Python bug (see https://bugs.python.org/issue23203)
 from acaciamc.mccmdgen import expression as acacia
+from acaciamc.ctexec import expr as acaciact
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.error import Error as AcaciaError, ErrorType
-from acaciamc.tools.versionlib import format_version
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -53,6 +55,25 @@ class ArgumentError(Exception):
 class _WrongArgTypeError(Exception):
     pass
 
+_PE_NOT_CONST = 1
+_PE_NOT_RT = 2
+
+class _PreconvertError(Exception):
+    def __init__(self, code: int, origin: "_EXPR_T"):
+        super().__init__(code, origin)
+        self.code = code
+        self.origin = origin
+
+    def show(self, arg: str) -> str:
+        o = _exprrepr(self.origin)
+        if self.code == _PE_NOT_CONST:
+            return (f'const argument "{arg}" received non-const value of '
+                    f'type {o}')
+        if self.code == _PE_NOT_RT:
+            return (f'argument "{arg}" is expecting a value that exists '
+                    f'at runtime, got {o}')
+        raise ValueError(f'unknown error code {self.code}')
+
 ### Building Stage
 
 _BP_ARG = 1
@@ -61,8 +82,11 @@ _BP_STAR_ARG = 3
 _BP_SLASH = 4
 _BP_KWDS = 5
 
+_EXPR_T = Union[acacia.AcaciaExpr, acaciact.CTExpr]
+_CONVERTER_T = Union["Converter", "CTConverter"]
+
 class _Argument:
-    def __init__(self, name: str, rename: str, converter: "Converter") -> None:
+    def __init__(self, name: str, rename: str, converter: _CONVERTER_T):
         self.name = name
         self.rename = rename
         self.converter = converter
@@ -79,7 +103,7 @@ class _Argument:
         raise ValueError("don't have default")
 
 class _ArgumentList:
-    def __init__(self, name: str, rename: str, converter: "Converter") -> None:
+    def __init__(self, name: str, rename: str, converter: _CONVERTER_T):
         self.name = name
         self.rename = rename
         self.converter = converter
@@ -113,16 +137,17 @@ def _parser_component(func: PyCallable[[_BuildingParser], Any]):
             return res
     return _decorated
 
-_TYPED_TYPE = Union[DataType, Type[DataType]]
-_ARG_TYPE = Union[_TYPED_TYPE, "Converter"]
-
 ### Building Stage Interface
 
+_TYPED_TYPE = Union[DataType, Type[DataType]]
+_ARG_TYPE = Union[_TYPED_TYPE, _CONVERTER_T]
 _NO_DEFAULT = object()
 
 def _converter(type_: _ARG_TYPE):
-    if isinstance(type_, Converter):
+    if isinstance(type_, (Converter, CTConverter)):
         return type_
+    elif isinstance(type_, acaciact.CTDataType):
+        return CTTyped(type_)
     else:
         return Typed(type_)
 
@@ -187,10 +212,52 @@ class Converter:
         """
         raise NotImplementedError
 
-class AnyValue(Converter):
+class CTConverter:
+    def wrong_argument(self):
+        """Used by `convert` method to raise an error."""
+        raise _WrongArgTypeError
+
+    def crepr(self) -> str:
+        raise NotImplementedError
+
+    def cconvert(self, origin: acaciact.CTExpr):
+        raise NotImplementedError
+
+class UConverter(CTConverter, Converter):
+    unbox_ctptr = True
+
+    def crepr(self) -> str:
+        return self.get_show_name()
+
+    def uconvert(self, origin: _EXPR_T):
+        raise NotImplementedError
+
+    def convert(self, origin: acacia.AcaciaExpr):
+        return self.uconvert(origin)
+
+    def cconvert(self, origin: acaciact.CTExpr):
+        if self.unbox_ctptr:
+            origin = abs(origin)
+        return self.uconvert(origin)
+
+class AnyValue(UConverter):
     """Accepts any value."""
     def get_show_name(self) -> str:
-        return "any object"
+        return "Any"
+
+    def uconvert(self, origin):
+        return origin
+
+class Constant(CTConverter):
+    def crepr(self) -> str:
+        return "Any"
+
+    def cconvert(self, origin):
+        return origin
+
+class AnyRT(Converter):
+    def get_show_name(self) -> str:
+        return "Any"
 
     def convert(self, origin: acacia.AcaciaExpr):
         return origin
@@ -236,91 +303,187 @@ class Multityped(Converter):
             self.wrong_argument()
         return origin
 
-class LiteralInt(Typed):
+class CTTyped(CTConverter):
+    """Accepts value of specified data type(s)."""
+    def __init__(self, *types: acaciact.CTDataType):
+        super().__init__()
+        self.types = types
+
+    def crepr(self) -> str:
+        return " / ".join(dt.name for dt in self.types)
+
+    def cconvert(self, origin: acaciact.CTExpr):
+        if not any(dt.is_typeof(origin) for dt in self.types):
+            self.wrong_argument()
+        return origin
+
+class UTyped(UConverter):
+    """Accepts value of specified data type."""
+    def __init__(self, rtype: _TYPED_TYPE, ctype: acaciact.CTDataType):
+        super().__init__()
+        self.rtype = rtype
+        self.ctype = ctype
+
+    def get_show_name(self) -> str:
+        return _type_to_str(self.rtype)
+
+    def uconvert(self, origin: _EXPR_T):
+        if isinstance(origin, acaciact.CTObj):
+            if not self.ctype.is_typeof(origin):
+                self.wrong_argument()
+        else:
+            if not _type_checker(origin, self.rtype):
+                self.wrong_argument()
+        return origin
+
+class UMultityped(UConverter):
+    """Accepts value of several types."""
+    def __init__(self, rtypes: Iterable[_TYPED_TYPE],
+                 ctypes: Iterable[acaciact.CTDataType]):
+        super().__init__()
+        self.rtypes = tuple(rtypes)
+        self.ctypes = tuple(ctypes)
+
+    def get_show_name(self) -> str:
+        return " / ".join(map(_type_to_str, self.rtypes))
+
+    def uconvert(self, origin: _EXPR_T):
+        if isinstance(origin, acaciact.CTObj):
+            if not any(dt.is_typeof(origin) for dt in self.ctypes):
+                self.wrong_argument()
+        else:
+            if not any(map(partial(_type_checker, origin), self.rtypes)):
+                self.wrong_argument()
+        return origin
+
+class ConverterContainer(Converter, CTConverter):
+    def __init_subclass__(subcls) -> None:
+        orig_convert = subcls.convert
+        orig_cconvert = subcls.cconvert
+        def new_convert(self: ConverterContainer, origin: acacia.AcaciaExpr):
+            if not all(isinstance(c, Converter) for c in self.__converters):
+                raise ChopError('%r is used as runtime converter but not all '
+                                'subconverters implement Converter')
+            return orig_convert(self, origin)
+        def new_cconvert(self: ConverterContainer, origin: acaciact.CTObj):
+            if not all(isinstance(c, CTConverter) for c in self.__converters):
+                raise ChopError('%r is used as compile time converter but not'
+                                ' all subconverters implement CTConverter')
+            return orig_cconvert(self, origin)
+        subcls.convert = new_convert
+        subcls.cconvert = new_cconvert
+
+    def __init__(self, *converters: _CONVERTER_T):
+        self.__converters = converters
+
+    def crepr(self) -> str:
+        return self.get_show_name()
+
+def _convname(converter: _CONVERTER_T) -> str:
+    if isinstance(converter, Converter):
+        return converter.get_show_name()
+    assert isinstance(converter, CTConverter)
+    return converter.crepr()
+
+def _exprrepr(expr: _EXPR_T) -> str:
+    if isinstance(expr, acacia.AcaciaExpr):
+        return str(expr.data_type)
+    assert isinstance(expr, (acaciact.CTObj, acaciact.CTObjPtr))
+    return expr.cdata_type.name
+
+class LiteralInt(UTyped):
     """Accepts an integer literal and converts it to Python `int`.
     Default value should also be given as Python `int`.
     """
     def __init__(self):
-        super().__init__(acacia.IntDataType)
+        super().__init__(acacia.IntDataType, acacia.integer.ctdt_int)
 
     def get_show_name(self) -> str:
         return "int (literal)"
 
-    def convert(self, origin: acacia.AcaciaExpr) -> int:
-        origin = super().convert(origin)
+    def uconvert(self, origin) -> int:
+        origin = super().uconvert(origin)
         if isinstance(origin, acacia.IntLiteral):
             return origin.value
         self.wrong_argument()
 
-class LiteralFloat(Multityped):
+class LiteralFloat(UMultityped):
     """Accepts float and integer literal and converts it to Python
     `float`. Default value should also be given as Python `float`.
     """
     def __init__(self):
-        super().__init__((acacia.IntDataType, acacia.FloatDataType))
+        super().__init__(
+            (acacia.IntDataType, acacia.FloatDataType),
+            (acacia.integer.ctdt_int, acacia.float_.ctdt_float)
+        )
 
     def get_show_name(self) -> str:
         return "float (accepts int literal)"
 
-    def convert(self, origin: acacia.AcaciaExpr) -> float:
-        origin = super().convert(origin)
+    def uconvert(self, origin) -> float:
+        origin = super().uconvert(origin)
         if isinstance(origin, acacia.IntLiteral):
             return float(origin.value)
         elif isinstance(origin, acacia.Float):
             return origin.value
         self.wrong_argument()
 
-class LiteralString(Typed):
+class LiteralString(UTyped):
     """Accepts a string literal and converts it to Python `str`.
     Default value should also be given as Python `str`.
     """
     def __init__(self):
-        super().__init__(acacia.StringDataType)
+        super().__init__(acacia.StringDataType, acacia.string.ctdt_string)
 
-    def convert(self, origin: acacia.AcaciaExpr) -> str:
-        origin = super().convert(origin)
+    def uconvert(self, origin) -> str:
+        origin = super().uconvert(origin)
         assert isinstance(origin, acacia.String)
         return origin.value
 
-class LiteralBool(Typed):
+class LiteralBool(UTyped):
     """Accepts a boolean literal and converts it to Python `bool`.
     Default value should also be given as Python `bool`.
     """
     def __init__(self):
-        super().__init__(acacia.BoolDataType)
+        super().__init__(acacia.BoolDataType, acacia.boolean.ctdt_bool)
 
     def get_show_name(self) -> str:
         return "bool (literal)"
 
-    def convert(self, origin: acacia.AcaciaExpr) -> bool:
-        origin = super().convert(origin)
+    def uconvert(self, origin) -> bool:
+        origin = super().uconvert(origin)
         if isinstance(origin, acacia.BoolLiteral):
             return origin.value
         self.wrong_argument()
 
-class Nullable(Converter):
+class Nullable(ConverterContainer):
     """Accepts "None" value and convert it to Python "None".
     Default value can be set to None.
     """
-    def __init__(self, converter: Converter):
-        super().__init__()
+    def __init__(self, converter: _CONVERTER_T):
+        super().__init__(converter)
         self.converter = converter
 
     def get_show_name(self) -> str:
-        return self.converter.get_show_name() + " (or None)"
+        return _convname(self.converter) + " (or None)"
 
     def convert(self, origin: acacia.AcaciaExpr):
         if origin.data_type.matches_cls(acacia.NoneDataType):
             return None
         return self.converter.convert(origin)
 
-class AnyOf(Converter):
+    def cconvert(self, origin: acaciact.CTObj):
+        if isinstance(origin, acacia.NoneLiteral):
+            return None
+        return self.converter.cconvert(origin)
+
+class AnyOf(ConverterContainer):
     """Accepts arguments of several kinds."""
-    def __init__(self, *converters: Converter):
-        super().__init__()
+    def __init__(self, *converters: _CONVERTER_T):
+        super().__init__(*converters)
         if not converters:
             raise ChopError("at least 1 converter needs to be specified")
-        self.converters: List[Converter] = []
+        self.converters: List[_CONVERTER_T] = []
         for converter in converters:
             if isinstance(converter, AnyOf):
                 self.converters.extend(converter.converters)
@@ -328,10 +491,7 @@ class AnyOf(Converter):
                 self.converters.append(converter)
 
     def get_show_name(self) -> str:
-        return " / ".join(
-            converter.get_show_name()
-            for converter in self.converters
-        )
+        return " / ".join(_convname(c) for c in self.converters)
 
     def convert(self, origin: acacia.AcaciaExpr):
         for converter in self.converters:
@@ -344,15 +504,38 @@ class AnyOf(Converter):
         else:
             self.wrong_argument()
 
+    def cconvert(self, origin: acaciact.CTObj):
+        for converter in self.converters:
+            try:
+                res = converter.cconvert(origin)
+            except _WrongArgTypeError:
+                pass
+            else:
+                return res
+        else:
+            self.wrong_argument()
+
 class Iterator(Converter):
     """Accepts an Acacia iterable and converts it to Python list."""
     def get_show_name(self) -> str:
-        return "any iterable"
+        return "(iterable)"
 
     def convert(self, origin: acacia.AcaciaExpr) -> "acacia.ITERLIST_T":
         try:
             res = origin.iterate()
         except NotImplementedError:
+            self.wrong_argument()
+        else:
+            return res
+
+class CTIterator(CTConverter):
+    def crepr(self) -> str:
+        return "(iterable)"
+
+    def cconvert(self, origin: acaciact.CTExpr) -> List[acaciact.CTExpr]:
+        try:
+            res = abs(origin).citerate()
+        except TypeError:
             self.wrong_argument()
         else:
             return res
@@ -379,8 +562,8 @@ class LiteralIntEnum(LiteralInt):
         return (super().get_show_name()
                 + " (one of %s)" % ", ".join(map(str, self.accepts)))
 
-    def convert(self, origin: acacia.AcaciaExpr) -> int:
-        origin_int = super().convert(origin)
+    def uconvert(self, origin) -> int:
+        origin_int = super().uconvert(origin)
         if origin_int not in self.accepts:
             self.wrong_argument()
         return origin_int
@@ -397,8 +580,8 @@ class LiteralStringEnum(LiteralString):
         return (super().get_show_name()
                 + " (one of %s)" % ", ".join(map(repr, self.accepts)))
 
-    def convert(self, origin: acacia.AcaciaExpr) -> str:
-        origin_str = super().convert(origin)
+    def uconvert(self, origin) -> str:
+        origin_str = super().uconvert(origin)
         if origin_str not in self.accepts:
             self.wrong_argument()
         return origin_str
@@ -419,6 +602,19 @@ class ListOf(Typed):
         assert isinstance(origin, acacia.AcaciaList)
         return list(map(self.converter.convert, origin.items))
 
+class CTListOf(CTTyped):
+    def __init__(self, converter: CTConverter):
+        super().__init__(acacia.list_.ctdt_constlist)
+        self.converter = converter
+
+    def get_show_name(self) -> str:
+        return "list of " + self.converter.crepr()
+
+    def cconvert(self, origin: acaciact.CTExpr) -> list:
+        origin = abs(super().cconvert(origin))
+        assert isinstance(origin, acacia.CTConstList)
+        return list(map(self.converter.cconvert, origin.ptrs))
+
 class MapOf(Typed):
     """Accepts a map of specified data type as key and value and
     converts it to Python `dict`.
@@ -437,6 +633,23 @@ class MapOf(Typed):
         assert isinstance(origin, acacia.Map)
         return {
             self.key.convert(key): self.value.convert(value)
+            for key, value in origin.items()
+        }
+
+class CTMapOf(CTTyped):
+    def __init__(self, key: CTConverter, value: CTConverter):
+        super().__init__(acacia.map_.ctdt_constmap)
+        self.key = key
+        self.value = value
+
+    def get_show_name(self) -> str:
+        return "map (%s: %s)" % (self.key.crepr(), self.value.crepr())
+
+    def cconvert(self, origin: acacia.AcaciaExpr) -> dict:
+        origin = abs(super().cconvert(origin))
+        assert isinstance(origin, acacia.CTConstMap)
+        return {
+            self.key.cconvert(key): self.value.cconvert(value)
             for key, value in origin.items()
         }
 
@@ -471,8 +684,8 @@ class RangedLiteralInt(LiteralInt):
     def get_show_name(self) -> str:
         return super().get_show_name() + " (%s ~ %s)" % (self.min, self.max)
 
-    def convert(self, origin: acacia.AcaciaExpr) -> int:
-        num = super().convert(origin)
+    def uconvert(self, origin) -> int:
+        num = super().uconvert(origin)
         if not self.min <= num <= self.max:
             self.wrong_argument()
         return num
@@ -494,11 +707,20 @@ class PosXZ(LiteralFloat):
     This is used for x and z axis in absolute position, as Minecraft
     also does this (move the position to block center).
     """
-    def convert(self, origin: acacia.AcaciaExpr) -> float:
-        res = super().convert(origin)
-        if origin.data_type.matches_cls(acacia.IntDataType):
+    def uconvert(self, origin) -> float:
+        res = super().uconvert(origin)
+        if isinstance(origin, acacia.IntLiteral):
             res += 0.5
         return res
+
+class CTReference(CTConverter):
+    def crepr(self) -> str:
+        return "(reference)"
+
+    def cconvert(self, origin: acaciact.CTExpr):
+        if not isinstance(origin, acaciact.CTObjPtr):
+            self.wrong_argument()
+        return origin
 
 ### Parser
 
@@ -525,13 +747,32 @@ def _call_impl(implementation, all_args: List[str], *args, **kwds):
             raise AcaciaError(ErrorType.INVALID_BIN_FUNC_ARG,
                               arg=err.arg, message=err.message)
 
+def _get_convert(origin: _EXPR_T, converter: _CONVERTER_T):
+    if isinstance(origin, acacia.AcaciaExpr):
+        if isinstance(converter, Converter):
+            convert = lambda: converter.convert(origin)
+        elif isinstance(origin, acacia.ConstExpr):
+            convert = lambda: converter.cconvert(origin.to_ctexpr())
+        else:
+            raise _PreconvertError(_PE_NOT_CONST)
+    else:
+        if isinstance(converter, CTConverter):
+            convert = lambda: converter.cconvert(origin)
+        else:
+            try:
+                origin_rt = abs(origin).to_rt()
+            except TypeError:
+                raise _PreconvertError(_PE_NOT_RT)
+            convert = lambda: converter.convert(origin_rt)
+    return convert
+
 class _Chopper:
     def __init__(self, building: _BuildingParser):
         self.pos_only: List[_Argument] = []
         self.pos_n_kw: List[_Argument] = []
         self.kw_only: List[_Argument] = []
-        self.args: Union[_ArgumentList, None] = None
-        self.kwds: Union[_ArgumentList, None] = None
+        self.args: Optional[_ArgumentList] = None
+        self.kwds: Optional[_ArgumentList] = None
         self.implementation = building.get_target()
         # Parse builder stack
         got_slash = False
@@ -595,34 +836,37 @@ class _Chopper:
         self.kw_name2def = {arg_def.name: arg_def
                             for arg_def in chain(self.kw_only, self.pos_n_kw)}
 
-    def _convert(self, origin: acacia.AcaciaExpr, converter: Converter,
-                 arg_name: str):
+    def _convert(self, origin: _EXPR_T, converter: _CONVERTER_T, arg: str):
         try:
-            return converter.convert(origin)
+            convert = _get_convert(origin, converter)
+        except _PreconvertError as err:
+            raise AcaciaError(ErrorType.ANY, message=err.show(arg))
+        try:
+            return convert()
         except _WrongArgTypeError:
             raise AcaciaError(
                 ErrorType.WRONG_ARG_TYPE,
-                expect=converter.get_show_name(),
-                arg=arg_name, got=str(origin.data_type)
+                expect=_convname(converter), arg=arg,
+                got=_exprrepr(origin)
             )
 
-    def __call__(self, compiler: "Compiler", args: acacia.ARGS_T,
-                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":
+    def __call__(self, compiler: "Compiler", args: List[_EXPR_T],
+                 kwds: Dict[str, _EXPR_T]):
         res: Dict[str, Any] = {}
         arg_got: List[str] = []
         # Positional arguments
-        ARG_LEN = len(args)
-        if ARG_LEN > self.MAX_POS_ARG:
+        if len(args) > self.MAX_POS_ARG:
             if self.args is None:
                 raise AcaciaError(ErrorType.TOO_MANY_ARGS)
             else:
                 res[self.args.rename] = [
                     self._convert(
                         arg, self.args.converter,
-                        "#%d(*%s)" % (i + 1, self.args.name)
+                        "#%d(*%s)" % (i, self.args.name)
                     )
-                    for i, arg in enumerate(args)
-                    if i >= self.MAX_POS_ARG
+                    for i, arg in enumerate(
+                        args[self.MAX_POS_ARG:], start=self.MAX_POS_ARG + 1
+                    )
                 ]
                 arg_got.append(self.args.name)
         for arg_def, arg in zip(chain(self.pos_only, self.pos_n_kw), args):
@@ -685,7 +929,7 @@ def _create_signature(arg_defs: List[_Argument]) -> str:
     return "(%s)" % ", ".join(
         "%s: %s" % (
             arg_def.name,
-            arg_def.converter.get_show_name()
+            _convname(arg_def.converter)
         )
         for arg_def in arg_defs
     )
@@ -780,9 +1024,9 @@ class OverloadChopped(type):
             if any(type_ != _BP_ARG for type_, _ in building):
                 raise ChopError("only arguments are allowed in overload "
                                 "definitions")
-            if any(arg_def.has_default() for _, arg_def in building):
-                raise ChopError("overload arguments can't have default values")
             arg_defs: List[_Argument] = [arg_def for _, arg_def in building]
+            if any(arg_def.has_default() for arg_def in arg_defs):
+                raise ChopError("overload arguments can't have default values")
             cls.__overloads.append((impl, arg_defs))
             _check_repeat([arg_def.name for arg_def in arg_defs],
                           [arg_def.rename for arg_def in arg_defs])
@@ -795,8 +1039,8 @@ class OverloadChopped(type):
         else:
             return " [MC %s]" % version.to_str()
 
-    def __call__(self, compiler: "Compiler", args: acacia.ARGS_T,
-                 kwds: acacia.KEYWORDS_T) -> "acacia.CALLRET_T":
+    def __call__(self, compiler: "Compiler", args: List[_EXPR_T],
+                 kwds: Dict[str, _EXPR_T]):
         if kwds:
             raise AcaciaError(ErrorType.ANY,
                               message="Overload functions don't support "
@@ -805,39 +1049,32 @@ class OverloadChopped(type):
         for implementation, arg_defs in self.__overloads:
             if len(arg_defs) != L:
                 continue
+            version = implementation.version
+            if version and not version.validate(compiler.cfg.mc_version):
+                continue
             res = {}
             for arg_def, arg in zip(arg_defs, args):
                 try:
-                    converted = arg_def.converter.convert(arg)
+                    convert = _get_convert(arg, arg_def.converter)
+                except _PreconvertError:
+                    break
+                try:
+                    converted = convert()
                 except _WrongArgTypeError:
                     break
-                else:
-                    res[arg_def.rename] = converted
+                res[arg_def.rename] = converted
             else:
-                version = implementation.version
-                if not version or version.validate(compiler.cfg.mc_version):
-                    return _call_impl(
-                        implementation,
-                        [arg_def.name for arg_def in arg_defs],
-                        compiler, **res
-                    )
-                else:
-                    raise AcaciaError(
-                        ErrorType.ANY,
-                        message="The overload %s is not available for "
-                                "Minecraft version %s; expecting %s"
-                        % (
-                            _create_signature(arg_defs),
-                            format_version(compiler.cfg.mc_version),
-                            version.to_str()
-                        )
-                    )
+                return _call_impl(
+                    implementation,
+                    [arg_def.name for arg_def in arg_defs],
+                    compiler, **res
+                )
         else:
             raise AcaciaError(
                 ErrorType.ANY,
                 message="No overload matches given arguments: "
                         "got %s, expected %s" % (
-                    "(%s)" % ", ".join(str(arg.data_type) for arg in args),
+                    "(%s)" % ", ".join(_exprrepr(arg) for arg in args),
                     " / ".join(
                         "%s%s" % (
                             _create_signature(arg_defs),

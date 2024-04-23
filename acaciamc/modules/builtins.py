@@ -4,6 +4,7 @@ from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.tools import axe, resultlib
 from acaciamc.error import Error, ErrorType
+from acaciamc.ctexec.expr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -21,9 +22,18 @@ class AnyDataType(DataType):
     def matches(self, other: "DataType") -> bool:
         return True
 
+class _AnyCTDataType(CTDataType):
+    def is_baseof(self, other: CTDataType) -> bool:
+        return True
+
+any_ctdt = _AnyCTDataType("Any")
+
 class AnyType(Type):
     def datatype_hook(self):
         return AnyDataType(self.compiler)
+
+    def cdatatype_hook(self):
+        return any_ctdt
 
 @axe.chop
 @axe.arg("x", axe.AnyValue())

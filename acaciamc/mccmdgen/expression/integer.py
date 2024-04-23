@@ -17,8 +17,8 @@ This shows the priority of these classes
 IntOpGroup > IntVar > IntLiteral
 A class can only handle operation with other objects with lower priority
 e.g. Literal can only handle operations with Literal
-If a class can't handle an operation `self (operator xxx) other`,
-other's method `other.__rxxx__` is used
+If a class can't handle an operation `self.xxx(other)`, other's method
+`other.rxxx(self)` is used.
 """
 
 __all__ = [
@@ -30,12 +30,10 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import List, Tuple, TYPE_CHECKING, Callable, Optional, Dict
+from typing import TYPE_CHECKING, List, Tuple, Callable, Optional, Dict, Union
 from abc import ABCMeta, abstractmethod
 from functools import partialmethod
-import operator as stdop
-
-from acaciamc.mccmdgen.expression.base import CMDLIST_T
+import operator
 
 from .base import *
 from .types import Type
@@ -45,15 +43,17 @@ from .boolean import (
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
 from acaciamc.tools import axe, resultlib, cmethod_of
-from acaciamc.ast import Operator, OP2PYOP, COMPOP_INVERT
+from acaciamc.ast import Operator, COMPOP_INVERT
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
+from acaciamc.ctexec.expr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
+    from acaciamc.ctexec.expr import CTObj
 
 STR2SCBOP = {
     "+": cmds.ScbOp.ADD_EQ,
@@ -65,9 +65,9 @@ STR2SCBOP = {
     ">": cmds.ScbOp.MAX,
     "=": cmds.ScbOp.ASSIGN
 }
-STR2PYOP = {
-    '+': stdop.add, '-': stdop.sub,
-    '*': stdop.mul, '/': stdop.floordiv, '%': stdop.mod
+STR2METHOD = {
+    '+': "add", '-': "sub",
+    '*': "mul", '/': "div", '%': "mod"
 }
 COMPOP2SCBOP = {
     Operator.greater: cmds.ScbCompareOp.GT,
@@ -75,6 +75,14 @@ COMPOP2SCBOP = {
     Operator.less: cmds.ScbCompareOp.LT,
     Operator.less_equal: cmds.ScbCompareOp.LTE,
     Operator.equal_to: cmds.ScbCompareOp.EQ
+}
+COMPOP2PYOP = {
+    Operator.equal_to: operator.eq,
+    Operator.unequal_to: operator.ne,
+    Operator.greater: operator.gt,
+    Operator.less: operator.lt,
+    Operator.greater_equal: operator.ge,
+    Operator.less_equal: operator.le
 }
 
 def remainder(a: int, b: int) -> int:
@@ -107,6 +115,8 @@ class IntDataType(DefaultDataType, Storable, SupportsEntityField):
         return IntVar(cmds.ScbSlot(entity.to_str(), meta["scoreboard"]),
                       self.compiler)
 
+ctdt_int = CTDataType("int")
+
 class IntType(Type):
     def do_init(self):
         self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
@@ -132,6 +142,9 @@ class IntType(Type):
 
     def datatype_hook(self):
         return IntDataType(self.compiler)
+
+    def cdatatype_hook(self):
+        return ctdt_int
 
 class IntCompare(CompareBase):
     """
@@ -170,17 +183,19 @@ class IntCompare(CompareBase):
         return res_dependencies, res_main
 
     # Unary operator
-    def not_(self):
+    def unarynot(self):
         return IntCompare(
             self.left, COMPOP_INVERT[self.operator], self.right, self.compiler
         )
 
-class IntLiteral(ConstExpr):
+class IntLiteral(ConstExprCombined):
     """Represents a literal integer.
     The purpose of these class is to implement constant folding
     which calculate the value of constant expressions
     in compile time (e.g. compiler can convert "2 + 3" to "5").
     """
+    cdata_type = ctdt_int
+
     def __init__(self, value: int, compiler):
         super().__init__(IntDataType(compiler), compiler)
         self.value = value
@@ -188,61 +203,44 @@ class IntLiteral(ConstExpr):
         if not INT_MIN <= value <= INT_MAX:
             raise Error(ErrorType.INT_OVERFLOW)
 
-    def cmdstr(self) -> str:
+    def cstringify(self) -> str:
         return str(self.value)
 
-    def map_hash(self):
+    def chash(self):
         return self.value
 
     def export(self, var: "IntVar"):
         return [cmds.ScbSetConst(var.slot, self.value)]
 
-    def compare(self, op, other):
+    def ccompare(self, op, other: Union[AcaciaExpr, "CTObj"]) -> bool:
         if isinstance(other, IntLiteral):
-            b = OP2PYOP[op](self.value, other.value)
-            return BoolLiteral(b, self.compiler)
-        return NotImplemented
+            return COMPOP2PYOP[op](self.value, other.value)
+        raise TypeError
 
     ## UNARY OPERATORS
 
-    def __pos__(self):
+    def cunarypos(self):
         return self
 
-    def __neg__(self):
+    def cunaryneg(self):
         return IntLiteral(-self.value, self.compiler)
 
     ## BINARY OPERATORS
 
-    def _bin_op(self, op: str, other):
+    def _bin_op(self, op: str, other: Union[AcaciaExpr, "CTObj"]):
         if isinstance(other, IntLiteral):
             try:
                 v = STR2PYINTOP[op](self.value, other.value)
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return IntLiteral(v, self.compiler)
-        return NotImplemented
+        raise TypeError
 
-    __add__ = partialmethod(_bin_op, '+')
-    __sub__ = partialmethod(_bin_op, '-')
-    __mul__ = partialmethod(_bin_op, '*')
-    __floordiv__ = partialmethod(_bin_op, '/')
-    __mod__ = partialmethod(_bin_op, '%')
-
-    def _ciop(self, op: str, other):
-        if isinstance(other, IntLiteral):
-            try:
-                v = STR2PYINTOP[op](self.value, other.value)
-            except ArithmeticError as err:
-                raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
-            return IntLiteral(v, self.compiler)
-        else:
-            raise TypeError
-
-    ciadd = partialmethod(_ciop, '+')
-    cisub = partialmethod(_ciop, '-')
-    cimul = partialmethod(_ciop, '*')
-    cidiv = partialmethod(_ciop, '/')
-    cimod = partialmethod(_ciop, '%')
+    cadd = partialmethod(_bin_op, '+')
+    csub = partialmethod(_bin_op, '-')
+    cmul = partialmethod(_bin_op, '*')
+    cdiv = partialmethod(_bin_op, '/')
+    cmod = partialmethod(_bin_op, '%')
 
 class IntVar(VarValue):
     """An integer variable."""
@@ -272,50 +270,40 @@ class IntVar(VarValue):
 
     ## UNARY OPERATORS
 
-    def __pos__(self):
+    def unarypos(self):
         return self
 
-    def __neg__(self):
-        return -IntOpGroup.from_intexpr(self)
+    def unaryneg(self):
+        return IntOpGroup.from_intexpr(self).unaryneg()
 
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _bin_op(self, other, name: str):
+    def _bin_op(self, name: str, other):
         # `name` is method name
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(IntOpGroup.from_intexpr(self), name)(other)
-        return NotImplemented
+        raise TypeError
 
-    def __add__(self, other):
-        return self._bin_op(other, '__add__')
-    def __sub__(self, other):
-        return self._bin_op(other, '__sub__')
-    def __mul__(self, other):
-        return self._bin_op(other, '__mul__')
-    def __floordiv__(self, other):
-        return self._bin_op(other, '__floordiv__')
-    def __mod__(self, other):
-        return self._bin_op(other, '__mod__')
+    add = partialmethod(_bin_op, 'add')
+    sub = partialmethod(_bin_op, 'sub')
+    mul = partialmethod(_bin_op, 'mul')
+    div = partialmethod(_bin_op, 'div')
+    mod = partialmethod(_bin_op, 'mod')
 
     ## BINARY (OTHER ... SELF) OPERATORS
-    # only `IntLiteral` might call __rxxx__ of self
+    # only `IntLiteral` might call rxxx of self
     # so just convert self to `IntOpGroup` and let this handle operation
 
-    def _r_bin_op(self, other, name):
+    def _r_bin_op(self, name, other):
         if isinstance(other, IntLiteral):
             return getattr(IntOpGroup.from_intexpr(other), name)(self)
-        return NotImplemented
+        raise TypeError
 
-    def __radd__(self, other):
-        return self._r_bin_op(other, '__add__')
-    def __rsub__(self, other):
-        return self._r_bin_op(other, '__sub__')
-    def __rmul__(self, other):
-        return self._r_bin_op(other, '__mul__')
-    def __rfloordiv__(self, other):
-        return self._r_bin_op(other, '__floordiv__')
-    def __rmod__(self, other):
-        return self._r_bin_op(other, '__mod__')
+    radd = partialmethod(_r_bin_op, 'add')
+    rsub = partialmethod(_r_bin_op, 'sub')
+    rmul = partialmethod(_r_bin_op, 'mul')
+    rdiv = partialmethod(_r_bin_op, 'div')
+    rmod = partialmethod(_r_bin_op, 'mod')
 
     # AUGMENTED ASSIGN `ixxx`
 
@@ -353,7 +341,7 @@ class IntVar(VarValue):
         """
         # In this condition, we convert a (op)= b to a = a (op) b
         ## Calculate
-        value = STR2PYOP[operator](self, other)
+        value = getattr(self, STR2METHOD[operator])(other)
         ## Export
         tmp = IntVar.new(self.compiler, tmp=True)
         res = value.export(tmp)
@@ -512,17 +500,16 @@ class IntOpGroup(AcaciaExpr):
 
     ## UNARY OPERATORS
 
-    def __pos__(self):
+    def unarypos(self):
         return self
 
-    def __neg__(self):
+    def unaryneg(self):
         # -expr = expr * (-1)
-        neg1 = self.compiler.add_int_const(-1)
-        return self * neg1
+        return self.mul(self.compiler.add_int_const(-1))
 
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _bin_op(self, other, operator: str):
+    def _bin_op(self, operator: str, other):
         """Implements binary operators (see `STR2SCBOP`)."""
         res = self.copy()
         if isinstance(other, IntLiteral):
@@ -534,46 +521,36 @@ class IntOpGroup(AcaciaExpr):
             res.add_op(IntCmdOp(other.export(tmp)))
             res.add_op(IntOpVar(operator, tmp.slot))
         else:
-            return NotImplemented
+            raise TypeError
         return res
 
-    def __add__(self, other):
-        return self._bin_op(other, '+')
-    def __sub__(self, other):
-        return self._bin_op(other, '-')
-    def __mul__(self, other):
-        return self._bin_op(other, '*')
-    def __floordiv__(self, other):
-        return self._bin_op(other, '/')
-    def __mod__(self, other):
-        return self._bin_op(other, '%')
+    add = partialmethod(_bin_op, '+')
+    sub = partialmethod(_bin_op, '-')
+    mul = partialmethod(_bin_op, '*')
+    div = partialmethod(_bin_op, '/')
+    mod = partialmethod(_bin_op, '%')
 
     ## BINARY (OTHER ... SELF) OPERATORS
-    # `other` in self.__rxxx__ may be Literal or VarValue
+    # `other` in self.rxxx may be IntLiteral or IntVar
 
-    def _r_add_mul(self, other, name):
+    def _r_add_mul(self, name: str, other):
         # a (+ or *) b is b (+ or *) a
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(self, name)(other)
-        return NotImplemented
+        raise TypeError
 
     def _r_sub_div_mod(self, other, name):
         # Convert `other` to `IntOpGroup` and use this to handle this
         # operation.
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(IntOpGroup.from_intexpr(other), name)(self)
-        return NotImplemented
+        raise TypeError
 
-    def __radd__(self, other):
-        return self._r_add_mul(other, '__add__')
-    def __rsub__(self, other):
-        return self._r_sub_div_mod(other, '__sub__')
-    def __rmul__(self, other):
-        return self._r_add_mul(other, '__mul__')
-    def __rfloordiv__(self, other):
-        return self._r_sub_div_mod(other, '__floordiv__')
-    def __rmod__(self, other):
-        return self._r_sub_div_mod(other, '__mod__')
+    radd = partialmethod(_r_add_mul, 'add')
+    rmul = partialmethod(_r_add_mul, 'mul')
+    rsub = partialmethod(_r_sub_div_mod, 'sub')
+    rdiv = partialmethod(_r_sub_div_mod, 'div')
+    rmod = partialmethod(_r_sub_div_mod, 'mod')
 
 # Utils
 def to_IntVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, IntVar]:

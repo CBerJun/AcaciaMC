@@ -9,6 +9,7 @@ from acaciamc.error import *
 from acaciamc.tools import axe, versionlib, cmethod_of
 from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .types import Type
@@ -48,19 +49,21 @@ class IntRange(axe.AnyOf):
             min_ = min_.strip()
             max_ = max_.strip()
             if not min_ and not max_:
-                self.wrong_argument(origin)
+                self.wrong_argument()
             if (min_ and not self.check_int(min_)
                 or max_ and not self.check_int(max_)):
-                self.wrong_argument(origin)
+                self.wrong_argument()
             return "%s..%s" % (min_, max_)
         else:
             if self.check_int(origin_py):
                 return origin_py
             else:
-                self.wrong_argument(origin)
+                self.wrong_argument()
 
 class EFilterDataType(DefaultDataType):
     name = "Enfilter"
+
+ctdt_efilter = CTDataType("Enfilter")
 
 class EFilterType(Type):
     def do_init(self):
@@ -72,6 +75,9 @@ class EFilterType(Type):
     def datatype_hook(self):
         return EFilterDataType(self.compiler)
 
+    def cdatatype_hook(self):
+        return ctdt_efilter
+
 class _EFilterData(NamedTuple):
     tag: Union[str, None]  # temporary tag name (None for last tuple)
     subcmds: List["_ExecuteSubcmd"]
@@ -82,7 +88,9 @@ class _EFilterData(NamedTuple):
             self.tag, self.subcmds.copy(), self.selector.copy()
         )
 
-class EntityFilter(ConstExpr, ImmutableMixin):
+class EntityFilter(ConstExprCombined, ImmutableMixin):
+    cdata_type = ctdt_efilter
+
     def __init__(self, compiler):
         super().__init__(EFilterDataType(compiler), compiler)
         self.context_occupied = False

@@ -4,28 +4,28 @@ __all__ = ['StringDataType', 'String']
 
 from .base import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 
 class StringDataType(DefaultDataType):
     name = 'str'
 
-class String(ConstExpr):
+ctdt_string = CTDataType("str")
+
+class String(ConstExprCombined):
+    cdata_type = ctdt_string
+
     def __init__(self, value: str, compiler):
         super().__init__(StringDataType(compiler), compiler)
         self.value = value
 
-    def map_hash(self):
+    def chash(self):
         return self.value
 
-    def cmdstr(self) -> str:
+    def cstringify(self) -> str:
         return self.value
 
-    def __add__(self, other):
+    def cadd(self, other):
         """Adding strings will connect them."""
-        if isinstance(other, String):
-            return String(self.value + other.value, self.compiler)
-        return NotImplemented
-
-    def ciadd(self, other: ConstExpr):
         if isinstance(other, String):
             return String(self.value + other.value, self.compiler)
         raise TypeError

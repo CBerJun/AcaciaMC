@@ -1,4 +1,5 @@
-"""Builtin callable objects.
+"""
+Function objects.
 
 There are several types of functions:
 - AcaciaFunction: functions that are written in Acacia
@@ -33,10 +34,10 @@ There are several types of functions:
     x = Entity()
     # is optimized too, because `Entity` can reconstruct `x` and set it
     # to a new entity.
-- BinaryCTFunction: functions that are written in Python and only
-  available under const context.
-- BinaryMaybeCTFunction: implements both BinaryFunction and
-  BinaryCTFunction.
+- BinaryCTFunction: functions that are written in Python and available
+  under const context and runtime context.
+- BinaryCTOnlyFunction: functions that are written in Python and
+  only available under const context.
 - AcaciaCTFunction: functions written in Acacia that are annotated with
   `const`.
 """
@@ -47,16 +48,21 @@ __all__ = [
     # Expressions
     'AcaciaFunction', 'InlineFunction', 'BinaryFunction',
     'BoundMethod', 'BoundVirtualMethod', 'ConstructorFunction',
-    'BinaryCTFunction', 'BinaryMaybeCTFunction', 'AcaciaCTFunction',
+    'AcaciaCTFunction', 'BinaryCTFunction', 'BinaryCTOnlyFunction'
 ]
 
-from typing import List, Dict, Union, TYPE_CHECKING, Callable, Tuple, Optional
+from typing import (
+    TYPE_CHECKING, List, Dict, Union, Callable, Tuple, Optional
+)
 from abc import abstractmethod
 
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.ast import FuncPortType
 from acaciamc.mccmdgen.mcselector import MCSelector
+from acaciamc.ctexec.expr import (
+    CTObj, CTObjPtr, CTDataType, CTExpr, CTCallable
+)
 import acaciamc.mccmdgen.cmds as cmds
 from .base import *
 from .none import NoneLiteral
@@ -70,10 +76,22 @@ if TYPE_CHECKING:
     from .entity import _EntityBase, TaggedEntity
     from .entity_template import EntityTemplate
 
+class AcaciaArgHandler(ArgumentHandler[AcaciaExpr, AcaciaExpr, "DataType"]):
+    def type_check(self, arg: str, value: AcaciaExpr, tp: "DataType"):
+        if not tp.matches(value.data_type):
+            raise Error(
+                ErrorType.WRONG_ARG_TYPE, arg=arg,
+                expect=str(tp), got=str(value.data_type)
+            )
+
 class FunctionDataType(DefaultDataType):
     name = 'function'
 
-class AcaciaFunction(ConstExpr, AcaciaCallable):
+ctdt_function = CTDataType("function")
+
+class AcaciaFunction(ConstExprCombined, AcaciaCallable):
+    cdata_type = ctdt_function
+
     def __init__(self, name: str, args: List[str],
                  arg_types: Dict[str, "Storable"],
                  arg_defaults: Dict[str, Union[AcaciaExpr, None]],
@@ -82,7 +100,7 @@ class AcaciaFunction(ConstExpr, AcaciaCallable):
         super().__init__(FunctionDataType(compiler), compiler)
         self.name = name
         self.result_type = returns
-        self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
+        self.arg_handler = AcaciaArgHandler(args, arg_types, arg_defaults)
         # Create a `VarValue` for every args according to their types
         # and store them as dict at `self.arg_vars`.
         self.arg_vars: Dict[str, VarValue] = {
@@ -114,7 +132,9 @@ class AcaciaFunction(ConstExpr, AcaciaCallable):
         result.is_temporary = True
         return result, res
 
-class InlineFunction(ConstExpr, AcaciaCallable):
+class InlineFunction(ConstExprCombined, AcaciaCallable):
+    cdata_type = ctdt_function
+
     def __init__(self, node: "InlineFuncDef",
                  args, arg_types, arg_defaults, arg_ports,
                  returns: "DataType", result_port: FuncPortType,
@@ -128,7 +148,7 @@ class InlineFunction(ConstExpr, AcaciaCallable):
         self.name = node.name
         self.result_type = returns
         self.result_port = result_port
-        self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
+        self.arg_handler = AcaciaArgHandler(args, arg_types, arg_defaults)
         self.arg_ports = arg_ports
         # For error hint
         if source is not None:
@@ -140,6 +160,9 @@ class InlineFunction(ConstExpr, AcaciaCallable):
 
 def _bin_call(impl, compiler, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
     res = impl(compiler, args, keywords)
+    return _handle_impl_res(res, compiler)
+
+def _handle_impl_res(res: Union["CALLRET_T", "AcaciaExpr", None], compiler):
     if isinstance(res, tuple):  # CALLRET_T
         return res
     elif isinstance(res, AcaciaExpr):
@@ -150,15 +173,7 @@ def _bin_call(impl, compiler, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         raise ValueError("Invalid return of binary func "
                          "implementation: {}".format(res))
 
-def _bin_ccall(impl, compiler, args: ARGS_T, keywords: KEYWORDS_T) \
-        -> ConstExpr:
-    res = impl(compiler, args, keywords)
-    if res is None:
-        return NoneLiteral(compiler)
-    assert isinstance(res, ConstExpr)
-    return res
-
-class BinaryFunction(ConstExpr, AcaciaCallable):
+class BinaryFunction(ConstExprCombined, AcaciaCallable):
     """These are the functions that are written in Python,
     rather than `AcaciaFunction`s which are written in Acacia.
     The arguments passed to `AcaicaFunction` are *assigned* to local
@@ -170,6 +185,8 @@ class BinaryFunction(ConstExpr, AcaciaCallable):
     type will be accepted. Also, the result value can be "unstorable"
     -- any type of result can be returned.
     """
+    cdata_type = ctdt_function
+
     def __init__(
             self,
             implementation: Callable[
@@ -197,52 +214,116 @@ class BinaryFunction(ConstExpr, AcaciaCallable):
     def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         return _bin_call(self.implementation, self.compiler, args, keywords)
 
-class BinaryCTFunction(CTCallable):
+class CTArgHandler(ArgumentHandler[
+    Union[CTExpr, AcaciaExpr], CTExpr, "CTDataType"
+]):
+    def preconvert(self, arg: str, value: Union[CTExpr, AcaciaExpr]):
+        if isinstance(value, AcaciaExpr):
+            if not isinstance(value, ConstExpr):
+                raise Error(ErrorType.ARG_NOT_CONST, arg=arg)
+            value = value.to_ctexpr()
+        return value
+
+    def type_check(self, arg: str, value: CTExpr, dt: "CTDataType"):
+        v = abs(value)
+        if not dt.is_typeof(v):
+            raise Error(ErrorType.WRONG_ARG_TYPE, arg=arg,
+                        expect=dt.name, got=v.cdata_type.name)
+
+class AcaciaCTFunction(ConstExprCombined, AcaciaCallable, CTCallable):
+    cdata_type = ctdt_function
+
+    def __init__(self, node: "ConstFuncDef",
+                 args, arg_types, arg_defaults,
+                 returns: "CTDataType",
+                 context: "Context", owner: "Generator",
+                 compiler, source=None):
+        super().__init__(FunctionDataType(compiler), compiler)
+        self.node = node
+        self.owner = owner
+        self.context = context
+        self.name = node.name
+        self.result_type = returns
+        self.arg_handler = CTArgHandler(args, arg_types, arg_defaults)
+        # For error hint
+        if source is not None:
+            self.source = source
+        self.func_repr = self.name
+
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+        arg2value = self.arg_handler.match(args, keywords)
+        r = abs(self.owner.ccall_const_func(self, arg2value))
+        try:
+            return r.to_rt(), []
+        except TypeError:
+            raise Error(ErrorType.NON_RT_RESULT, got=r.cdata_type.name)
+
+    def ccall(self, args: List["CTObj"], keywords: Dict[str, "CTObj"]):
+        arg2value = self.arg_handler.match(args, keywords)
+        return self.owner.ccall_const_func(self, arg2value)
+
+class BinaryCTOnlyFunction(CTCallable):
+    cdata_type = ctdt_function
+
     def __init__(
-        self, implementation: Callable[
-            ["Compiler", "ARGS_T", "KEYWORDS_T"],
-            Optional[ConstExpr]
+        self, impl: Callable[
+            ["Compiler", List[CTExpr], Dict[str, CTExpr]],
+            Union[None, CTExpr, ConstExpr]
+        ],
+        compiler,
+        *args, **kwds
+    ):
+        super().__init__(*args, **kwds)
+        self.impl = impl
+        self.compiler = compiler
+        self.func_repr = "<binary function>"
+
+    def ccall(self, args: List[CTExpr],
+              keywords: Dict[str, CTExpr]) -> CTExpr:
+        res = self.impl(self.compiler, args, keywords)
+        if res is None:
+            return NoneLiteral(self.compiler)
+        if isinstance(res, (CTObj, CTObjPtr)):
+            return res
+        if isinstance(res, ConstExpr):
+            return res.to_ctexpr()
+        raise TypeError("invalid return value from impl of"
+                        f" BinaryCTOnlyFunction: {res!r}")
+
+class BinaryCTFunction(BinaryCTOnlyFunction, ConstExprCombined,
+                       AcaciaCallable):
+    cdata_type = ctdt_function
+
+    def __init__(
+        self, impl: Callable[
+            ["Compiler", List[Union[CTExpr, AcaciaExpr]],
+             Dict[str, Union[CTExpr, AcaciaExpr]]],
+            Union[None, CTExpr, AcaciaExpr, "CALLRET_T"]
         ],
         compiler
     ):
-        super().__init__(FunctionDataType(compiler), compiler)
-        self.implementation = implementation
+        super().__init__(impl, compiler, FunctionDataType(compiler), compiler)
         self.func_repr = "<binary function>"
 
-    def ccall(self, args: ARGS_T, keywords: KEYWORDS_T) -> ConstExpr:
-        return _bin_ccall(self.implementation, self.compiler, args, keywords)
-
-class BinaryMaybeCTFunction(CTCallable, AcaciaCallable):
-    def __init__(
-        self,
-        normal_impl: Callable[
-            ["Compiler", "ARGS_T", "KEYWORDS_T"],
-            Union["CALLRET_T", AcaciaExpr, None]
-        ],
-        const_impl: Callable[
-            ["Compiler", "ARGS_T", "KEYWORDS_T"],
-            Optional[ConstExpr]
-        ],
-        compiler
-    ):
-        super().__init__(FunctionDataType(compiler), compiler)
-        self.normal_impl = normal_impl
-        self.const_impl = const_impl
-        self.func_repr = "<binary function>"
-
-    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
-        return _bin_call(self.normal_impl, self.compiler, args, keywords)
-
-    def ccall(self, args: ARGS_T, keywords: KEYWORDS_T) -> ConstExpr:
-        return _bin_ccall(self.const_impl, self.compiler, args, keywords)
+    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+        res = self.impl(self.compiler, args, keywords)
+        if isinstance(res, (CTObj, CTObjPtr)):
+            res = abs(res)
+            try:
+                return res.to_rt(), []
+            except TypeError:
+                raise Error(ErrorType.NON_RT_RESULT, got=res.cdata_type.name)
+        return _handle_impl_res(res, self.compiler)
 
 METHODDEF_T = Union[AcaciaFunction, InlineFunction]
 
-class _BoundMethod(ConstExpr, AcaciaCallable):
+class _BoundMethod(ConstExprCombined, AcaciaCallable):
     """
     A method bound to an entity, but when called it does not set self
     var. Self var is set by `BoundMethod` and `BoundVirtualMethod`.
     """
+    cdata_type = ctdt_function
+
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T, compiler):
         super().__init__(FunctionDataType(compiler), compiler)
@@ -265,7 +346,9 @@ class _BoundMethod(ConstExpr, AcaciaCallable):
         # because we are not sure about their result data type
         return result, commands
 
-class BoundMethod(ConstExpr, AcaciaCallable):
+class BoundMethod(ConstExprCombined, AcaciaCallable):
+    cdata_type = ctdt_function
+
     def __init__(self, object_: "_EntityBase", method_name: str,
                  definition: METHODDEF_T,
                  get_self_var: Optional[Callable[[], "TaggedEntity"]],
@@ -287,7 +370,9 @@ class BoundMethod(ConstExpr, AcaciaCallable):
             commands[:0] = self.content.object.export(self.self_var_getter())
         return result, commands
 
-class BoundVirtualMethod(ConstExpr, AcaciaCallable):
+class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
+    cdata_type = ctdt_function
+
     def __init__(self, object_: "_EntityBase", method_name: str,
                  result_var: VarValue, compiler):
         super().__init__(FunctionDataType(compiler), compiler)
@@ -395,29 +480,6 @@ class BoundVirtualMethod(ConstExpr, AcaciaCallable):
                         [cmds.ExecuteCond("entity", "@s[tag=%s]" % self_tag)],
                         runs=cmds.InvokeFunction(f)
                     ))
-
-class AcaciaCTFunction(CTCallable, AcaciaCallable):
-    def __init__(self, node: "ConstFuncDef",
-                 args, arg_types, arg_defaults,
-                 returns: "DataType",
-                 context: "Context", owner: "Generator",
-                 compiler, source=None):
-        super().__init__(FunctionDataType(compiler), compiler)
-        self.node = node
-        self.owner = owner
-        self.context = context
-        self.name = node.name
-        self.result_type = returns
-        self.arg_handler = ArgumentHandler(args, arg_types, arg_defaults)
-        if source is not None:
-            self.source = source
-        self.func_repr = self.name
-
-    def ccall(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> ConstExpr:
-        return self.owner.call_const_func(self, args, keywords)
-
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
-        return self.owner.call_const_func(self, args, keywords), []
 
 class ConstructorFunction(AcaciaCallable):
     # `initialize` should initialize a var of `var_type` type.

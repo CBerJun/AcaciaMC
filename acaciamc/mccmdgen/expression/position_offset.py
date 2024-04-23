@@ -13,6 +13,7 @@ from enum import Enum
 from acaciamc.error import *
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 from .base import *
 from .types import Type
 
@@ -23,6 +24,8 @@ class CoordinateType(Enum):
 
 class PosOffsetDataType(DefaultDataType):
     name = "Offset"
+
+ctdt_posoffset = CTDataType("Offset")
 
 class PosOffsetType(Type):
     def do_init(self):
@@ -79,7 +82,12 @@ class PosOffsetType(Type):
     def datatype_hook(self):
         return PosOffsetDataType(self.compiler)
 
-class PosOffset(ConstExpr, ImmutableMixin):
+    def cdatatype_hook(self):
+        return ctdt_posoffset
+
+class PosOffset(ConstExprCombined, ImmutableMixin):
+    cdata_type = ctdt_posoffset
+
     def __init__(self, compiler):
         super().__init__(PosOffsetDataType(compiler), compiler)
         self.values: List[float] = [0.0, 0.0, 0.0]

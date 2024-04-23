@@ -46,8 +46,9 @@ from typing import TYPE_CHECKING
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.ctexec.expr import CTDataType
 from acaciamc.ast import Operator
-from acaciamc.tools import axe, resultlib, method_of
+from acaciamc.tools import axe, resultlib, cmethod_of, method_of
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -55,6 +56,8 @@ if TYPE_CHECKING:
 
 class TaskDataType(DefaultDataType):
     name = "Task"
+
+ctdt_task = CTDataType("Task")
 
 class TaskType(Type):
     """
@@ -69,12 +72,18 @@ class TaskType(Type):
         @axe.star_arg("args", axe.AnyValue())
         @axe.kwds("kwds", axe.AnyValue())
         def _new(compiler, target, args, kwds):
-            return Task(target, args, kwds, compiler)
+            res = Task(target, args, kwds, compiler)
+            return res, res.timer_reset()
 
     def datatype_hook(self):
         return TaskDataType(self.compiler)
 
-class Task(ConstExpr):
+    def cdatatype_hook(self):
+        return ctdt_task
+
+class Task(ConstExprCombined):
+    cdata_type = ctdt_task
+
     def __init__(self, target: AcaciaCallable, other_arg, other_kw, compiler):
         """
         target: The function to call
@@ -91,9 +100,7 @@ class Task(ConstExpr):
             other_arg, other_kw, location="<schedule.Task>"
         )
         self.target_file.extend(call_cmds)
-        def _timer_reset():
-            commands = IntLiteral(-1, compiler).export(self.timer)
-            return resultlib.commands(commands, compiler)
+
         @method_of(self, "after")
         @axe.chop
         @axe.arg("delay", IntDataType)
@@ -105,10 +112,7 @@ class Task(ConstExpr):
         @axe.chop
         def _cancel(compiler):
             """.cancel(): Cancel the schedule created by `after`."""
-            return _timer_reset()
-        @method_of(self, "__init__")
-        def _init(compiler, args, keywords):
-            return _timer_reset()
+            return resultlib.commands(self.timer_reset(), compiler)
         @method_of(self, "has_schedule")
         @axe.chop
         def _has_schedule(compiler):
@@ -184,6 +188,9 @@ class Task(ConstExpr):
             for cmd in self.timer.isub(IntLiteral(1, self.compiler))
         )
 
+    def timer_reset(self) -> CMDLIST_T:
+        return IntLiteral(-1, self.compiler).export(self.timer)
+
 def _create_register_loop(compiler):
     @axe.chop
     @axe.arg("target", axe.Callable())
@@ -205,6 +212,8 @@ def _create_register_loop(compiler):
         # Optimization: if the interval is 1, no need for timer
         if isinstance(interval, IntLiteral) and interval.value == 1:
             compiler.file_tick.extend(tick_commands)
+            # NOTE The `music` module depends on that this produces no
+            # commands when the interval is 1.
             return None
         # Allocate an int for timer
         timer = IntVar.new(compiler)
