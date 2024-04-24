@@ -4,7 +4,16 @@ NOTE Python package `mido` is required.
 """
 
 from typing import Dict, TYPE_CHECKING
-from itertools import pairwise
+try:
+    from itertools import pairwise
+except ImportError:
+    def pairwise(iterable):
+        """A clone of itertools.pairwise for Python 3.9 or below."""
+        iterator = iter(iterable)
+        last = next(iterator, None)
+        for current in iterator:
+            yield last, current
+            last = current
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
