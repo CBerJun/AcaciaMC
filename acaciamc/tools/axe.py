@@ -968,7 +968,6 @@ def chop(building: _BuildingParser):
     ... def f(compiler, foo, bar):
     ...     # implement this binary function here
     ...     print(foo, bar)
-    ...     return acacia.NoneVar(compiler)
     >>> func = acacia.BinaryFunction(f, compiler=compiler)
     >>> func.call(
     ...     [], {"foo": acacia.BoolLiteral(True, compiler),
@@ -991,7 +990,6 @@ class OverloadChopped(type):
     ...     @arg("b", LiteralInt())
     ...     def f1(cls, compiler, a, b):
     ...         print("f1: ", a, b)
-    ...         return acacia.NoneVar(compiler)
     ...     @overload
     ...     @arg("a", acacia.BoolDataType)
     ...     def f2(cls, compiler, a):

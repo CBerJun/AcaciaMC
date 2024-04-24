@@ -17,7 +17,7 @@ class Result(NamedTuple):
     commands: acacia.CMDLIST_T
 
 def commands(cmds: acacia.CMDLIST_T, compiler: "Compiler") -> Result:
-    return Result(acacia.NoneVar(compiler), cmds)
+    return Result(acacia.NoneLiteral(compiler), cmds)
 
 def literal(value: Union[bool, int, str, float, None],
             compiler: "Compiler") -> acacia.AcaciaExpr:
@@ -30,5 +30,5 @@ def literal(value: Union[bool, int, str, float, None],
     elif isinstance(value, float):
         return acacia.Float(value, compiler)
     elif value is None:
-        return acacia.NoneVar(compiler)
+        return acacia.NoneLiteral(compiler)
     raise TypeError("unexpected value %r" % value)

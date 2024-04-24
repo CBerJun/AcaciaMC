@@ -1,42 +1,35 @@
 """Builtin None value."""
 
-__all__ = ['NoneDataType', 'NoneVar', 'NoneLiteral']
+__all__ = ['NoneDataType', 'NoneLiteral']
 
 from .base import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.ctexec.expr import CTDataType
 
 class NoneDataType(DefaultDataType, Storable):
-    name = 'nonetype'
+    name = 'None'
 
-    def new_var(self) -> "NoneVar":
-        return NoneVar(self.compiler)
+    def new_var(self) -> "NoneLiteral":
+        return NoneLiteral(self.compiler)
 
 ctdt_none = CTDataType("None")
 
-class NoneVar(VarValue):
-    """Used when function's result is nothing."""
-    def __init__(self, compiler):
-        super().__init__(NoneDataType(compiler), compiler)
-
-    def swap(self, other: "NoneVar"):
-        return []
-
-    def export(self, var: "NoneVar"):
-        return []
-
-class NoneLiteral(ConstExprCombined):
-    """Represents a literal None. Used by "None" keyword."""
+class NoneLiteral(ConstExprCombined, VarValue):
+    """Represents a literal None."""
     cdata_type = ctdt_none
 
     def __init__(self, compiler):
         super().__init__(NoneDataType(compiler), compiler)
+        self.is_temporary = True  # Assignment to None is always disallowed
 
-    def export(self, var: "NoneVar"):
+    def export(self, var: "NoneLiteral"):
+        return []
+
+    def swap(self, other: "NoneLiteral"):
         return []
 
     def datatype_hook(self):
-        """None as a type specifier represents nonetype."""
+        """None as a type specifier represents the None type."""
         return NoneDataType(self.compiler)
 
     def cdatatype_hook(self) -> CTDataType:
