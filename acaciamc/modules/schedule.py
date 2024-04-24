@@ -212,8 +212,6 @@ def _create_register_loop(compiler):
         # Optimization: if the interval is 1, no need for timer
         if isinstance(interval, IntLiteral) and interval.value == 1:
             compiler.file_tick.extend(tick_commands)
-            # NOTE The `music` module depends on that this produces no
-            # commands when the interval is 1.
             return None
         # Allocate an int for timer
         timer = IntVar.new(compiler)

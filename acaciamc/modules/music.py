@@ -4,11 +4,11 @@ NOTE Python package `mido` is required.
 """
 
 from typing import Dict, TYPE_CHECKING
+from itertools import pairwise
 
 from acaciamc.mccmdgen.expression import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.ctexec.expr import CTDataType
-from acaciamc.ast import ModuleMeta
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, cmethod_of, method_of
 import acaciamc.mccmdgen.cmds as cmds
@@ -264,7 +264,7 @@ class Music(ConstExprCombined):
     def __init__(self, midi, listener_str: str, looping: int,
                  note_offset: int, chunk_size: int, speed: float,
                  volume: float, channel_volume: Dict[int, float],
-                 instrument: Dict[int, str], compiler):
+                 instrument: Dict[int, str], compiler: "Compiler"):
         super().__init__(MusicDataType(compiler), compiler)
         self.midi = midi
         self.listener_str = listener_str
@@ -299,7 +299,9 @@ class Music(ConstExprCombined):
         # Timer:
         #   when 0 <= timer <= music length, the music is playing
         #   when timer > music length, the music has ended
-        #   when timer < 0, it's the countdown of starting playing
+        #   only when looping is enabled, if timer == music length + 1,
+        #       it will be reset next GT so that it will play again
+        #   when timer < 0, it's the countdown before we start playing
         self.timer = IntVar.new(compiler)
         # Volume
         self.user_volume = volume
@@ -323,46 +325,30 @@ class Music(ConstExprCombined):
         for file in self.files:
             self.compiler.add_file(file)
         self.file_sep_gt.append(GT_LEN + 1)
-        # Create GT loop using `schedule` module
-        @axe.chop
-        def _gt_loop(compiler):
-            commands = []
-            commands.extend(
-                cmds.Execute(
-                    [cmds.ExecuteScoreMatch(
-                        self.timer.slot, "%d..%d" % (
-                            self.file_sep_gt[i], self.file_sep_gt[i+1] - 1
-                        )
-                    )],
-                    runs=cmds.InvokeFunction(file)
-                )
-                for i, file in enumerate(self.files)
+        # Loop commands
+        loopcmds: CMDLIST_T = [cmds.Comment("# music.Music")]
+        loopcmds.extend(
+            cmds.Execute(
+                [cmds.ExecuteScoreMatch(self.timer.slot, f"{t1}..{t2 - 1}")],
+                runs=cmds.InvokeFunction(self.files[i])
             )
-            commands.extend(
-                cmds.execute(
-                    [cmds.ExecuteScoreMatch(self.timer.slot, "..%d" % GT_LEN)],
-                    runs=cmd
-                )
-                for cmd in self.timer.iadd(IntLiteral(1, self.compiler))
-            )
-            if looping >= 0:
-                commands.extend(cmds.execute(
-                    [cmds.ExecuteScoreMatch(
-                        self.timer.slot, str(GT_LEN + 1)
-                    )],
-                    runs=cmd
-                ) for cmd in IntLiteral(-looping, compiler)
-                             .export(self.timer))
-            return resultlib.commands(commands, compiler)
-        # Register this to be called every tick
-        _res, init_cmds = register_loop.call(
-            args=[BinaryFunction(_gt_loop, self.compiler)],
-            keywords={}
+            for i, (t1, t2) in enumerate(pairwise(self.file_sep_gt))
         )
-        # XXX Making `Music` instantiatable at compile time relies on
-        # the fact that `register_loop` does not produce any commands
-        # (when interval is 1).
-        assert not init_cmds
+        loopcmds.append(
+            cmds.Execute(
+                [cmds.ExecuteScoreMatch(self.timer.slot, f"..{GT_LEN}")],
+                runs=cmds.ScbAddConst(self.timer.slot, 1)
+            )
+        )
+        if looping >= 0:
+            loopcmds.append(
+                cmds.Execute(
+                    [cmds.ExecuteScoreMatch(self.timer.slot, str(GT_LEN + 1))],
+                    runs=cmds.ScbSetConst(self.timer.slot, -looping)
+                )
+            )
+        # Register loop commands to be called every tick
+        compiler.file_tick.extend(loopcmds)
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
@@ -377,14 +363,14 @@ class Music(ConstExprCombined):
             of playing. When `timer` >= 0, its where the music starts
             playing.
             """
-            cmds = timer.export(self.timer)
-            return resultlib.commands(cmds, compiler)
+            commands = timer.export(self.timer)
+            return resultlib.commands(commands, compiler)
         @method_of(self, "stop")
         @axe.chop
         def _stop(compiler):
             """.stop(): Stop the music"""
-            cmds = IntLiteral(GT_LEN + 2, compiler).export(self.timer)
-            return resultlib.commands(cmds, compiler)
+            commands = [cmds.ScbSetConst(self.timer.slot, GT_LEN + 2)]
+            return resultlib.commands(commands, compiler)
 
     def main_loop(self):
         # Read messages
@@ -465,12 +451,10 @@ class Music(ConstExprCombined):
         self.cur_chunk_size += 1
 
 def acacia_build(compiler: "Compiler"):
-    global mido, register_loop
+    global mido
     try:
         import mido
     except ImportError:
         raise Error(ErrorType.ANY,
                     message="Python module 'mido' is required")
-    schedule = compiler.get_module(ModuleMeta("schedule"))
-    register_loop = schedule.attribute_table.lookup("register_loop")
     return {"Music": MusicType(compiler)}
