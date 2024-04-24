@@ -18,6 +18,13 @@ class CTRTConversionError(Exception):
 class SymbolTable:
     def __init__(self, outer: Optional["SymbolTable"] = None,
                  builtins: Optional["SymbolTable"] = None):
+        """
+        Create a new empty symbol table.
+        `outer` is looked up if a name is not found in this table.
+        `builtins` is looked up finally if a name is not found in this
+        table and all the outer ones. It is expected that `builtins` is
+        the same for all instances of `SymbolTable`.
+        """
         self.outer = outer
         self.builtins = builtins
         self.no_export: Set[str] = set()
@@ -46,12 +53,12 @@ class SymbolTable:
                 return abs(res).to_rt()
             except TypeError:
                 raise CTRTConversionError(abs(res))
+        if use_outer and self.outer:
+            return self.outer.lookup(name, use_builtins=False)
         if use_builtins and self.builtins:
             res = self.builtins.lookup(name)
             if res is not None:
                 return res
-        if use_outer and self.outer:
-            return self.outer.lookup(name, use_builtins=False)
         return None
 
     def clookup(self, name: str, use_builtins=True, use_outer=True):
@@ -62,12 +69,12 @@ class SymbolTable:
             elif isinstance(res, expression.AcaciaExpr):
                 raise CTRTConversionError(res)
             return res
+        if use_outer and self.outer:
+            return self.outer.clookup(name, use_builtins=False)
         if use_builtins and self.builtins:
             res = self.builtins.clookup(name)
             if res is not None:
                 return res
-        if use_outer and self.outer:
-            return self.outer.clookup(name, use_builtins=False)
         return None
 
     def all_names(self) -> Iterable[str]:
