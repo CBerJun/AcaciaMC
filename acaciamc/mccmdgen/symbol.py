@@ -54,7 +54,9 @@ class SymbolTable:
             except TypeError:
                 raise CTRTConversionError(abs(res))
         if use_outer and self.outer:
-            return self.outer.lookup(name, use_builtins=False)
+            res = self.outer.lookup(name, use_builtins=False)
+            if res is not None:
+                return res
         if use_builtins and self.builtins:
             res = self.builtins.lookup(name)
             if res is not None:
@@ -70,7 +72,9 @@ class SymbolTable:
                 raise CTRTConversionError(res)
             return res
         if use_outer and self.outer:
-            return self.outer.clookup(name, use_builtins=False)
+            res = self.outer.clookup(name, use_builtins=False)
+            if res is not None:
+                return res
         if use_builtins and self.builtins:
             res = self.builtins.clookup(name)
             if res is not None:
