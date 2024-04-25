@@ -7,6 +7,7 @@ from typing import NamedTuple, Union, TYPE_CHECKING
 # `import acaciamc.objects as objects` won't work in 3.6
 # because of a Python bug (see https://bugs.python.org/issue23203)
 from acaciamc import objects
+from acaciamc.mccmdgen.utils import unreachable
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -32,4 +33,4 @@ def literal(value: Union[bool, int, str, float, None],
         return objects.Float(value, compiler)
     elif value is None:
         return objects.NoneLiteral(compiler)
-    raise TypeError("unexpected value %r" % value)
+    unreachable(f"unexpected value {value!r}")

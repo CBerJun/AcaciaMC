@@ -7,6 +7,7 @@ from acaciamc.ast import *
 from acaciamc.error import Error, ErrorType, SourceLocation
 from acaciamc.mccmdgen.ctexpr import *
 from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
+from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
 from acaciamc.objects import (
     IntLiteral, BoolLiteral, String, CTList, CTMap, NoneLiteral, Float
 )
@@ -95,7 +96,7 @@ class CTExecuter(ASTVisitor):
             return NoneLiteral(self.compiler)
         elif isinstance(value, float):
             return Float(value, self.compiler)
-        raise TypeError
+        unreachable()
 
     def visit_StrLiteral(self, node: StrLiteral):
         s = self.visit(node.content)
@@ -151,10 +152,10 @@ class CTExecuter(ASTVisitor):
         elif node.operator is Operator.negative:
             meth = obj.cunaryneg
         else:
-            raise TypeError
+            unreachable()
         try:
             return meth()
-        except TypeError:
+        except InvalidOpError:
             self.error_node(node, ErrorType.INVALID_OPERAND,
                             operator=node.operator.value,
                             operand=f'"{obj.cdata_type.name}"')
@@ -164,10 +165,10 @@ class CTExecuter(ASTVisitor):
         right: CTObj = abs(self.visit(node.right))
         try:
             res = getattr(left, BINOPS[node.operator])(right)
-        except TypeError:
+        except InvalidOpError:
             try:
                 res = getattr(right, RBINOPS[node.operator])(left)
-            except TypeError:
+            except InvalidOpError:
                 ls = left.cdata_type.name
                 rs = right.cdata_type.name
                 self.error_node(
@@ -185,10 +186,10 @@ class CTExecuter(ASTVisitor):
             left, right = right, abs(operand)
             try:
                 res = left.ccompare(operator, right)
-            except TypeError:
+            except InvalidOpError:
                 try:
                     res = right.ccompare(COMPOP_SWAP[operator], left)
-                except TypeError:
+                except InvalidOpError:
                     ls = left.cdata_type.name
                     rs = right.cdata_type.name
                     self.error_node(
@@ -272,7 +273,7 @@ class CTExecuter(ASTVisitor):
         value: CTObj = abs(self.visit(node.value))
         try:
             res = getattr(abs(target), BINOPS[node.operator])(value)
-        except TypeError:
+        except InvalidOpError:
             t1 = abs(target).cdata_type.name
             t2 = value.cdata_type.name
             self.error_node(node, ErrorType.INVALID_OPERAND,
@@ -323,7 +324,7 @@ class CTExecuter(ASTVisitor):
         iterable: CTObj = abs(self.visit(node.expr))
         try:
             values = iterable.citerate()
-        except TypeError:
+        except InvalidOpError:
             self.error_node(
                 node.expr, ErrorType.NOT_ITERABLE,
                 type_=iterable.cdata_type.name
@@ -355,7 +356,7 @@ class CTExecuter(ASTVisitor):
         type_: CTObj = abs(self.visit(node.content))
         try:
             dt = type_.cdatatype_hook()
-        except TypeError:
+        except InvalidOpError:
             self.error_node(node, ErrorType.INVALID_TYPE_SPEC,
                             got=type_.cdata_type.name)
         return dt
@@ -378,7 +379,7 @@ class CTExecuter(ASTVisitor):
                 expr: CTObj = abs(self.visit(section))
                 try:
                     value = expr.cstringify()
-                except TypeError:
+                except InvalidOpError:
                     self.error_node(section, ErrorType.INVALID_FEXPR)
                 res.append(value)
         return ''.join(res)

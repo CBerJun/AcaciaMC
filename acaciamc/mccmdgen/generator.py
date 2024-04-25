@@ -8,13 +8,14 @@ import contextlib
 from acaciamc.ast import *
 from acaciamc.error import *
 from acaciamc.objects import *
-from acaciamc.mccmdgen.expr import *
 from acaciamc.objects.none import ctdt_none
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import *
 from acaciamc.mccmdgen.ctexecuter import CTExecuter
 from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr
+from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -310,7 +311,7 @@ class Generator(ASTVisitor):
         if hasattr(target, method):
             try:
                 commands = getattr(target, method)(value)
-            except TypeError:
+            except InvalidOpError:
                 pass
             else:
                 # Success
@@ -361,7 +362,7 @@ class Generator(ASTVisitor):
                 expr = self.visit(section)
                 try:
                     value = expr.cmdstr()
-                except NotImplementedError:
+                except InvalidOpError:
                     self.error_node(section, ErrorType.INVALID_FEXPR)
                 res.append(value)
         return ''.join(res)
@@ -520,7 +521,7 @@ class Generator(ASTVisitor):
         type_ = self.visit(node.content)
         try:
             dt = type_.datatype_hook()
-        except NotImplementedError:
+        except InvalidOpError:
             self.error_c(ErrorType.INVALID_TYPE_SPEC, got=str(type_.data_type))
         return dt
 
@@ -819,7 +820,7 @@ class Generator(ASTVisitor):
         if not iterable.data_type.matches_cls(EGroupDataType):
             try:
                 items = iterable.iterate()
-            except NotImplementedError:
+            except InvalidOpError:
                 self.error_c(ErrorType.NOT_ITERABLE,
                              type_=str(iterable.data_type))
             self.write_debug("Iterating over %d items" % len(items))
@@ -945,7 +946,7 @@ class Generator(ASTVisitor):
             return NoneLiteral(self.compiler)
         elif isinstance(value, float):
             return Float(value, self.compiler)
-        raise TypeError
+        unreachable()
 
     def visit_StrLiteral(self, node: StrLiteral):
         return String(self.visit(node.content), self.compiler)
@@ -1005,22 +1006,11 @@ class Generator(ASTVisitor):
     def _op_error(self, operator: Operator, *operands: AcaciaExpr):
         self._op_error_s(operator.value, *operands)
 
-    def _wrap_method_op(self, operator: str, method: str,
-                        owner: AcaciaExpr, *operands: AcaciaExpr):
-        if hasattr(owner, method):
-            try:
-                commands = getattr(owner, method)(*operands)
-            except TypeError:
-                pass
-            else:
-                return commands
-        self._op_error(operator, owner, *operands)
-
     def visit_UnaryOp(self, node: UnaryOp):
         operand = self.visit(node.operand)
         try:
             res = getattr(operand, OP2METHOD[node.operator])()
-        except TypeError:
+        except InvalidOpError:
             self._op_error(node.operator, operand)
         return res
 
@@ -1029,10 +1019,10 @@ class Generator(ASTVisitor):
         meth = OP2METHOD[node.operator]
         try:
             res = getattr(left, meth)(right)
-        except TypeError:
+        except InvalidOpError:
             try:
                 res = getattr(right, f"r{meth}")(left)
-            except TypeError:
+            except InvalidOpError:
                 self._op_error(node.operator, left, right)
         return res
 
@@ -1043,10 +1033,12 @@ class Generator(ASTVisitor):
         # `e0 o1 e1 and ... and e(n-1) o(n) e(n)`
         for operand, operator in zip(node.operands, node.operators):
             left, right = right, self.visit(operand)
-            res = left.compare(operator, right)
-            if res is NotImplemented:
-                res = right.compare(COMPOP_SWAP[operator], left)
-                if res is NotImplemented:
+            try:
+                res = left.compare(operator, right)
+            except InvalidOpError:
+                try:
+                    res = right.compare(COMPOP_SWAP[operator], left)
+                except InvalidOpError:
                     self.error_c(
                         ErrorType.INVALID_OPERAND,
                         operator=operator.value,
@@ -1073,7 +1065,7 @@ class Generator(ASTVisitor):
             return new_and_group(operands, self.compiler)
         elif operator is Operator.or_:
             return new_or_expression(operands, self.compiler)
-        raise TypeError
+        unreachable()
 
     # call
 

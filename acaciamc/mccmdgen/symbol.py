@@ -5,6 +5,7 @@ __all__ = ['CTRTConversionError', 'SymbolTable']
 from typing import TYPE_CHECKING, Optional, Dict, Set, Union, Iterable
 
 from acaciamc.mccmdgen import expr
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.ctexpr import CTExpr
@@ -51,7 +52,7 @@ class SymbolTable:
                 return res
             try:
                 return abs(res).to_rt()
-            except TypeError:
+            except InvalidOpError:
                 raise CTRTConversionError(abs(res))
         if use_outer and self.outer:
             res = self.outer.lookup(name, use_builtins=False)

@@ -18,6 +18,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTObj, CTDataType, CTObjPtr, CTExpr
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 class MapDataType(DefaultDataType):
     name = "const_map"
@@ -104,7 +105,7 @@ class Map(ConstExpr):
     def _get_key(self, key: AcaciaExpr):
         try:
             hash_ = key.hash()
-        except NotImplementedError:
+        except InvalidOpError:
             raise Error(ErrorType.INVALID_MAP_KEY)
         else:
             return (type(key.data_type), hash_)
@@ -195,7 +196,7 @@ class CTConstMap(CTObj):
     def get_key(key: "CTExpr"):
         try:
             return abs(key).chash()
-        except NotImplementedError:
+        except InvalidOpError:
             raise Error(ErrorType.INVALID_MAP_KEY)
 
     def set(self, key: "CTExpr", value: "CTExpr"):

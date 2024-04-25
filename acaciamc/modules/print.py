@@ -7,6 +7,7 @@ from acaciamc.objects import *
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.utils import unreachable
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 from acaciamc.constants import COLORS, COLORS_NEW
@@ -183,7 +184,7 @@ class FString(ConstExprCombined):
             # connect json
             res.json.extend(other.json)
         else:
-            raise TypeError
+            unreachable()
         return res
 
     cradd = cadd

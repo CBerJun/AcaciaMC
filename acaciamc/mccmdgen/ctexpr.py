@@ -6,6 +6,7 @@ from typing import (
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.mccmdgen.symbol import SymbolTable
+from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.error import traced_call
 
 if TYPE_CHECKING:
@@ -40,51 +41,51 @@ class CTObj:
         return self
 
     def to_rt(self) -> "ConstExpr":
-        raise TypeError
+        raise InvalidOpError
 
     def cadd(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def csub(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def cmul(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def cdiv(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def cmod(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
 
     def cradd(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def crsub(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def crmul(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def crdiv(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def crmod(self, other: "CTObj") -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
 
     def cunarypos(self) -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def cunaryneg(self) -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
     def cunarynot(self) -> "CTExpr":
-        raise TypeError
+        raise InvalidOpError
 
     def ccompare(self, op: "Operator", other: "CTObj") -> bool:
-        raise TypeError
+        raise InvalidOpError
 
     def cdatatype_hook(self) -> CTDataType:
-        raise TypeError
+        raise InvalidOpError
 
     def cstringify(self) -> str:
-        raise TypeError
+        raise InvalidOpError
 
     def citerate(self) -> List["CTExpr"]:
-        raise TypeError
+        raise InvalidOpError
 
     def chash(self) -> Hashable:
-        raise NotImplementedError
+        raise InvalidOpError
 
 class CTObjPtr:
     def __init__(self, value: CTObj):

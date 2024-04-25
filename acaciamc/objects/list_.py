@@ -20,6 +20,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr, CTDataType
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.ctexpr import CTExpr
@@ -153,14 +154,14 @@ class AcaciaList(ConstExpr):
     def add(self, other):
         if isinstance(other, AcaciaList):
             return AcaciaList(self.items + other.items, self.compiler)
-        raise TypeError
+        raise InvalidOpError
 
     def mul(self, other: AcaciaExpr):
         if isinstance(other, IntLiteral):
             return AcaciaList(self.items * other.value, self.compiler)
         if other.data_type.matches_cls(IntDataType):
             raise Error(ErrorType.LIST_MULTIMES_NON_LITERAL)
-        raise TypeError
+        raise InvalidOpError
 
     def to_ctexpr(self):
         return CTConstList(list2ct(self.items), self.compiler)

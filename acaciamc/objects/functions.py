@@ -65,6 +65,7 @@ from acaciamc.mccmdgen.ctexpr import (
     CTObj, CTObjPtr, CTDataType, CTExpr, CTCallable
 )
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
 import acaciamc.mccmdgen.cmds as cmds
 from .none import NoneLiteral
 
@@ -233,8 +234,8 @@ def _handle_impl_res(res: Union[CALLRET_T, AcaciaExpr, None], compiler):
     elif res is None:
         return NoneLiteral(compiler), []
     else:
-        raise ValueError("Invalid return of binary func "
-                         "implementation: {}".format(res))
+        unreachable("Invalid return of binary func "
+                    f"implementation: {res!r}")
 
 class BinaryFunction(ConstExprCombined, AcaciaCallable):
     """These are the functions that are written in Python,
@@ -318,7 +319,7 @@ class AcaciaCTFunction(ConstExprCombined, AcaciaCallable, CTCallable):
         r = abs(self.owner.ccall_const_func(self, arg2value))
         try:
             return r.to_rt(), []
-        except TypeError:
+        except InvalidOpError:
             raise Error(ErrorType.NON_RT_RESULT, got=r.cdata_type.name)
 
     def ccall(self, args: List["CTObj"], keywords: Dict[str, "CTObj"]):
@@ -350,8 +351,8 @@ class BinaryCTOnlyFunction(CTCallable):
             return res
         if isinstance(res, ConstExpr):
             return res.to_ctexpr()
-        raise TypeError("invalid return value from impl of"
-                        f" BinaryCTOnlyFunction: {res!r}")
+        unreachable("invalid return value from impl of"
+                    f" BinaryCTOnlyFunction: {res!r}")
 
 class BinaryCTFunction(BinaryCTOnlyFunction, ConstExprCombined,
                        AcaciaCallable):
@@ -374,7 +375,7 @@ class BinaryCTFunction(BinaryCTOnlyFunction, ConstExprCombined,
             res = abs(res)
             try:
                 return res.to_rt(), []
-            except TypeError:
+            except InvalidOpError:
                 raise Error(ErrorType.NON_RT_RESULT, got=res.cdata_type.name)
         return _handle_impl_res(res, self.compiler)
 

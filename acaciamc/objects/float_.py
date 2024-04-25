@@ -8,6 +8,7 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import Error, ErrorType
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.utils import InvalidOpError
 from .integer import IntLiteral
 
 class FloatDataType(DefaultDataType):
@@ -49,7 +50,7 @@ class Float(ConstExprCombined):
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return Float(v, self.compiler)
-        raise TypeError
+        raise InvalidOpError
 
     cadd = partialmethod(_bin_op, method="__add__")
     csub = partialmethod(_bin_op, method="__sub__")

@@ -18,6 +18,7 @@ from acaciamc.parser import Parser
 from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.optimizer import Optimizer
+from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.objects import IntVar, BinaryModule, EntityTemplate
 import acaciamc.mccmdgen.cmds as cmds
 
@@ -372,7 +373,7 @@ class Compiler:
         """Swap two `VarValue`s that are assignable to each other."""
         try:
             res = x.swap(y)
-        except NotImplementedError:
+        except InvalidOpError:
             # Fall back
             tmp = x.data_type.new_var()
             res = [

@@ -6,6 +6,7 @@ from typing import Iterable, Dict, Set, List, Tuple
 from abc import ABCMeta, abstractmethod
 
 import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.mccmdgen.utils import unreachable
 
 class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
     def optimize(self):
@@ -123,7 +124,7 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                 elif isinstance(subcmd, cmds.ExecuteScoreMatch):
                     slots.add(subcmd.operand)
                 else:
-                    raise TypeError
+                    unreachable()
             for command in commands:
                 for slot in slots:
                     if command.scb_did_assign(slot):

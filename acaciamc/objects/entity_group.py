@@ -8,6 +8,7 @@ from acaciamc.tools import axe, resultlib, method_of, cmethod_of
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.utils import InvalidOpError
 import acaciamc.mccmdgen.cmds as cmds
 from .entity_template import ETemplateDataType
 from .entity_filter import EFilterDataType
@@ -228,7 +229,7 @@ class EntityGroup(VarValue):
             )
             assert expr is self
             return cmds
-        raise TypeError
+        raise InvalidOpError
 
     def isub(self, other):
         if isinstance(other, EntityGroup):
@@ -237,4 +238,4 @@ class EntityGroup(VarValue):
             )
             assert expr is self
             return cmds
-        raise TypeError
+        raise InvalidOpError

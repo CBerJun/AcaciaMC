@@ -11,18 +11,17 @@ __all__ = [
 from typing import List, Union, Dict, Tuple, Hashable, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
-from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.error import *
+from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.ctexpr import CTObj
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 if TYPE_CHECKING:
-    from types import NotImplementedType  # Python 3.10
     from acaciamc.ast import Operator
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import Command
     from acaciamc.mccmdgen.ctexpr import CTExpr
-    from acaciamc.objects.boolean import CompareBase
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
@@ -76,7 +75,7 @@ class AcaciaExpr:
      - iadd, isub, imul, idiv, imod: represents +=, -=, *=, /=, %=
        respectively.
     When you are not satisfied with input operand type, please raise
-    `TypeError`.
+    `InvalidOpError`.
     """
     def __init__(self, type_: "DataType", compiler: "Compiler"):
         super().__init__()
@@ -100,7 +99,7 @@ class AcaciaExpr:
         raw commands. If not implemented, then the object can not be
         formatted in a command.
         """
-        raise NotImplementedError
+        raise InvalidOpError
 
     def iterate(self) -> ITERLIST_T:
         """Implements for-in iteration. Should return an iterable
@@ -110,57 +109,55 @@ class AcaciaExpr:
         NOTE that for-in on an entity group is handled completely
         differently by the generator, so it should never implement this.
         """
-        raise NotImplementedError
+        raise InvalidOpError
 
     def datatype_hook(self) -> "DataType":
         """When this expression is used as a type specifier, this
         method is called to obtain the `DataType`.
         """
-        raise NotImplementedError
+        raise InvalidOpError
 
     def hash(self) -> Hashable:
         """When this expression is used as a map's key, this method
         is called to obtain the hash value.
         """
-        raise NotImplementedError
+        raise InvalidOpError
 
-    def compare(self, op: "Operator", other: "AcaciaExpr") \
-            -> Union["CompareBase", "NotImplementedType"]:
+    def compare(self, op: "Operator", other: "AcaciaExpr") -> "AcaciaExpr":
         """
         Implement comparison operators for this expression.
-        Return value should either be `NotImplemented` or an
-        `AcaciaExpr` with boolean type.
+        Return value should be a boolean expression.
         """
-        return NotImplemented
+        raise InvalidOpError
 
     def add(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def sub(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def mul(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def div(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def mod(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
 
     def radd(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def rsub(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def rmul(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def rdiv(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def rmod(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
 
     def unarypos(self) -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def unaryneg(self) -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
     def unarynot(self) -> "AcaciaExpr":
-        raise TypeError
+        raise InvalidOpError
 
 class ConstExpr(AcaciaExpr, metaclass=ABCMeta):
     @abstractmethod
@@ -181,7 +178,7 @@ class VarValue(AcaciaExpr):
     is_temporary = False  # used as a temporary and is read-only
 
     def swap(self, other: "VarValue") -> CMDLIST_T:
-        raise NotImplementedError
+        raise InvalidOpError
 
     def is_assignable(self) -> bool:
         return not self.is_temporary
@@ -240,17 +237,10 @@ class ConstExprCombined(ConstExpr, CTObj):
         return self
 
     def cmdstr(self):
-        try:
-            return self.cstringify()
-        except TypeError:
-            raise NotImplementedError
+        return self.cstringify()
 
     def compare(self, op: "Operator", other: AcaciaExpr):
-        try:
-            b = self.ccompare(op, other)
-        except TypeError:
-            return NotImplemented
-        if isinstance(b, bool):
-            from acaciamc.objects.boolean import BoolLiteral
-            return BoolLiteral(b, self.compiler)
-        return b
+        from acaciamc.objects.boolean import BoolLiteral
+        b = self.ccompare(op, other)
+        assert isinstance(b, bool)
+        return BoolLiteral(b, self.compiler)

@@ -29,6 +29,7 @@ import inspect
 from acaciamc import objects
 from acaciamc.mccmdgen import ctexpr as acaciact, expr as acacia
 from acaciamc.mccmdgen.datatype import DataType
+from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.error import Error as AcaciaError, ErrorType
 
 if TYPE_CHECKING:
@@ -523,7 +524,7 @@ class Iterator(Converter):
     def convert(self, origin: acacia.AcaciaExpr) -> "acacia.ITERLIST_T":
         try:
             res = origin.iterate()
-        except NotImplementedError:
+        except InvalidOpError:
             self.wrong_argument()
         else:
             return res
@@ -535,7 +536,7 @@ class CTIterator(CTConverter):
     def cconvert(self, origin: acaciact.CTExpr) -> List[acaciact.CTExpr]:
         try:
             res = abs(origin).citerate()
-        except TypeError:
+        except InvalidOpError:
             self.wrong_argument()
         else:
             return res
@@ -761,7 +762,7 @@ def _get_convert(origin: _EXPR_T, converter: _CONVERTER_T):
         else:
             try:
                 origin_rt = abs(origin).to_rt()
-            except TypeError:
+            except InvalidOpError:
                 raise _PreconvertError(_PE_NOT_RT)
             convert = lambda: converter.convert(origin_rt)
     return convert

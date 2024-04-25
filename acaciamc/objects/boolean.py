@@ -45,6 +45,7 @@ from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.utils import InvalidOpError
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
 def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
     """Wildcard `compare` method to compare a bool with a bool."""
     if not (op is Operator.equal_to or op is Operator.unequal_to):
-        raise TypeError
+        raise InvalidOpError
     dep = []
     invert = op is Operator.unequal_to
     if isinstance(other, BoolVar):
@@ -68,7 +69,7 @@ def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
         dep.extend(_dep)
         slot2 = other_var.slot
     else:
-        raise TypeError
+        raise InvalidOpError
     _dep, self_var = to_BoolVar(self)
     dep.extend(_dep)
     return ScbEqualCompare(
@@ -150,7 +151,7 @@ class BoolLiteral(ConstExprCombined):
 
     def ccompare(self, op: Operator, other: Union[AcaciaExpr, "CTObj"]):
         if not (op is Operator.equal_to or op is Operator.unequal_to):
-            raise TypeError
+            raise InvalidOpError
         # For a boolean expression b, b == True is equivalent to "b"
         # b == False is equivalent to "not b"; != is the opposite
         true = self.value == (op is Operator.equal_to)
@@ -160,7 +161,7 @@ class BoolLiteral(ConstExprCombined):
               and self.data_type.is_type_of(other)):
             return other if true else other.unarynot()
         else:
-            raise TypeError
+            raise InvalidOpError
 
     def __str__(self):
         """Return 1 if True, 0 if False."""
@@ -192,9 +193,9 @@ class BoolVar(VarValue, SupportsAsExecute):
 
     def compare(self, op, other):
         if not (op is Operator.equal_to or op is Operator.unequal_to):
-            return NotImplemented
+            raise InvalidOpError
         if not isinstance(other, BoolVar):
-            return NotImplemented
+            raise InvalidOpError
         invert = op is Operator.unequal_to
         return ScbEqualCompare(self.slot, other.slot, self.compiler, invert)
 
@@ -233,9 +234,9 @@ class NotBoolVar(AcaciaExpr):
 
     def compare(self, op, other):
         if not (op is Operator.equal_to or op is Operator.unequal_to):
-            return NotImplemented
+            raise InvalidOpError
         if not isinstance(other, (BoolVar, NotBoolVar)):
-            return NotImplemented
+            raise InvalidOpError
         invert = (op is Operator.equal_to) == (isinstance(other, BoolVar))
         return ScbEqualCompare(self.slot, other.slot, self.compiler, invert)
 

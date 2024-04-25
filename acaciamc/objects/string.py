@@ -5,6 +5,7 @@ __all__ = ['StringDataType', 'String']
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 class StringDataType(DefaultDataType):
     name = 'str'
@@ -28,4 +29,4 @@ class String(ConstExprCombined):
         """Adding strings will connect them."""
         if isinstance(other, String):
             return String(self.value + other.value, self.compiler)
-        raise TypeError
+        raise InvalidOpError

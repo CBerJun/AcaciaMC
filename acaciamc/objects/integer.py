@@ -48,6 +48,7 @@ from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.utils import InvalidOpError, unreachable
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -215,7 +216,7 @@ class IntLiteral(ConstExprCombined):
     def ccompare(self, op, other: Union[AcaciaExpr, "CTObj"]) -> bool:
         if isinstance(other, IntLiteral):
             return COMPOP2PYOP[op](self.value, other.value)
-        raise TypeError
+        raise InvalidOpError
 
     ## UNARY OPERATORS
 
@@ -234,7 +235,7 @@ class IntLiteral(ConstExprCombined):
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
             return IntLiteral(v, self.compiler)
-        raise TypeError
+        raise InvalidOpError
 
     cadd = partialmethod(_bin_op, '+')
     csub = partialmethod(_bin_op, '-')
@@ -258,7 +259,7 @@ class IntVar(VarValue):
 
     def compare(self, op, other):
         if not other.data_type.matches_cls(IntDataType):
-            return NotImplemented
+            raise InvalidOpError
         if isinstance(other, IntLiteral):
             return ScbMatchesCompare(
                 [], self.slot, op, other.value, self.compiler
@@ -282,7 +283,7 @@ class IntVar(VarValue):
         # `name` is method name
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(IntOpGroup.from_intexpr(self), name)(other)
-        raise TypeError
+        raise InvalidOpError
 
     add = partialmethod(_bin_op, 'add')
     sub = partialmethod(_bin_op, 'sub')
@@ -297,7 +298,7 @@ class IntVar(VarValue):
     def _r_bin_op(self, name, other):
         if isinstance(other, IntLiteral):
             return getattr(IntOpGroup.from_intexpr(other), name)(self)
-        raise TypeError
+        raise InvalidOpError
 
     radd = partialmethod(_r_bin_op, 'add')
     rsub = partialmethod(_r_bin_op, 'sub')
@@ -318,7 +319,7 @@ class IntVar(VarValue):
             )]
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator)
-        raise TypeError
+        raise InvalidOpError
 
     def _imul_div_mod(self, other, operator: str) -> list:
         """Implementation of imul, idiv, imod."""
@@ -333,7 +334,7 @@ class IntVar(VarValue):
             )]
         elif isinstance(other, IntOpGroup):
             return self._aug_IntOpGroup(other, operator)
-        raise TypeError
+        raise InvalidOpError
 
     def _aug_IntOpGroup(self, other: "IntOpGroup", operator: str):
         """Implementation for augmented assigns where `other` is
@@ -452,6 +453,10 @@ class IntOpGroup(AcaciaExpr):
 
     @classmethod
     def from_intexpr(cls, init: AcaciaExpr) -> "IntOpGroup":
+        """
+        Create an `IntOpGroup` that sets the value to `init`.
+        `init` must be int type.
+        """
         if isinstance(init, IntOpGroup):
             return init
         res = cls(None, init.compiler)
@@ -460,7 +465,7 @@ class IntOpGroup(AcaciaExpr):
         elif isinstance(init, IntVar):
             res.add_op(IntSetVar(init.slot))
         else:
-            raise TypeError
+            unreachable()
         return res
 
     def export(self, var: IntVar):
@@ -487,7 +492,7 @@ class IntOpGroup(AcaciaExpr):
 
     def compare(self, op, other):
         if not other.data_type.matches_cls(IntDataType):
-            return NotImplemented
+            raise InvalidOpError
         if isinstance(other, IntLiteral):
             commands, var = to_IntVar(self)
             return ScbMatchesCompare(
@@ -521,7 +526,7 @@ class IntOpGroup(AcaciaExpr):
             res.add_op(IntCmdOp(other.export(tmp)))
             res.add_op(IntOpVar(operator, tmp.slot))
         else:
-            raise TypeError
+            raise InvalidOpError
         return res
 
     add = partialmethod(_bin_op, '+')
@@ -537,14 +542,14 @@ class IntOpGroup(AcaciaExpr):
         # a (+ or *) b is b (+ or *) a
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(self, name)(other)
-        raise TypeError
+        raise InvalidOpError
 
     def _r_sub_div_mod(self, other, name):
         # Convert `other` to `IntOpGroup` and use this to handle this
         # operation.
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(IntOpGroup.from_intexpr(other), name)(self)
-        raise TypeError
+        raise InvalidOpError
 
     radd = partialmethod(_r_add_mul, 'add')
     rmul = partialmethod(_r_add_mul, 'mul')

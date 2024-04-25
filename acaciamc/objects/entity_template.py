@@ -12,6 +12,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.utils import unreachable
 from .entity import TaggedEntity, EntityDataType
 from .functions import (
     BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction
@@ -81,7 +82,7 @@ class _MethodDispatcher:
                     bound.add_implementation(template, impl, get_self)
                 break
         else:
-            raise ValueError("Base not found")
+            unreachable("Base not found")
 
     def bind_to(self, entity: "_EntityBase"):
         res = BoundVirtualMethod(
