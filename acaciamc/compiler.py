@@ -130,8 +130,7 @@ class Compiler:
         self.output_mgr.new_file(
             self.file_tick, self.output_mgr.tick_file_path
         )
-        self.current_generator = None  # the Generator that is running
-        # vars to record the resources that are applied
+        self.current_generator: Optional[Generator] = None
         self._interface_paths: Dict[str, SourceLocation] = {}
         self._score_max = 0  # max id of score allocated
         self._scoreboard_max = 0  # max id of scoreboard allocated
@@ -153,11 +152,12 @@ class Compiler:
             field_types={}, field_metas={}, methods={},
             method_qualifiers={}, parents=[], metas={}, compiler=self
         )
-        self.builtins = self.get_module(ModuleMeta("builtins")).attribute_table
+        builtin_mod = self.get_module(ModuleMeta("builtins"), self.file_main)
+        self.builtins = builtin_mod.attribute_table
 
         # --- START COMPILE ---
         ## start
-        with self._load_generator(main_path) as generator:
+        with self._load_generator(main_path, self.file_main) as generator:
             generator.parse()
         ## callback
         for cb in self._before_finish_cbs:
@@ -308,7 +308,8 @@ class Compiler:
                     return path
         return None
 
-    def parse_module(self, meta: ModuleMeta) -> Tuple[AcaciaExpr, str]:
+    def parse_module(self, meta: ModuleMeta,
+                     mcfunc: cmds.MCFunctionFile) -> Tuple[AcaciaExpr, str]:
         """Parse and get a module and its path."""
         path = self.find_module(meta)
         if path is None:
@@ -326,19 +327,21 @@ class Compiler:
             _, ext = os.path.splitext(path)
             if ext == ".aca":
                 # Parse the Acacia module
-                with self._load_generator(path) as generator:
+                with self._load_generator(path, mcfunc) as generator:
                     mod = generator.parse_as_module()
             elif ext == ".py":
                 # Parse the binary module
                 mod = BinaryModule(path, self)
+                mcfunc.extend(mod.execute())
             self._cached_modules[path] = mod
         return (mod, path)
 
-    def get_module(self, meta: ModuleMeta):
+    def get_module(self, meta: ModuleMeta,
+                   mcfunc: cmds.MCFunctionFile) -> AcaciaExpr:
         """Parse a module meta and just return the module
         An API for binary module developing.
         """
-        return self.parse_module(meta)[0]
+        return self.parse_module(meta, mcfunc)[0]
 
     def lookup_interface(self, path: str) -> Optional[SourceLocation]:
         """Return the location of the interface if it exists."""
@@ -379,7 +382,7 @@ class Compiler:
         return res
 
     @contextmanager
-    def _load_generator(self, path: str):
+    def _load_generator(self, path: str, mcfunc: cmds.MCFunctionFile):
         """Load the Generator of an Acacia source and store it at
         `self.current_generator`.
         """
@@ -401,7 +404,7 @@ class Compiler:
         finally:
             src_file.close()
         self.current_generator = Generator(
-            node=node, main_file=self.file_main,
+            node=node, main_file=mcfunc,
             file_name=path, compiler=self
         )
         yield self.current_generator

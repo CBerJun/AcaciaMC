@@ -180,8 +180,9 @@ def _floordiv(compiler, x, y):
 
 def acacia_build(compiler: "Compiler"):
     global _math
-    _math = compiler.get_module(ModuleMeta("_math"))
-    return {
+    f = cmds.MCFunctionFile()
+    _math = compiler.get_module(ModuleMeta("_math"), f)
+    attributes = {
         'randint': BinaryFunction(_randint, compiler),
         'pow': BinaryCTFunction(_pow, compiler),
         'min': BinaryCTFunction(_min, compiler),
@@ -189,3 +190,4 @@ def acacia_build(compiler: "Compiler"):
         'mod': BinaryCTFunction(_mod, compiler),
         'floordiv': BinaryCTFunction(_floordiv, compiler),
     }
+    return BuiltModule(attributes, f.commands)

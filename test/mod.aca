@@ -7,6 +7,11 @@
 # `module.aca` has imported `print`, so here it should use cache
 import print  # Names imported are not exported
 
+#* Run code on module level *#
+print.tell("Hello world!")
+
+#* Functions *#
+
 def _internal() -> int:
     # Names starting with an underscore is not exported
     result 0

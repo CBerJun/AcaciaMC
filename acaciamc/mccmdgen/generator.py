@@ -674,7 +674,7 @@ class Generator(ASTVisitor):
 
     def module_traced(self, meta: ModuleMeta, lineno: int, col: int):
         try:
-            res = self.compiler.parse_module(meta)
+            res = self.compiler.parse_module(meta, self.current_file)
         except Error as err:
             err.add_frame(ErrFrame(
                 SourceLocation(self.file_name, (lineno, col)),
