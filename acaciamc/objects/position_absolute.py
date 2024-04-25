@@ -3,10 +3,10 @@ Most important: it is compatible with both `Pos` and `Offset`.
 """
 
 import acaciamc.mccmdgen.cmds as cmds
-from acaciamc.ctexec.expr import CTDataType
-from acaciamc.tools import axe, cmethod_of
+from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.tools import axe, cmethod_of, transform_immutable
 from acaciamc.constants import XYZ
-from .base import *
 from .types import Type
 from .position import PosDataType, Position, ctdt_position
 from .position_offset import (

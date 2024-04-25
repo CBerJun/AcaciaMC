@@ -35,7 +35,6 @@ from abc import ABCMeta, abstractmethod
 from functools import partialmethod
 import operator
 
-from .base import *
 from .types import Type
 from .boolean import (
     CompareBase, BoolDataType, BoolLiteral, ScbMatchesCompare, to_BoolVar
@@ -44,16 +43,17 @@ from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
 from acaciamc.tools import axe, resultlib, cmethod_of
 from acaciamc.ast import Operator, COMPOP_INVERT
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
-    from acaciamc.ctexec.expr import CTObj
+    from acaciamc.mccmdgen.ctexpr import CTObj
 
 STR2SCBOP = {
     "+": cmds.ScbOp.ADD_EQ,

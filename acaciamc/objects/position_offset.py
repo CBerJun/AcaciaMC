@@ -11,10 +11,10 @@ from typing import List
 from enum import Enum
 
 from acaciamc.error import *
-from acaciamc.tools import axe, cmethod_of
+from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
-from .base import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 from .types import Type
 
 class CoordinateType(Enum):

@@ -15,9 +15,10 @@ except ImportError:
             yield last, current
             last = current
 
-from acaciamc.mccmdgen.expression import *
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, cmethod_of, method_of
 import acaciamc.mccmdgen.cmds as cmds

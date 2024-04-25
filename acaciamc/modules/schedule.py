@@ -44,11 +44,12 @@ result:
 
 from typing import TYPE_CHECKING
 
-from acaciamc.mccmdgen.expression import *
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.ast import Operator
-from acaciamc.tools import axe, resultlib, cmethod_of, method_of
+from acaciamc.tools import axe, resultlib, method_of
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:

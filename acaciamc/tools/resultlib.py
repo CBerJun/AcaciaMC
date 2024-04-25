@@ -4,31 +4,32 @@ __all__ = ["Result", "commands", "literal", "nothing"]
 
 from typing import NamedTuple, Union, TYPE_CHECKING
 
-# `import acaciamc.mccmdgen.expression as acacia` won't work in 3.6
+# `import acaciamc.objects as objects` won't work in 3.6
 # because of a Python bug (see https://bugs.python.org/issue23203)
-from acaciamc.mccmdgen import expression as acacia
+from acaciamc import objects
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.expr import AcaciaExpr, CMDLIST_T
 
 class Result(NamedTuple):
     """Return value of a binary function implementation."""
-    value: acacia.AcaciaExpr
-    commands: acacia.CMDLIST_T
+    value: "AcaciaExpr"
+    commands: "CMDLIST_T"
 
-def commands(cmds: acacia.CMDLIST_T, compiler: "Compiler") -> Result:
-    return Result(acacia.NoneLiteral(compiler), cmds)
+def commands(cmds: "CMDLIST_T", compiler: "Compiler") -> Result:
+    return Result(objects.NoneLiteral(compiler), cmds)
 
 def literal(value: Union[bool, int, str, float, None],
-            compiler: "Compiler") -> acacia.AcaciaExpr:
+            compiler: "Compiler") -> "AcaciaExpr":
     if isinstance(value, bool):  # `bool` in front of `int`
-        return acacia.BoolLiteral(value, compiler)
+        return objects.BoolLiteral(value, compiler)
     elif isinstance(value, int):
-        return acacia.IntLiteral(value, compiler)
+        return objects.IntLiteral(value, compiler)
     elif isinstance(value, str):
-        return acacia.String(value, compiler)
+        return objects.String(value, compiler)
     elif isinstance(value, float):
-        return acacia.Float(value, compiler)
+        return objects.Float(value, compiler)
     elif value is None:
-        return acacia.NoneLiteral(compiler)
+        return objects.NoneLiteral(compiler)
     raise TypeError("unexpected value %r" % value)

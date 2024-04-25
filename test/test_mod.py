@@ -5,7 +5,7 @@ See "test/module.aca".
 
 from typing import TYPE_CHECKING
 from acaciamc.tools import axe, resultlib
-from acaciamc.mccmdgen.expression import *
+from acaciamc.objects import *
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler

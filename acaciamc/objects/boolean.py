@@ -36,21 +36,21 @@ __all__ = [
 from typing import List, Tuple, Dict, Optional, Union, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
-from .base import *
 from .types import Type
 from acaciamc.ast import Operator, COMPOP_INVERT
 from acaciamc.error import *
 from acaciamc.constants import INT_MAX, INT_MIN
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
     from acaciamc.compiler import Compiler
-    from acaciamc.ctexec.expr import CTObj
+    from acaciamc.mccmdgen.ctexpr import CTObj
 
 def _bool_compare(self: AcaciaExpr, op: Operator, other: AcaciaExpr):
     """Wildcard `compare` method to compare a bool with a bool."""

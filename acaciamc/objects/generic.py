@@ -3,8 +3,8 @@
 __all__ = ["GenericDataType", "BinaryGeneric"]
 
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
-from .base import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 
 class GenericDataType(DefaultDataType):
     name = 'generic'

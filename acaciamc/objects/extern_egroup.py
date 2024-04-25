@@ -43,7 +43,7 @@ __all__ = [
 from typing import TYPE_CHECKING
 
 from acaciamc.tools import axe, resultlib, cmethod_of
-from .base import *
+from acaciamc.mccmdgen.expr import *
 from .entity_group import *
 from .entity_template import ETemplateDataType
 from .functions import (

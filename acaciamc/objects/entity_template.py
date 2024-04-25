@@ -10,8 +10,8 @@ import itertools
 from acaciamc.ast import MethodQualifier
 from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
-from acaciamc.ctexec.expr import CTDataType
-from .base import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 from .entity import TaggedEntity, EntityDataType
 from .functions import (
     BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction

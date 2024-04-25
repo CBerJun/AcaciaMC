@@ -52,7 +52,8 @@ __all__ = [
 ]
 
 from typing import (
-    TYPE_CHECKING, List, Dict, Union, Callable, Tuple, Optional
+    TYPE_CHECKING, List, Dict, Union, Callable, Tuple, Optional, Generic,
+    TypeVar
 )
 from abc import abstractmethod
 
@@ -60,11 +61,11 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.ast import FuncPortType
 from acaciamc.mccmdgen.mcselector import MCSelector
-from acaciamc.ctexec.expr import (
+from acaciamc.mccmdgen.ctexpr import (
     CTObj, CTObjPtr, CTDataType, CTExpr, CTCallable
 )
+from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
-from .base import *
 from .none import NoneLiteral
 
 if TYPE_CHECKING:
@@ -72,9 +73,71 @@ if TYPE_CHECKING:
     from acaciamc.ast import InlineFuncDef, ConstFuncDef
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.mccmdgen.generator import Generator, Context
-    from .base import ARGS_T, KEYWORDS_T, CALLRET_T
     from .entity import _EntityBase, TaggedEntity
     from .entity_template import EntityTemplate
+
+T = TypeVar("T")
+DT = TypeVar("DT")
+IT = TypeVar("IT")
+
+class ArgumentHandler(Generic[IT, T, DT]):
+    """A tool to match function arguments against a given definition."""
+    def __init__(self, args: List[str], arg_types: Dict[str, Optional[DT]],
+                 arg_defaults: Dict[str, Optional[T]]):
+        """`args`, `arg_types` and `arg_defaults` decide the expected
+        pattern.
+        """
+        self.args = args
+        self.arg_types = arg_types
+        self.arg_defaults = arg_defaults
+        # Throw away arguments that have no default value in
+        # `arg_defaults`.
+        for arg, value in self.arg_defaults.copy().items():
+            if value is None:
+                del self.arg_defaults[arg]
+        self.ARG_LEN = len(self.args)
+
+    def preconvert(self, arg: str, value: IT) -> T:
+        # Can be omitted if `IT` is same as `T`.
+        return value
+
+    def type_check(self, arg: str, value: T, type_: DT) -> None:
+        raise NotImplementedError
+
+    def __type_check(self, arg: str, value: T, type_: Optional[DT]) -> None:
+        if type_ is not None:
+            self.type_check(arg, value, type_)
+
+    def match(self, args: List[IT], keywords: Dict[str, IT]) -> Dict[str, T]:
+        """Match the expected pattern with given call arguments.
+        Return a `dict` mapping names to argument value.
+        """
+        if len(args) > self.ARG_LEN:
+            raise Error(ErrorType.TOO_MANY_ARGS)
+        res = dict.fromkeys(self.args)
+        # positioned
+        for i, value in enumerate(args):
+            arg = self.args[i]
+            value = self.preconvert(arg, value)
+            self.__type_check(arg, value, self.arg_types[arg])
+            res[arg] = value
+        # keyword
+        for arg, value in keywords.items():
+            if arg not in self.args:
+                raise Error(ErrorType.UNEXPECTED_KEYWORD_ARG, arg=arg)
+            if res[arg] is not None:
+                raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=arg)
+            value = self.preconvert(arg, value)
+            self.__type_check(arg, value, self.arg_types[arg])
+            res[arg] = value
+        # if any args are missing use default if exists, else error
+        for arg, value in res.copy().items():
+            if value is None:
+                if arg in self.arg_defaults:
+                    res[arg] = self.arg_defaults[arg]
+                else:
+                    raise Error(ErrorType.MISSING_ARG, arg=arg)
+        return res
 
 class AcaciaArgHandler(ArgumentHandler[AcaciaExpr, AcaciaExpr, "DataType"]):
     def type_check(self, arg: str, value: AcaciaExpr, tp: "DataType"):
@@ -116,7 +179,7 @@ class AcaciaFunction(ConstExprCombined, AcaciaCallable):
             self.source = source
         self.func_repr = self.name
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         res = []
         # Parse args
         arguments = self.arg_handler.match(args, keywords)
@@ -155,14 +218,14 @@ class InlineFunction(ConstExprCombined, AcaciaCallable):
             self.source = source
         self.func_repr = self.name
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         return self.owner.call_inline_func(self, args, keywords)
 
 def _bin_call(impl, compiler, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
     res = impl(compiler, args, keywords)
     return _handle_impl_res(res, compiler)
 
-def _handle_impl_res(res: Union["CALLRET_T", "AcaciaExpr", None], compiler):
+def _handle_impl_res(res: Union[CALLRET_T, AcaciaExpr, None], compiler):
     if isinstance(res, tuple):  # CALLRET_T
         return res
     elif isinstance(res, AcaciaExpr):
@@ -190,8 +253,8 @@ class BinaryFunction(ConstExprCombined, AcaciaCallable):
     def __init__(
             self,
             implementation: Callable[
-                ["Compiler", "ARGS_T", "KEYWORDS_T"],
-                Union["CALLRET_T", AcaciaExpr, None]
+                ["Compiler", ARGS_T, KEYWORDS_T],
+                Union[CALLRET_T, AcaciaExpr, None]
             ],
             compiler):
         """implementation: it handles a call to this binary function.
@@ -250,7 +313,7 @@ class AcaciaCTFunction(ConstExprCombined, AcaciaCallable, CTCallable):
             self.source = source
         self.func_repr = self.name
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         arg2value = self.arg_handler.match(args, keywords)
         r = abs(self.owner.ccall_const_func(self, arg2value))
         try:
@@ -298,14 +361,14 @@ class BinaryCTFunction(BinaryCTOnlyFunction, ConstExprCombined,
         self, impl: Callable[
             ["Compiler", List[Union[CTExpr, AcaciaExpr]],
              Dict[str, Union[CTExpr, AcaciaExpr]]],
-            Union[None, CTExpr, AcaciaExpr, "CALLRET_T"]
+            Union[None, CTExpr, AcaciaExpr, CALLRET_T]
         ],
         compiler
     ):
         super().__init__(impl, compiler, FunctionDataType(compiler), compiler)
         self.func_repr = "<binary function>"
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         res = self.impl(self.compiler, args, keywords)
         if isinstance(res, (CTObj, CTObjPtr)):
             res = abs(res)
@@ -334,7 +397,7 @@ class _BoundMethod(ConstExprCombined, AcaciaCallable):
         self.func_repr = self.name
         self.source = self.definition.source
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         if not self.is_inline:
             result, commands = self.definition.call(args, keywords)
         else:
@@ -364,7 +427,7 @@ class BoundMethod(ConstExprCombined, AcaciaCallable):
         self.self_var_getter = get_self_var
         assert (get_self_var is None) == self.content.is_inline
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         result, commands = self.content.call(args, keywords)
         if not self.content.is_inline:
             commands[:0] = self.content.object.export(self.self_var_getter())
@@ -384,7 +447,7 @@ class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
                 Optional[Callable[[], "TaggedEntity"]]
             ]] = {}
         self.files: \
-            List[Tuple["ARGS_T", "KEYWORDS_T", cmds.MCFunctionFile]] = []
+            List[Tuple[ARGS_T, KEYWORDS_T, cmds.MCFunctionFile]] = []
         self.result_var = result_var
         self.func_repr = self.name
         self.compiler.before_finish(self._generate)
@@ -402,7 +465,7 @@ class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
             )
             self.impls[definition] = (bound_method, [template], get_self_var)
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         file = cmds.MCFunctionFile()
         self.files.append((args, keywords, file))
         self.compiler.add_file(file)
@@ -414,7 +477,7 @@ class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
         ]
 
     def _generate(self):
-        def _call_bm(args: "ARGS_T", keywords: "KEYWORDS_T",
+        def _call_bm(args: ARGS_T, keywords: KEYWORDS_T,
                      bm: _BoundMethod) -> CMDLIST_T:
             result, commands = bm.call_withframe(
                 args, keywords,
@@ -486,14 +549,14 @@ class ConstructorFunction(AcaciaCallable):
     # `var_type` defaults to call `datatype_hook` if it is implemented,
     # otherwise subclasses have to implement `var_type`.
 
-    def call(self, args: "ARGS_T", keywords: "KEYWORDS_T") -> "CALLRET_T":
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         instance = self.get_var_type().new_var()
         commands = self.initialize(instance, args, keywords)
         return instance, commands
 
     @abstractmethod
-    def initialize(self, instance, args: "ARGS_T",
-                   keywords: "KEYWORDS_T") -> CMDLIST_T:
+    def initialize(self, instance, args: ARGS_T,
+                   keywords: KEYWORDS_T) -> CMDLIST_T:
         pass
 
     def get_var_type(self) -> Storable:

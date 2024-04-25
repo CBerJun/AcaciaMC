@@ -6,8 +6,8 @@ from functools import partialmethod
 
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.error import Error, ErrorType
-from acaciamc.ctexec.expr import CTDataType
-from .base import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 from .integer import IntLiteral
 
 class FloatDataType(DefaultDataType):

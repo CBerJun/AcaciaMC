@@ -1,5 +1,5 @@
-# Export useful things
-from .base import *
+"""All the core objects in Acacia are defined here."""
+
 from .types import *
 from .functions import *
 from .module import *

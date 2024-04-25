@@ -7,10 +7,10 @@ __all__ = ['TypeDataType', 'Type']
 from typing import TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
-from .base import *
 from acaciamc.error import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType, CTCallable
+from acaciamc.mccmdgen.ctexpr import CTDataType, CTCallable
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler

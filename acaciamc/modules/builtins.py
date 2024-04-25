@@ -1,15 +1,16 @@
 from typing import Union, TYPE_CHECKING
 
-from acaciamc.mccmdgen.expression import *
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.tools import axe, resultlib
 from acaciamc.error import Error, ErrorType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
-    from acaciamc.mccmdgen.expression.entity import _EntityBase
+    from acaciamc.objects.entity import _EntityBase
 
 class AnyDataType(DataType):
     def __str__(self) -> str:

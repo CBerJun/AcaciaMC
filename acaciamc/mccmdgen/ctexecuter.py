@@ -5,9 +5,9 @@ from contextlib import contextmanager
 
 from acaciamc.ast import *
 from acaciamc.error import Error, ErrorType, SourceLocation
-from acaciamc.ctexec.expr import *
+from acaciamc.mccmdgen.ctexpr import *
 from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
-from acaciamc.mccmdgen.expression import (
+from acaciamc.objects import (
     IntLiteral, BoolLiteral, String, CTList, CTMap, NoneLiteral, Float
 )
 

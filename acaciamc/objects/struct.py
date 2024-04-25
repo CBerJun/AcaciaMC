@@ -4,7 +4,7 @@ __all__ = ["StructDataType", "Struct"]
 
 from typing import TYPE_CHECKING, Dict, Tuple
 
-from .base import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
 from acaciamc.error import *
 

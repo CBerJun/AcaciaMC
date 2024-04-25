@@ -11,7 +11,7 @@ from acaciamc.error import traced_call
 if TYPE_CHECKING:
     from acaciamc.ast import Operator
     from acaciamc.error import SourceLocation
-    from acaciamc.mccmdgen.expression.base import ConstExpr
+    from acaciamc.mccmdgen.expr import ConstExpr
 
 class CTDataType:
     def __init__(self, name: str, bases: Iterable["CTDataType"] = ()):

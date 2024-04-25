@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, List
 from acaciamc.tools import axe, resultlib, method_of, cmethod_of
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
+from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
-from .base import *
 from .entity_template import ETemplateDataType
 from .entity_filter import EFilterDataType
 from .entity import EntityDataType, EntityReference

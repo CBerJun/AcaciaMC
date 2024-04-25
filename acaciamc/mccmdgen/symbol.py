@@ -4,16 +4,16 @@ __all__ = ['CTRTConversionError', 'SymbolTable']
 
 from typing import TYPE_CHECKING, Optional, Dict, Set, Union, Iterable
 
-from acaciamc.mccmdgen import expression
+from acaciamc.mccmdgen import expr
 
 if TYPE_CHECKING:
-    from acaciamc.ctexec.expr import CTExpr
-    from acaciamc.mccmdgen.expression import AcaciaExpr
+    from acaciamc.mccmdgen.ctexpr import CTExpr
+    from acaciamc.mccmdgen.expr import AcaciaExpr
 
 class CTRTConversionError(Exception):
-    def __init__(self, expr: Union["AcaciaExpr", "CTExpr"]):
-        super().__init__(expr)
-        self.expr = expr
+    def __init__(self, obj: Union["AcaciaExpr", "CTExpr"]):
+        super().__init__(obj)
+        self.expr = obj
 
 class SymbolTable:
     def __init__(self, outer: Optional["SymbolTable"] = None,
@@ -47,7 +47,7 @@ class SymbolTable:
         """Look up a name; if not found, return None."""
         if name in self._table:
             res = self._table[name]
-            if isinstance(res, expression.AcaciaExpr):
+            if isinstance(res, expr.AcaciaExpr):
                 return res
             try:
                 return abs(res).to_rt()
@@ -66,9 +66,9 @@ class SymbolTable:
     def clookup(self, name: str, use_builtins=True, use_outer=True):
         if name in self._table:
             res = self._table[name]
-            if isinstance(res, expression.ConstExpr):
+            if isinstance(res, expr.ConstExpr):
                 return res.to_ctexpr()
-            elif isinstance(res, expression.AcaciaExpr):
+            elif isinstance(res, expr.AcaciaExpr):
                 raise CTRTConversionError(res)
             return res
         if use_outer and self.outer:

@@ -4,21 +4,16 @@ __all__ = [
     # Base classes
     'AcaciaExpr', 'VarValue', 'AcaciaCallable',
     'ConstExpr', 'ConstExprCombined',
-    # Utils
-    'ArgumentHandler', 'ImmutableMixin', 'transform_immutable',
     # Type checking
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T', 'CMDLIST_T',
 ]
 
-from typing import (
-    List, Union, Dict, Tuple, Callable, Hashable, Optional,
-    Generic, TypeVar, TYPE_CHECKING
-)
+from typing import List, Union, Dict, Tuple, Hashable, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.error import *
-from acaciamc.ctexec.expr import CTObj
+from acaciamc.mccmdgen.ctexpr import CTObj
 
 if TYPE_CHECKING:
     from types import NotImplementedType  # Python 3.10
@@ -26,8 +21,8 @@ if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.cmds import Command
-    from acaciamc.ctexec.expr import CTExpr
-    from .boolean import CompareBase
+    from acaciamc.mccmdgen.ctexpr import CTExpr
+    from acaciamc.objects.boolean import CompareBase
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
@@ -172,69 +167,6 @@ class ConstExpr(AcaciaExpr, metaclass=ABCMeta):
     def to_ctexpr(self) -> "CTExpr":
         pass
 
-T = TypeVar("T")
-DT = TypeVar("DT")
-IT = TypeVar("IT")
-
-class ArgumentHandler(Generic[IT, T, DT]):
-    """A tool to match function arguments against a given definition."""
-    def __init__(self, args: List[str], arg_types: Dict[str, Optional[DT]],
-                 arg_defaults: Dict[str, Optional[T]]):
-        """`args`, `arg_types` and `arg_defaults` decide the expected
-        pattern.
-        """
-        self.args = args
-        self.arg_types = arg_types
-        self.arg_defaults = arg_defaults
-        # Throw away arguments that have no default value in
-        # `arg_defaults`.
-        for arg, value in self.arg_defaults.copy().items():
-            if value is None:
-                del self.arg_defaults[arg]
-        self.ARG_LEN = len(self.args)
-
-    def preconvert(self, arg: str, value: IT) -> T:
-        # Can be omitted if `IT` is same as `T`.
-        return value
-
-    def type_check(self, arg: str, value: T, type_: DT) -> None:
-        raise NotImplementedError
-
-    def __type_check(self, arg: str, value: T, type_: Optional[DT]) -> None:
-        if type_ is not None:
-            self.type_check(arg, value, type_)
-
-    def match(self, args: List[IT], keywords: Dict[str, IT]) -> Dict[str, T]:
-        """Match the expected pattern with given call arguments.
-        Return a `dict` mapping names to argument value.
-        """
-        if len(args) > self.ARG_LEN:
-            raise Error(ErrorType.TOO_MANY_ARGS)
-        res = dict.fromkeys(self.args)
-        # positioned
-        for i, value in enumerate(args):
-            arg = self.args[i]
-            value = self.preconvert(arg, value)
-            self.__type_check(arg, value, self.arg_types[arg])
-            res[arg] = value
-        # keyword
-        for arg, value in keywords.items():
-            if arg not in self.args:
-                raise Error(ErrorType.UNEXPECTED_KEYWORD_ARG, arg=arg)
-            if res[arg] is not None:
-                raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=arg)
-            value = self.preconvert(arg, value)
-            self.__type_check(arg, value, self.arg_types[arg])
-            res[arg] = value
-        # if any args are missing use default if exists, else error
-        for arg, value in res.copy().items():
-            if value is None:
-                if arg in self.arg_defaults:
-                    res[arg] = self.arg_defaults[arg]
-                else:
-                    raise Error(ErrorType.MISSING_ARG, arg=arg)
-        return res
-
 class VarValue(AcaciaExpr):
     """
     `VarValue`s are special `AcaciaExpr`s that can be assigned to. It
@@ -284,25 +216,6 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
         """
         pass
 
-class ImmutableMixin:
-    """An `AcaciaExpr` that can't be changed and only allows
-    transformations into another object of same type.
-    """
-    def copy(self) -> "ImmutableMixin":
-        raise NotImplementedError
-
-def transform_immutable(self: ImmutableMixin):
-    """Return a decorator for binary function implementations that
-    transforms an immutable expression to another one.
-    """
-    if not isinstance(self, ImmutableMixin):
-        raise TypeError("can't transform non-ImmutableMixin")
-    def _decorator(func: Callable):
-        def _decorated(*args, **kwds):
-            return func(self.copy(), *args, **kwds)
-        return _decorated
-    return _decorator
-
 class ConstExprCombined(ConstExpr, CTObj):
     def __init_subclass__(cls) -> None:
         for meth in (
@@ -338,6 +251,6 @@ class ConstExprCombined(ConstExpr, CTObj):
         except TypeError:
             return NotImplemented
         if isinstance(b, bool):
-            from .boolean import BoolLiteral
+            from acaciamc.objects.boolean import BoolLiteral
             return BoolLiteral(b, self.compiler)
         return b

@@ -2,9 +2,9 @@
 
 __all__ = ['StringDataType', 'String']
 
-from .base import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 
 class StringDataType(DefaultDataType):
     name = 'str'

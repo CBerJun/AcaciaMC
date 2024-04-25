@@ -2,9 +2,9 @@
 
 __all__ = ['NoneDataType', 'NoneLiteral']
 
-from .base import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 
 class NoneDataType(DefaultDataType, Storable):
     name = 'None'

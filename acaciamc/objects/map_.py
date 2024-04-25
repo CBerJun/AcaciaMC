@@ -8,7 +8,6 @@ __all__ = ["MapType", "MapDataType", "Map", "CTConstMap", "CTMap"]
 from typing import Dict, Hashable, Iterable, Optional, Tuple, List
 from itertools import repeat
 
-from .base import *
 from .types import Type
 from .none import NoneLiteral
 from .list_ import AcaciaList, CTList, list2ct
@@ -16,8 +15,9 @@ from .boolean import BoolLiteral
 from .integer import IntLiteral
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.error import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTObj, CTDataType, CTObjPtr, CTExpr
+from acaciamc.mccmdgen.ctexpr import CTObj, CTDataType, CTObjPtr, CTExpr
 
 class MapDataType(DefaultDataType):
     name = "const_map"

@@ -24,10 +24,10 @@ from itertools import chain
 from functools import partial
 import inspect
 
-# `import acaciamc.mccmdgen.expression as acacia` won't work in 3.6
+# `import acaciamc.objects as objects` won't work in 3.6
 # because of a Python bug (see https://bugs.python.org/issue23203)
-from acaciamc.mccmdgen import expression as acacia
-from acaciamc.ctexec import expr as acaciact
+from acaciamc import objects
+from acaciamc.mccmdgen import ctexpr as acaciact, expr as acacia
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.error import Error as AcaciaError, ErrorType
 
@@ -396,14 +396,14 @@ class LiteralInt(UTyped):
     Default value should also be given as Python `int`.
     """
     def __init__(self):
-        super().__init__(acacia.IntDataType, acacia.integer.ctdt_int)
+        super().__init__(objects.IntDataType, objects.integer.ctdt_int)
 
     def get_show_name(self) -> str:
         return "int (literal)"
 
     def uconvert(self, origin) -> int:
         origin = super().uconvert(origin)
-        if isinstance(origin, acacia.IntLiteral):
+        if isinstance(origin, objects.IntLiteral):
             return origin.value
         self.wrong_argument()
 
@@ -413,8 +413,8 @@ class LiteralFloat(UMultityped):
     """
     def __init__(self):
         super().__init__(
-            (acacia.IntDataType, acacia.FloatDataType),
-            (acacia.integer.ctdt_int, acacia.float_.ctdt_float)
+            (objects.IntDataType, objects.FloatDataType),
+            (objects.integer.ctdt_int, objects.float_.ctdt_float)
         )
 
     def get_show_name(self) -> str:
@@ -422,9 +422,9 @@ class LiteralFloat(UMultityped):
 
     def uconvert(self, origin) -> float:
         origin = super().uconvert(origin)
-        if isinstance(origin, acacia.IntLiteral):
+        if isinstance(origin, objects.IntLiteral):
             return float(origin.value)
-        elif isinstance(origin, acacia.Float):
+        elif isinstance(origin, objects.Float):
             return origin.value
         self.wrong_argument()
 
@@ -433,11 +433,11 @@ class LiteralString(UTyped):
     Default value should also be given as Python `str`.
     """
     def __init__(self):
-        super().__init__(acacia.StringDataType, acacia.string.ctdt_string)
+        super().__init__(objects.StringDataType, objects.string.ctdt_string)
 
     def uconvert(self, origin) -> str:
         origin = super().uconvert(origin)
-        assert isinstance(origin, acacia.String)
+        assert isinstance(origin, objects.String)
         return origin.value
 
 class LiteralBool(UTyped):
@@ -445,14 +445,14 @@ class LiteralBool(UTyped):
     Default value should also be given as Python `bool`.
     """
     def __init__(self):
-        super().__init__(acacia.BoolDataType, acacia.boolean.ctdt_bool)
+        super().__init__(objects.BoolDataType, objects.boolean.ctdt_bool)
 
     def get_show_name(self) -> str:
         return "bool (literal)"
 
     def uconvert(self, origin) -> bool:
         origin = super().uconvert(origin)
-        if isinstance(origin, acacia.BoolLiteral):
+        if isinstance(origin, objects.BoolLiteral):
             return origin.value
         self.wrong_argument()
 
@@ -468,12 +468,12 @@ class Nullable(ConverterContainer):
         return _convname(self.converter) + " (or None)"
 
     def convert(self, origin: acacia.AcaciaExpr):
-        if origin.data_type.matches_cls(acacia.NoneDataType):
+        if origin.data_type.matches_cls(objects.NoneDataType):
             return None
         return self.converter.convert(origin)
 
     def cconvert(self, origin: acaciact.CTObj):
-        if isinstance(origin, acacia.NoneLiteral):
+        if isinstance(origin, objects.NoneLiteral):
             return None
         return self.converter.cconvert(origin)
 
@@ -543,7 +543,7 @@ class CTIterator(CTConverter):
 class Selector(Multityped):
     """Accepts entity or Engroup and convert it to `MCSelector`."""
     def __init__(self):
-        super().__init__((acacia.EntityDataType, acacia.EGroupDataType))
+        super().__init__((objects.EntityDataType, objects.EGroupDataType))
 
     def convert(self, origin: acacia.AcaciaExpr) -> "MCSelector":
         # Both `_EntityBase` and `EntityGroup` define `get_selector`.
@@ -591,7 +591,7 @@ class ListOf(Typed):
     `list`.
     """
     def __init__(self, converter: Converter):
-        super().__init__(acacia.ListDataType)
+        super().__init__(objects.ListDataType)
         self.converter = converter
 
     def get_show_name(self) -> str:
@@ -599,12 +599,12 @@ class ListOf(Typed):
 
     def convert(self, origin: acacia.AcaciaExpr) -> list:
         origin = super().convert(origin)
-        assert isinstance(origin, acacia.AcaciaList)
+        assert isinstance(origin, objects.AcaciaList)
         return list(map(self.converter.convert, origin.items))
 
 class CTListOf(CTTyped):
     def __init__(self, converter: CTConverter):
-        super().__init__(acacia.list_.ctdt_constlist)
+        super().__init__(objects.list_.ctdt_constlist)
         self.converter = converter
 
     def get_show_name(self) -> str:
@@ -612,7 +612,7 @@ class CTListOf(CTTyped):
 
     def cconvert(self, origin: acaciact.CTExpr) -> list:
         origin = abs(super().cconvert(origin))
-        assert isinstance(origin, acacia.CTConstList)
+        assert isinstance(origin, objects.CTConstList)
         return list(map(self.converter.cconvert, origin.ptrs))
 
 class MapOf(Typed):
@@ -620,7 +620,7 @@ class MapOf(Typed):
     converts it to Python `dict`.
     """
     def __init__(self, key: Converter, value: Converter):
-        super().__init__(acacia.MapDataType)
+        super().__init__(objects.MapDataType)
         self.key = key
         self.value = value
 
@@ -630,7 +630,7 @@ class MapOf(Typed):
 
     def convert(self, origin: acacia.AcaciaExpr) -> dict:
         origin = super().convert(origin)
-        assert isinstance(origin, acacia.Map)
+        assert isinstance(origin, objects.Map)
         return {
             self.key.convert(key): self.value.convert(value)
             for key, value in origin.items()
@@ -638,7 +638,7 @@ class MapOf(Typed):
 
 class CTMapOf(CTTyped):
     def __init__(self, key: CTConverter, value: CTConverter):
-        super().__init__(acacia.map_.ctdt_constmap)
+        super().__init__(objects.map_.ctdt_constmap)
         self.key = key
         self.value = value
 
@@ -647,7 +647,7 @@ class CTMapOf(CTTyped):
 
     def cconvert(self, origin: acacia.AcaciaExpr) -> dict:
         origin = abs(super().cconvert(origin))
-        assert isinstance(origin, acacia.CTConstMap)
+        assert isinstance(origin, objects.CTConstMap)
         return {
             self.key.cconvert(key): self.value.cconvert(value)
             for key, value in origin.items()
@@ -709,7 +709,7 @@ class PosXZ(LiteralFloat):
     """
     def uconvert(self, origin) -> float:
         res = super().uconvert(origin)
-        if isinstance(origin, acacia.IntLiteral):
+        if isinstance(origin, objects.IntLiteral):
             res += 0.5
         return res
 
@@ -963,19 +963,19 @@ def chop(building: _BuildingParser):
     """Use a Python-style argument parser for decorated function.
     Example:
     >>> @chop
-    ... @arg("foo", Nullable(Typed(acacia.BoolDataType)))
+    ... @arg("foo", Nullable(Typed(BoolDataType)))
     ... @arg("bar", LiteralInt(), default=11)
     ... def f(compiler, foo, bar):
     ...     # implement this binary function here
     ...     print(foo, bar)
-    >>> func = acacia.BinaryFunction(f, compiler=compiler)
+    >>> func = BinaryFunction(f, compiler=compiler)
     >>> func.call(
-    ...     [], {"foo": acacia.BoolLiteral(True, compiler),
-    ...          "bar": acacia.IntLiteral(2, compiler)}
+    ...     [], {"foo": BoolLiteral(True, compiler),
+    ...          "bar": IntLiteral(2, compiler)}
     ... )
-    <acacia.BoolLiteral object at ...> 2
+    <...BoolLiteral object at ...> 2
     >>> func.call(
-    ...     [acacia.NoneLiteral(compiler)], {}
+    ...     [NoneLiteral(compiler)], {}
     ... )
     None 11
     """
@@ -986,26 +986,24 @@ class OverloadChopped(type):
     Example:
     >>> class Foo(metaclass=OverloadChopped):
     ...     @overload
-    ...     @arg("a", acacia.BoolDataType)
+    ...     @arg("a", BoolDataType)
     ...     @arg("b", LiteralInt())
     ...     def f1(cls, compiler, a, b):
     ...         print("f1: ", a, b)
     ...     @overload
-    ...     @arg("a", acacia.BoolDataType)
+    ...     @arg("a", BoolDataType)
     ...     def f2(cls, compiler, a):
     ...         print("f2: ", a)
     ...         return cls.f1(compiler, a, b=10)
-    >>> func = acacia.BinaryFunction(Foo, compiler)
+    >>> func = BinaryFunction(Foo, compiler)
+    >>> func.call([BoolLiteral(True, compiler)], {})
+    f2: <...BoolLiteral object at ...>
+    f1: <...BoolLiteral object at ...> 10
     >>> func.call(
-    ...     [acacia.BoolLiteral(True, compiler)], {}
+    ...     [BoolLiteral(False, compiler),
+    ...      IntLiteral(5, compiler)], {}
     ... )
-    f2: <acacia.BoolLiteral object at ...>
-    f1: <acacia.BoolLiteral object at ...> 10
-    >>> func.call(
-    ...     [acacia.BoolLiteral(False, compiler),
-    ...      acacia.IntLiteral(5, compiler)], {}
-    ... )
-    f1: <acacia.BoolLiteral object at ...> 5
+    f1: <BoolLiteral object at ...> 5
     """
 
     # For IDE hint only:

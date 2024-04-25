@@ -7,8 +7,8 @@ from typing import Tuple, TYPE_CHECKING, List, Optional
 from acaciamc.error import *
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
+from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
-from .base import *
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler

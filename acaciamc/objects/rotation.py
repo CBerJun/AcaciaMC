@@ -9,12 +9,12 @@ __all__ = ["RotType", "RotDataType", "Rotation"]
 
 from typing import List, TYPE_CHECKING
 
-from acaciamc.tools import axe, cmethod_of
+from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
 from acaciamc.constants import DEFAULT_ANCHOR
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
-from .base import *
 from .types import Type
 from .entity import EntityDataType
 from .functions import BinaryCTFunction

@@ -1,8 +1,9 @@
 """math - Math related utilities."""
 from typing import List, Optional, TYPE_CHECKING
 
-from acaciamc.mccmdgen.expression import *
-from acaciamc.mccmdgen.expression.integer import (
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
+from acaciamc.objects.integer import (
     IntRandom, IntCmdOp, IntOpSelf, IntOpVar, IntOp, STR2SCBOP
 )
 from acaciamc.ast import ModuleMeta

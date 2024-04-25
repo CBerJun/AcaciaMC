@@ -4,13 +4,13 @@ __all__ = ["StructTemplateDataType", "StructTemplate"]
 
 from typing import List, Dict, Optional, TYPE_CHECKING
 
-from .base import *
 from .struct import StructDataType, Struct
 from .functions import ConstructorFunction, BinaryFunction
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import Storable

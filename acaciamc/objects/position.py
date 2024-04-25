@@ -5,12 +5,12 @@ __all__ = ["PosType", "PosDataType", "Position"]
 from typing import List, TYPE_CHECKING
 
 from acaciamc.error import *
-from acaciamc.tools import axe, cmethod_of
+from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
 from acaciamc.constants import DEFAULT_ANCHOR, XYZ
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
-from .base import *
 from .types import Type
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
 from .functions import BinaryFunction

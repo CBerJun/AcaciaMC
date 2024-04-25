@@ -239,9 +239,10 @@ is_entity(ent: entity, filter: Enfilter) -> bool
 from typing import Dict, Callable, List, Union, Optional, TYPE_CHECKING
 import json
 
-from acaciamc.mccmdgen.expression import *
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.tools import axe, resultlib, cmethod_of
 from acaciamc.tools.versionlib import edu_only
 import acaciamc.mccmdgen.cmds as cmds
@@ -249,7 +250,7 @@ import acaciamc.mccmdgen.cmds as cmds
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
-    from acaciamc.mccmdgen.expression.entity import _EntityBase
+    from acaciamc.objects.entity import _EntityBase
 
 _methods: Dict[str, Callable] = {}
 

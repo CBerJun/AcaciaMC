@@ -3,9 +3,10 @@
 from typing import List, Optional, Tuple, TYPE_CHECKING
 from copy import deepcopy
 
-from acaciamc.mccmdgen.expression import *
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 from acaciamc.constants import COLORS, COLORS_NEW

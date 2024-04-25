@@ -5,10 +5,10 @@ __all__ = ['ModuleDataType', 'BinaryModule', 'AcaciaModule', 'BuiltModule']
 from typing import Dict, Optional
 import importlib.util
 
-from .base import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.symbol import SymbolTable
-from acaciamc.ctexec.expr import CTDataType
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.error import *
 
 class ModuleDataType(DefaultDataType):

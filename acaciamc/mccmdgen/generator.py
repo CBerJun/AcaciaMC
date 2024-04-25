@@ -7,19 +7,20 @@ import contextlib
 
 from acaciamc.ast import *
 from acaciamc.error import *
-from acaciamc.mccmdgen.expression import *
-from acaciamc.mccmdgen.expression.none import ctdt_none
+from acaciamc.objects import *
+from acaciamc.mccmdgen.expr import *
+from acaciamc.objects.none import ctdt_none
 from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import *
-from acaciamc.ctexec.executer import CTExecuter
-from acaciamc.ctexec.expr import CTObj, CTObjPtr
+from acaciamc.mccmdgen.ctexecuter import CTExecuter
+from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import DataType
-    from acaciamc.ctexec.expr import CTDataType, CTExpr
+    from acaciamc.mccmdgen.ctexpr import CTDataType, CTExpr
 
 FUNC_NONE = "none"
 FUNC_INLINE = "inline"

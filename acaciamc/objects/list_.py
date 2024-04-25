@@ -13,16 +13,16 @@ __all__ = ["ListType", "ListDataType", "AcaciaList", "CTConstList", "CTList"]
 from typing import TYPE_CHECKING, List, Union, Iterable
 from itertools import repeat
 
-from .base import *
 from .types import Type
 from .integer import IntDataType, IntLiteral
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.error import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.ctexec.expr import CTObj, CTObjPtr, CTDataType
+from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr, CTDataType
 
 if TYPE_CHECKING:
-    from acaciamc.ctexec.expr import CTExpr
+    from acaciamc.mccmdgen.ctexpr import CTExpr
 
 class ListDataType(DefaultDataType):
     name = "const_list"

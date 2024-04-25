@@ -16,8 +16,9 @@ from acaciamc.error import *
 from acaciamc.tokenizer import Tokenizer
 from acaciamc.parser import Parser
 from acaciamc.mccmdgen.generator import Generator
-from acaciamc.mccmdgen.expression import *
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.optimizer import Optimizer
+from acaciamc.objects import IntVar, BinaryModule, EntityTemplate
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -79,7 +80,7 @@ class Config(NamedTuple):
     main_file: str = 'main'
     # Prefix of scoreboard that Acacia uses to hold data
     scoreboard: str = 'acacia'
-    # Default type of entity spawned)
+    # Default type of entity spawned
     entity_type: str = 'armor_stand'
     # Default position to spawn entity
     entity_pos: str = '~ ~ ~'

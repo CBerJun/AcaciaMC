@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Type as PythonType
 from abc import ABCMeta, abstractmethod
 
 if TYPE_CHECKING:
-    from acaciamc.mccmdgen.expression.entity import _EntityBase
-    from acaciamc.mccmdgen.expression.base import AcaciaExpr, VarValue
+    from acaciamc.objects.entity import _EntityBase
+    from acaciamc.mccmdgen.expr import AcaciaExpr, VarValue
     from acaciamc.compiler import Compiler
 
 class DataType(metaclass=ABCMeta):
