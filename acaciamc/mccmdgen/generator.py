@@ -96,9 +96,7 @@ class Generator(ASTVisitor):
 
     def parse_as_module(self) -> AcaciaModule:
         """Parse the AST and return it as an `AcaciaModule`."""
-        self.current_file.write_debug("## Start of module parsing")
         self.parse()
-        self.current_file.write_debug("## End of module parsing")
         return AcaciaModule(self.ctx.scope, self.compiler)
 
     def fix_error_location(self, error: Error):

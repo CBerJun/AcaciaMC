@@ -6,7 +6,7 @@ It assembles files and classes together and writes output.
 __all__ = ['Compiler', 'Config']
 
 from typing import (
-    Tuple, Union, Optional, Callable, Dict, NamedTuple, TYPE_CHECKING
+    Tuple, Union, Optional, Callable, Dict, NamedTuple, List, TYPE_CHECKING
 )
 import os
 from contextlib import contextmanager
@@ -18,7 +18,7 @@ from acaciamc.parser import Parser
 from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.optimizer import Optimizer
-from acaciamc.mccmdgen.utils import InvalidOpError
+from acaciamc.mccmdgen.utils import InvalidOpError, unreachable
 from acaciamc.objects import IntVar, BinaryModule, EntityTemplate
 import acaciamc.mccmdgen.cmds as cmds
 
@@ -104,6 +104,17 @@ class Config(NamedTuple):
     # Encoding of input and output files
     encoding: Optional[str] = None
 
+class CachedModule(NamedTuple):
+    # Path to module source file
+    path: str
+    # Module object
+    module: AcaciaExpr
+    # Module main function (None if no command is needed)
+    main: Optional[cmds.MCFunctionFile] = None
+    # Runtime variable to indicate if main function has been executed
+    # (None if `main` is None)
+    loaded_var: Optional[cmds.ScbSlot] = None
+
 class Compiler:
     """Start compiling the project
     A Compiler manage the resources in the compile task and
@@ -139,7 +150,7 @@ class Compiler:
         self._entity_tag_max = 0  # max id of entity tag allocated
         self._free_tmp_score = []  # free tmp scores (see `allocate_tmp`)
         self._current_file = None  # str; Path of current parsing file
-        self._cached_modules = {}  # loaded modules are cached here
+        self._cached_modules: List[CachedModule] = []
         self._loading_files = []  # paths of Acacia modules that are loading
         self._before_finish_cbs = []  # callbacks to run before finish
 
@@ -164,6 +175,18 @@ class Compiler:
         ## callback
         for cb in self._before_finish_cbs:
             cb()
+        ## import caching system init
+        mod_loaded_vars = [
+            mod.loaded_var for mod in self._cached_modules
+            if mod.main is not None
+        ]
+        if mod_loaded_vars:
+            self.file_main.commands[:0] = [
+                cmds.ScbSetConst(v, 0) for v in mod_loaded_vars
+            ]
+            self.file_main.commands.insert(
+                0, cmds.Comment("# Reset import caching flags")
+            )
         ## init
         init = self.output_mgr.generate_init()
         if self.cfg.split_init:
@@ -319,24 +342,42 @@ class Compiler:
                 Error(ErrorType.MODULE_NOT_FOUND, module=str(meta))
             )
         # Get the module accoding to path
-        for p in self._cached_modules:
+        for cm in self._cached_modules:
             # Return cached if exists
-            if os.path.samefile(p, path):
-                mod = self._cached_modules[p]
+            if os.path.samefile(cm.path, path):
+                finalcm = cm
                 break
         else:
             # Load the module
             _, ext = os.path.splitext(path)
+            mod_main = cmds.MCFunctionFile()
             if ext == ".aca":
                 # Parse the Acacia module
-                with self._load_generator(path, mcfunc) as generator:
+                with self._load_generator(path, mod_main) as generator:
                     mod = generator.parse_as_module()
             elif ext == ".py":
                 # Parse the binary module
                 mod = BinaryModule(path, self)
-                mcfunc.extend(mod.execute())
-            self._cached_modules[path] = mod
-        return (mod, path)
+                mod_main.extend(mod.execute())
+            else:
+                unreachable()
+            if mod_main.has_content():
+                loaded_var = self.allocate()
+                self.add_file(mod_main)
+                mod_main.commands[:0] = [
+                    cmds.Comment(f"## Main file of module {path}"),
+                    cmds.ScbSetConst(loaded_var, 1)
+                ]
+                finalcm = CachedModule(path, mod, mod_main, loaded_var)
+            else:
+                finalcm = CachedModule(path, mod)
+            self._cached_modules.append(finalcm)
+        if finalcm.main is not None:
+            mcfunc.write(cmds.Execute(
+                [cmds.ExecuteScoreMatch(finalcm.loaded_var, "0")],
+                cmds.InvokeFunction(finalcm.main)
+            ))
+        return finalcm.module, path
 
     def get_module(self, meta: ModuleMeta,
                    mcfunc: cmds.MCFunctionFile) -> AcaciaExpr:
