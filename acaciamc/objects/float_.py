@@ -19,8 +19,8 @@ ctdt_float = CTDataType("float")
 class Float(ConstExprCombined):
     cdata_type = ctdt_float
 
-    def __init__(self, value: float, compiler):
-        super().__init__(FloatDataType(compiler), compiler)
+    def __init__(self, value: float):
+        super().__init__(FloatDataType())
         self.value = value
 
     def cstringify(self) -> str:
@@ -31,7 +31,7 @@ class Float(ConstExprCombined):
 
     @classmethod
     def from_int(cls, integer: IntLiteral):
-        return Float(float(integer.value), integer.compiler)
+        return Float(float(integer.value))
 
     def __str__(self) -> str:
         return str(self.value)
@@ -40,7 +40,7 @@ class Float(ConstExprCombined):
         return self
 
     def cunaryneg(self):
-        return Float(-self.value, self.compiler)
+        return Float(-self.value)
 
     def _bin_op(self, other, method: str):
         """`method`: "__add__", "__sub__", etc."""
@@ -49,7 +49,7 @@ class Float(ConstExprCombined):
                 v = getattr(self.value, method)(other.value)
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
-            return Float(v, self.compiler)
+            return Float(v)
         raise InvalidOpError
 
     cadd = partialmethod(_bin_op, method="__add__")

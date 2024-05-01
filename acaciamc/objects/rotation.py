@@ -39,7 +39,7 @@ class RotType(Type):
             @axe.overload
             @axe.arg("entity", EntityDataType)
             def from_entity(cls, compiler, entity: "_EntityBase"):
-                inst = Rotation(compiler)
+                inst = Rotation()
                 inst.context.append(cmds.ExecuteEnv(
                     "rotated", "as " + entity.to_str()
                 ))
@@ -49,7 +49,7 @@ class RotType(Type):
             @axe.arg("vertical", axe.LiteralFloat())
             @axe.arg("horizontal", axe.LiteralFloat())
             def absolute(cls, compiler, vertical: float, horizontal: float):
-                inst = Rotation(compiler)
+                inst = Rotation()
                 inst.context.append(cmds.ExecuteEnv(
                     "rotated", "%s %s" % (vertical, horizontal)
                 ))
@@ -59,14 +59,14 @@ class RotType(Type):
         @axe.arg("target", EntityDataType)
         @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
         def _face_entity(compiler, target: "_EntityBase", anchor: str):
-            inst = Rotation(compiler)
+            inst = Rotation()
             inst.context.append(cmds.ExecuteEnv(
                 "facing", "entity %s %s" % (target, anchor)
             ))
             return inst
 
     def datatype_hook(self):
-        return RotDataType(self.compiler)
+        return RotDataType()
 
     def cdatatype_hook(self):
         return ctdt_rotation
@@ -74,8 +74,8 @@ class RotType(Type):
 class Rotation(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_rotation
 
-    def __init__(self, compiler):
-        super().__init__(RotDataType(compiler), compiler)
+    def __init__(self):
+        super().__init__(RotDataType())
         self.context: List["_ExecuteSubcmd"] = []
 
         _abs = self._create_setter("")
@@ -85,11 +85,11 @@ class Rotation(ConstExprCombined, ImmutableMixin):
         float, representing xrot and yrot values. "abs" directly sets
         rotation and "offset" rotates relatively.
         """
-        self.attribute_table.set("abs", BinaryCTFunction(_abs, compiler))
-        self.attribute_table.set("offset", BinaryCTFunction(_offset, compiler))
+        self.attribute_table.set("abs", BinaryCTFunction(_abs))
+        self.attribute_table.set("offset", BinaryCTFunction(_offset))
 
     def copy(self):
-        res = Rotation(self.compiler)
+        res = Rotation()
         res.context.extend(self.context)
         return res
 

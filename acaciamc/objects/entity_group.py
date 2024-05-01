@@ -31,7 +31,7 @@ class EGroupDataType(Storable):
     name = "Engroup"
 
     def __init__(self, template: "EntityTemplate"):
-        super().__init__(template.compiler)
+        super().__init__()
         self.template = template
 
     def __str__(self) -> str:
@@ -45,33 +45,34 @@ class EGroupDataType(Storable):
         return (isinstance(other, EGroupDataType) and
                 other.template.is_subtemplate_of(self.template))
 
-    def new_var(self):
-        return EntityGroup.from_template(self.template, self.compiler)
+    def new_var(self, compiler):
+        return EntityGroup.from_template(self.template, compiler)
 
 class EGroupGeneric(BinaryGeneric):
-    def __init__(self, compiler):
-        super().__init__(compiler)
+    def __init__(self):
+        super().__init__()
         @cmethod_of(self, "__getitem__")
         @axe.chop
         @axe.arg("template", ETemplateDataType)
         def _getitem(compiler, template: "EntityTemplate"):
-            return EGroupType(template, compiler)
+            return EGroupType(template)
 
 class EGroupType(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_type
 
-    def __init__(self, template: "EntityTemplate", compiler):
-        super().__init__(TypeDataType(compiler), compiler)
+    def __init__(self, template: "EntityTemplate"):
+        super().__init__(TypeDataType())
         self.template = template
 
     def initialize(
             self, instance: "EntityGroup",
             args: "ARGS_T", keywords: "KEYWORDS_T",
+            compiler: "Compiler"
         ) -> CMDLIST_T:
         @axe.chop
         def _call_me(compiler: "Compiler"):
-            return resultlib.commands(instance.clear(), compiler)
-        _, c = BinaryFunction(_call_me, self.compiler).call(args, keywords)
+            return resultlib.commands(instance.clear())
+        _, c = BinaryFunction(_call_me).call(args, keywords, compiler)
         return c
 
     def datatype_hook(self):
@@ -93,10 +94,10 @@ class IntEntityCount(IntOp):
         ]
 
 class EntityGroup(VarValue):
-    def __init__(self, data_type: EGroupDataType, compiler):
-        super().__init__(data_type, compiler)
+    def __init__(self, data_type: EGroupDataType, compiler: "Compiler"):
+        super().__init__(data_type)
         self.template = data_type.template
-        self.tag = self.compiler.allocate_entity_tag()
+        self.tag = compiler.allocate_entity_tag()
         SELF = self.get_selector().to_str()
         MEMBER_TYPE = EntityDataType(self.template)
         OPERAND_TYPE = EGroupDataType(self.template)
@@ -163,8 +164,8 @@ class EntityGroup(VarValue):
         @method_of(self, "copy")
         @axe.chop
         def _copy(compiler):
-            res = self.data_type.new_var()
-            return res, self.export(res)
+            res = data_type.new_var(compiler)
+            return res, self.export(res, compiler)
         @method_of(self, "clear")
         @axe.chop
         def _clear(compiler):
@@ -185,16 +186,15 @@ class EntityGroup(VarValue):
         @axe.chop
         def _is_empty(compiler: "Compiler"):
             subcmds = [cmds.ExecuteCond("entity", SELF, invert=True)]
-            return WildBool(subcmds, [], compiler)
+            return WildBool(subcmds, [])
         @method_of(self, "size")
         @axe.chop
         def _size(compiler: "Compiler"):
-            return IntOpGroup(init=IntEntityCount(SELF), compiler=compiler)
+            return IntOpGroup(init=IntEntityCount(SELF))
         @method_of(self, "to_single")
         @axe.chop
         def _to_single(compiler: "Compiler"):
-            return EntityReference(self.get_selector(),
-                                   self.template, compiler)
+            return EntityReference(self.get_selector(), self.template)
         @method_of(self, "has")
         @axe.chop
         @axe.arg("ent", MEMBER_TYPE)
@@ -203,16 +203,16 @@ class EntityGroup(VarValue):
             selector = ent.get_selector()
             selector.tag(self.tag)
             subcmds = [cmds.ExecuteCond("entity", selector.to_str())]
-            return WildBool(subcmds, [], compiler)
+            return WildBool(subcmds, [])
 
     @classmethod
     def from_template(cls, template: "EntityTemplate", compiler: "Compiler"):
         return cls(EGroupDataType(template), compiler)
 
-    def export(self, var: "EntityGroup") -> CMDLIST_T:
-        cmds = var.clear()
-        cmds.append("tag @e[tag=%s] add %s" % (self.tag, var.tag))
-        return cmds
+    def export(self, var: "EntityGroup", compiler) -> CMDLIST_T:
+        commands = var.clear()
+        commands.append("tag @e[tag=%s] add %s" % (self.tag, var.tag))
+        return commands
 
     def get_selector(self) -> "MCSelector":
         res = MCSelector("e")
@@ -222,19 +222,19 @@ class EntityGroup(VarValue):
     def clear(self) -> CMDLIST_T:
         return ["tag @e[tag={0}] remove {0}".format(self.tag)]
 
-    def iadd(self, other):
+    def iadd(self, other, compiler):
         if isinstance(other, EntityGroup):
             expr, cmds = self.attribute_table.lookup("extend").call(
-                [other], {}
+                [other], {}, compiler
             )
             assert expr is self
             return cmds
         raise InvalidOpError
 
-    def isub(self, other):
+    def isub(self, other, compiler):
         if isinstance(other, EntityGroup):
             expr, cmds = self.attribute_table.lookup("subtract").call(
-                [other], {}
+                [other], {}, compiler
             )
             assert expr is self
             return cmds

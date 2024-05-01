@@ -39,10 +39,7 @@ OP2METHOD = {
 }
 
 class Context:
-    def __init__(self, compiler: "Compiler", scope: SymbolTable = None):
-        self.compiler = compiler
-        if scope is None:
-            scope = SymbolTable(builtins=compiler.builtins)
+    def __init__(self, scope: SymbolTable):
         self.scope: SymbolTable = scope
         # current_function: the current function we are visiting
         self.current_function: \
@@ -58,7 +55,7 @@ class Context:
         self.self_value: Optional[AcaciaExpr] = None
 
     def copy(self):
-        res = Context(self.compiler, self.scope)
+        res = Context(self.scope)
         res.current_function = self.current_function
         res.inline_result = self.inline_result
         res.function_state = self.function_state
@@ -66,7 +63,7 @@ class Context:
         return res
 
     def new_scope(self):
-        self.scope = SymbolTable(self.scope, self.compiler.builtins)
+        self.scope = SymbolTable(self.scope, self.scope.builtins)
 
 class Generator(ASTVisitor):
     """Generates MC function from an AST for a single file."""
@@ -77,7 +74,7 @@ class Generator(ASTVisitor):
         self.compiler = compiler
         self.file_name = file_name
         self.current_file = main_file
-        self.ctx = Context(compiler)
+        self.ctx = Context(SymbolTable(builtins=compiler.builtins))
         # processing_node: prepared for showing errors
         # to know which AST we are passing (so that lineno and col are known)
         self.processing_node = self.node
@@ -97,7 +94,7 @@ class Generator(ASTVisitor):
     def parse_as_module(self) -> AcaciaModule:
         """Parse the AST and return it as an `AcaciaModule`."""
         self.parse()
-        return AcaciaModule(self.ctx.scope, self.compiler)
+        return AcaciaModule(self.ctx.scope)
 
     def fix_error_location(self, error: Error):
         error.location.linecol = (
@@ -229,7 +226,7 @@ class Generator(ASTVisitor):
         dt: DataType = self.visit(node.type)
         if not isinstance(dt, Storable):
             self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE, var_type=str(dt))
-        var = dt.new_var()
+        var = dt.new_var(self.compiler)
         self.register_symbol(node.target, var)
         if node.value is not None:
             self._assign(var, node.value)
@@ -248,13 +245,13 @@ class Generator(ASTVisitor):
         if not isinstance(dt, Storable):
             self.error_c(ErrorType.UNSUPPORTED_VAR_TYPE, var_type=str(dt))
         if not is_ctor:
-            var = dt.new_var()
+            var = dt.new_var(self.compiler)
         else:
             var = value
         self.register_symbol(node.target, var)
         # Assign
         if value is not None and not is_ctor:
-            self.current_file.extend(value.export(var))
+            self.current_file.extend(value.export(var, self.compiler))
 
     def _assign(self, target: AcaciaExpr, value_node: Expression):
         if not target.is_assignable():
@@ -270,7 +267,9 @@ class Generator(ASTVisitor):
                 and target.data_type is func.get_var_type()
             ):
                 def ctor_cb():
-                    commands.extend(func.initialize(target, *table))
+                    commands.extend(
+                        func.initialize(target, *table, self.compiler)
+                    )
                 value_type = func.get_var_type()
             else:
                 value = self._call_invoke(value_node, func, table)
@@ -288,7 +287,7 @@ class Generator(ASTVisitor):
         # assign
         commands = []
         if value is not None:
-            commands.extend(value.export(target))
+            commands.extend(value.export(target, self.compiler))
         else:
             assert ctor_cb is not None
             ctor_cb()
@@ -308,7 +307,7 @@ class Generator(ASTVisitor):
         # Call target's methods
         if hasattr(target, method):
             try:
-                commands = getattr(target, method)(value)
+                commands = getattr(target, method)(value, self.compiler)
             except InvalidOpError:
                 pass
             else:
@@ -390,11 +389,12 @@ class Generator(ASTVisitor):
             # no code in either branch
             return
         if has_then != has_else:
-            new_cond = condition if has_then else condition.unarynot()
+            new_cond = condition if has_then \
+                else condition.unarynot(self.compiler)
             if isinstance(new_cond, SupportsAsExecute):
                 # optimization for SupportsAsExecute (when only one of
                 # then/else is present)
-                dependencies, subcmds = new_cond.as_execute()
+                dependencies, subcmds = new_cond.as_execute(self.compiler)
                 self.current_file.extend(dependencies)
                 self.current_file.write(cmds.Execute(
                     subcmds, runs=cmds.InvokeFunction(
@@ -410,8 +410,8 @@ class Generator(ASTVisitor):
             )
             return
         # Fallback
-        dependencies, condition_var = to_BoolVar(condition, tmp=False)
-        self.current_file.extend(dependencies)
+        dep, condition_var = to_BoolVar(condition, self.compiler, tmp=False)
+        self.current_file.extend(dep)
         if has_then:
             self.current_file.write(cmds.Execute(
                 [cmds.ExecuteScoreMatch(condition_var.slot, "1")],
@@ -447,15 +447,15 @@ class Generator(ASTVisitor):
                 self.error_c(ErrorType.ENDLESS_WHILE_LOOP)
         if isinstance(condition, SupportsAsExecute):
             # optimization for `SupportsAsExecute`
-            dependencies, subcmds = condition.as_execute()
+            dep, subcmds = condition.as_execute(self.compiler)
         else:
-            dependencies, condition_var = to_BoolVar(condition, tmp=False)
-            subcmds = [cmds.ExecuteScoreMatch(condition_var.slot, "1")]
+            dep, cond_var = to_BoolVar(condition, self.compiler, tmp=False)
+            subcmds = [cmds.ExecuteScoreMatch(cond_var.slot, "1")]
         # triggering the function
         if body_file.has_content():
             body_file.write_debug('## Part 2. Recursion')
             for file in (body_file, self.current_file):
-                file.extend(dependencies)
+                file.extend(dep)
                 file.write(cmds.Execute(
                     subcmds, runs=cmds.InvokeFunction(body_file)
                 ))
@@ -538,7 +538,7 @@ class Generator(ASTVisitor):
         """
         # get return type (of DataType type)
         if node.returns is None:
-            returns = NoneDataType(self.compiler)
+            returns = NoneDataType()
         else:
             returns = self.visit(node.returns)
         # check result type
@@ -582,7 +582,7 @@ class Generator(ASTVisitor):
     def handle_inline_func(self, node: InlineFuncDef) -> InlineFunction:
         # Return the inline function object to a function definition
         if node.returns is None:
-            returns = NoneDataType(self.compiler)
+            returns = NoneDataType()
             res_port = FuncPortType.by_value
         else:
             returns, res_port = self.visit(node.returns)
@@ -604,7 +604,7 @@ class Generator(ASTVisitor):
             node,
             args, arg_types, arg_defaults, arg_ports,
             returns, res_port, self.ctx, owner=self,
-            compiler=self.compiler, source=self.node_location(node)
+            source=self.node_location(node)
         )
 
     def handle_normal_func(self, node: FuncDef) -> AcaciaFunction:
@@ -656,7 +656,7 @@ class Generator(ASTVisitor):
             returns = ctexec.visittop(node.returns.type)
         return AcaciaCTFunction(
             node, args, arg_types, defaults,
-            returns, self.ctx, owner=self, compiler=self.compiler,
+            returns, self.ctx, owner=self,
             source=self.node_location(node)
         )
 
@@ -785,7 +785,7 @@ class Generator(ASTVisitor):
         if not isinstance(data_type, SupportsEntityField):
             self.error_c(ErrorType.UNSUPPORTED_EFIELD_TYPE,
                          field_type=str(data_type))
-        field_meta = data_type.new_entity_field()
+        field_meta = data_type.new_entity_field(self.compiler)
         return data_type, field_meta
 
     def visit_EntityMethod(self, node: EntityMethod):
@@ -835,10 +835,8 @@ class Generator(ASTVisitor):
                 self.ctx.new_scope()
                 self.write_debug("Entity group iteration body")
                 this = TaggedEntity.new_tag(iterable.template, self.compiler)
-                executer = EntityReference(
-                    MCSelector("s"), iterable.template, self.compiler
-                )
-                self.current_file.extend(executer.export(this))
+                executer = EntityReference(MCSelector("s"), iterable.template)
+                self.current_file.extend(executer.export(this, self.compiler))
                 self.register_symbol(node.name, this)
                 for stmt in node.body:
                     self.visit(stmt)
@@ -874,7 +872,7 @@ class Generator(ASTVisitor):
             else:
                 assert isinstance(decl, Pass)
         self.register_symbol(node.name, StructTemplate(
-            node.name, fields, base_structs, self.compiler,
+            node.name, fields, base_structs,
             source=self.node_location(node)
         ))
 
@@ -896,10 +894,10 @@ class Generator(ASTVisitor):
                 value = self.visit(node.value)
             rv = self.ctx.current_function.result_var
             if value is None:
-                commands = func.initialize(rv, *table)
+                commands = func.initialize(rv, *table, self.compiler)
             else:
                 _check(value.data_type)
-                commands = value.export(rv)
+                commands = value.export(rv, self.compiler)
             self.current_file.extend(commands)
         elif self.ctx.function_state == FUNC_INLINE:
             value: AcaciaExpr = self.visit(node.value)
@@ -911,8 +909,10 @@ class Generator(ASTVisitor):
                     self.error_c(ErrorType.UNSUPPORTED_RESULT_TYPE,
                                 result_type=str(dt))
                 if self.ctx.inline_result is None:
-                    self.ctx.inline_result = dt.new_var()
-                self.current_file.extend(value.export(self.ctx.inline_result))
+                    self.ctx.inline_result = dt.new_var(self.compiler)
+                self.current_file.extend(
+                    value.export(self.ctx.inline_result, self.compiler)
+                )
             elif p is FuncPortType.by_reference:
                 if self.ctx.inline_result is not None:
                     self.error_c(ErrorType.MULTIPLE_RESULTS)
@@ -937,17 +937,17 @@ class Generator(ASTVisitor):
         value = node.value
         # NOTE Python bool is a subclass of int!!!
         if isinstance(value, bool):
-            return BoolLiteral(value, self.compiler)
+            return BoolLiteral(value)
         elif isinstance(value, int):
-            return IntLiteral(value, self.compiler)
+            return IntLiteral(value)
         elif value is None:
-            return NoneLiteral(self.compiler)
+            return NoneLiteral()
         elif isinstance(value, float):
-            return Float(value, self.compiler)
+            return Float(value)
         unreachable()
 
     def visit_StrLiteral(self, node: StrLiteral):
-        return String(self.visit(node.content), self.compiler)
+        return String(self.visit(node.content))
 
     def visit_Self(self, node: Self):
         v = self.ctx.self_value
@@ -965,11 +965,11 @@ class Generator(ASTVisitor):
         return res
 
     def visit_ListDef(self, node: ListDef):
-        return AcaciaList(self._ct_list(node.items), self.compiler)
+        return AcaciaList(self._ct_list(node.items))
 
     def visit_MapDef(self, node: MapDef):
         return Map(self._ct_list(node.keys),
-                   self._ct_list(node.values), self.compiler)
+                   self._ct_list(node.values))
 
     # assignable
 
@@ -1007,7 +1007,7 @@ class Generator(ASTVisitor):
     def visit_UnaryOp(self, node: UnaryOp):
         operand = self.visit(node.operand)
         try:
-            res = getattr(operand, OP2METHOD[node.operator])()
+            res = getattr(operand, OP2METHOD[node.operator])(self.compiler)
         except InvalidOpError:
             self._op_error(node.operator, operand)
         return res
@@ -1016,10 +1016,10 @@ class Generator(ASTVisitor):
         left, right = self.visit(node.left), self.visit(node.right)
         meth = OP2METHOD[node.operator]
         try:
-            res = getattr(left, meth)(right)
+            res = getattr(left, meth)(right, self.compiler)
         except InvalidOpError:
             try:
-                res = getattr(right, f"r{meth}")(left)
+                res = getattr(right, f"r{meth}")(left, self.compiler)
             except InvalidOpError:
                 self._op_error(node.operator, left, right)
         return res
@@ -1032,10 +1032,12 @@ class Generator(ASTVisitor):
         for operand, operator in zip(node.operands, node.operators):
             left, right = right, self.visit(operand)
             try:
-                res = left.compare(operator, right)
+                res = left.compare(operator, right, self.compiler)
             except InvalidOpError:
                 try:
-                    res = right.compare(COMPOP_SWAP[operator], left)
+                    res = right.compare(
+                        COMPOP_SWAP[operator], left, self.compiler
+                    )
                 except InvalidOpError:
                     self.error_c(
                         ErrorType.INVALID_OPERAND,
@@ -1079,7 +1081,7 @@ class Generator(ASTVisitor):
                      table: Tuple[ARGS_T, KEYWORDS_T]) -> AcaciaExpr:
         # call it
         res, commands = func.call_withframe(
-            *table,
+            *table, self.compiler,
             location=self.node_location(node)
         )
         # write commands
@@ -1094,7 +1096,9 @@ class Generator(ASTVisitor):
                       keywords: KEYWORDS_T, location=None) -> AcaciaExpr:
         if not isinstance(func, AcaciaCallable):
             self.error_c(ErrorType.UNCALLABLE, expr_type=str(func.data_type))
-        res, commands = func.call_withframe(args, keywords, location)
+        res, commands = func.call_withframe(
+            args, keywords, self.compiler, location
+        )
         self.current_file.extend(commands)
         return res
 
@@ -1103,7 +1107,7 @@ class Generator(ASTVisitor):
         if result is None:
             # didn't specify result
             if expect_type is None or expect_type.matches_cls(NoneDataType):
-                result = NoneLiteral(self.compiler)
+                result = NoneLiteral()
             else:
                 self.error_c(ErrorType.NEVER_RESULT)
         else:
@@ -1136,9 +1140,9 @@ class Generator(ASTVisitor):
                     if not isinstance(dt, Storable):
                         self.error_c(ErrorType.UNSUPPORTED_ARG_TYPE,
                                         arg=arg, arg_type=str(dt))
-                    tmp = dt.new_var()
+                    tmp = dt.new_var(self.compiler)
                     self.register_symbol(arg, tmp)
-                    self.current_file.extend(value.export(tmp))
+                    self.current_file.extend(value.export(tmp, self.compiler))
                 else:
                     assert port is FuncPortType.const
                     if not isinstance(value, ConstExpr):
@@ -1164,7 +1168,7 @@ class Generator(ASTVisitor):
                 ctexec.visittop(stmt)
             result = ctexec.result
         if result is None:
-            result = NoneLiteral(self.compiler)
+            result = NoneLiteral()
         if not func.result_type.is_typeof(result):
             # This function might be called by `CTExecuter` and
             # therefore the error location should be set by that.

@@ -27,7 +27,7 @@ def _randint(compiler, min_: int, max_: int):
     randint(const min: int, const max: int) -> int
     Get a random integer between `min` and `max` (inclusive).
     """
-    return IntOpGroup(init=IntRandom(min_, max_), compiler=compiler)
+    return IntOpGroup(init=IntRandom(min_, max_))
 
 class IntXOpSelf(IntOp):
     def __init__(self, x: cmds.ScbSlot, op: str) -> None:
@@ -52,14 +52,14 @@ def _pow(compiler: "Compiler", base, exp):
     """
     if not isinstance(exp, IntLiteral):
         # Fallback to `_math.pow`
-        return internal("pow").call(args=[base, exp], keywords={})
+        return internal("pow").call([base, exp], {}, compiler)
     if exp.value < 0:
         raise axe.ArgumentError('exp', 'must be a non-negative integer')
     if exp.value == 0:
-        return IntLiteral(1, compiler)
+        return IntLiteral(1)
     # Optimize when base is a literal
     if isinstance(base, IntLiteral):
-        return IntLiteral(base.value ** exp.value, compiler)
+        return IntLiteral(base.value ** exp.value)
     # Base is a variable but exp is a literal
     # Reference: https://en.wikipedia.org/wiki/Exponentiation_by_squaring
     # Section "With constant auxiliary memory"
@@ -116,12 +116,12 @@ def _min(compiler, operands: List[AcaciaExpr]):
         else:
             rest.append(operand)
     if not rest:
-        return IntLiteral(upper, compiler)
+        return IntLiteral(upper)
     # Get first arg
     res = IntOpGroup.from_intexpr(rest[0])
     # Handle args left
     for operand in rest[1:]:
-        deps, var = to_IntVar(operand)
+        deps, var = to_IntVar(operand, compiler)
         res.add_op(IntCmdOp(deps))
         res.add_op(IntOpVar("<", var.slot))
     if upper is not None:
@@ -147,12 +147,12 @@ def _max(compiler, operands: List[AcaciaExpr]):
         else:
             rest.append(operand)
     if not rest:
-        return IntLiteral(lower, compiler)
+        return IntLiteral(lower)
     # Get first arg
     res = IntOpGroup.from_intexpr(rest[0])
     # Handle args left
     for operand in rest[1:]:
-        deps, var = to_IntVar(operand)
+        deps, var = to_IntVar(operand, compiler)
         res.add_op(IntCmdOp(deps))
         res.add_op(IntOpVar(">", var.slot))
     if lower is not None:
@@ -166,8 +166,8 @@ def _mod(compiler, x, y):
     if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
         if y.value == 0:
             raise axe.ArgumentError('y', 'modulo by 0')
-        return IntLiteral(x.value % y.value, compiler)
-    return internal("mod").call(args=[x, y], keywords={})
+        return IntLiteral(x.value % y.value)
+    return internal("mod").call([x, y], {}, compiler)
 
 @axe.chop
 @axe.arg("x", IntDataType)
@@ -176,19 +176,19 @@ def _floordiv(compiler, x, y):
     if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
         if y.value == 0:
             raise axe.ArgumentError('y', 'cannot divide by 0')
-        return IntLiteral(x.value // y.value, compiler)
-    return internal("floordiv").call(args=[x, y], keywords={})
+        return IntLiteral(x.value // y.value)
+    return internal("floordiv").call([x, y], {}, compiler)
 
 def acacia_build(compiler: "Compiler"):
     global _math
     f = cmds.MCFunctionFile()
     _math = compiler.get_module(ModuleMeta("_math"), f)
     attributes = {
-        'randint': BinaryFunction(_randint, compiler),
-        'pow': BinaryCTFunction(_pow, compiler),
-        'min': BinaryCTFunction(_min, compiler),
-        'max': BinaryCTFunction(_max, compiler),
-        'mod': BinaryCTFunction(_mod, compiler),
-        'floordiv': BinaryCTFunction(_floordiv, compiler),
+        'randint': BinaryFunction(_randint),
+        'pow': BinaryCTFunction(_pow),
+        'min': BinaryCTFunction(_min),
+        'max': BinaryCTFunction(_max),
+        'mod': BinaryCTFunction(_mod),
+        'floordiv': BinaryCTFunction(_floordiv),
     }
     return BuiltModule(attributes, f.commands)

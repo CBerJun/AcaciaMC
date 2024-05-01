@@ -20,7 +20,7 @@ SUMMON = "summon {type} ~ {y} ~{rot} {event}{name}"
 
 class EntityDataType(Storable):
     def __init__(self, template: "EntityTemplate"):
-        super().__init__(template.compiler)
+        super().__init__()
         self.template = template
 
     def __str__(self) -> str:
@@ -34,13 +34,13 @@ class EntityDataType(Storable):
         return (isinstance(other, EntityDataType) and
                 other.template.is_subtemplate_of(self.template))
 
-    def new_var(self) -> "TaggedEntity":
-        return TaggedEntity.new_tag(self.template, self.compiler)
+    def new_var(self, compiler) -> "TaggedEntity":
+        return TaggedEntity.new_tag(self.template, compiler)
 
 class _EntityBase(AcaciaExpr):
-    def __init__(self, template: "EntityTemplate", compiler,
+    def __init__(self, template: "EntityTemplate",
                  cast_to: Optional["EntityTemplate"] = None):
-        super().__init__(EntityDataType(template), compiler)
+        super().__init__(EntityDataType(template))
         self.cast_template = cast_to
         self.template = template
         self.template.register_entity(self)
@@ -67,34 +67,31 @@ class _EntityBase(AcaciaExpr):
     def cast_to(self, template: "EntityTemplate"):
         raise NotImplementedError
 
-    def export(self, var: "TaggedEntity"):
+    def export(self, var: "TaggedEntity", compiler):
         cmds = var.clear()
         cmds.append("tag %s add %s" % (self, var.tag))
         return cmds
 
 class EntityReference(_EntityBase):
     def __init__(self, selector: MCSelector, template: "EntityTemplate",
-                 compiler, cast_to: Optional["EntityTemplate"] = None):
+                 cast_to: Optional["EntityTemplate"] = None):
         self.selector = selector
-        super().__init__(template, compiler, cast_to)
+        super().__init__(template, cast_to)
 
     def _get_selector(self) -> MCSelector:
         return self.selector.copy()
 
     def cast_to(self, template):
-        return EntityReference(
-            self.selector, self.template, self.compiler, template
-        )
+        return EntityReference(self.selector, self.template, template)
 
 class TaggedEntity(_EntityBase, VarValue):
     def __init__(self, tag: str, template: "EntityTemplate",
-                 compiler: "Compiler",
                  cast_to: Optional["EntityTemplate"] = None):
         self.tag = tag
-        super().__init__(template, compiler, cast_to)
+        super().__init__(template, cast_to)
 
     def cast_to(self, template):
-        return TaggedEntity(self.tag, self.template, self.compiler, template)
+        return TaggedEntity(self.tag, self.template, template)
 
     @classmethod
     def new_tag(cls, template: "EntityTemplate", compiler: "Compiler",
@@ -102,7 +99,7 @@ class TaggedEntity(_EntityBase, VarValue):
         """Create a new entity tag that points to no entity."""
         return cls(
             compiler.allocate_entity_tag(),
-            template, compiler, cast_to
+            template, cast_to
         )
 
     @classmethod

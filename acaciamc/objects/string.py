@@ -15,8 +15,8 @@ ctdt_string = CTDataType("str")
 class String(ConstExprCombined):
     cdata_type = ctdt_string
 
-    def __init__(self, value: str, compiler):
-        super().__init__(StringDataType(compiler), compiler)
+    def __init__(self, value: str):
+        super().__init__(StringDataType())
         self.value = value
 
     def chash(self):
@@ -28,5 +28,5 @@ class String(ConstExprCombined):
     def cadd(self, other):
         """Adding strings will connect them."""
         if isinstance(other, String):
-            return String(self.value + other.value, self.compiler)
+            return String(self.value + other.value)
         raise InvalidOpError

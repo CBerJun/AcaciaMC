@@ -969,15 +969,12 @@ def chop(building: _BuildingParser):
     ... def f(compiler, foo, bar):
     ...     # implement this binary function here
     ...     print(foo, bar)
-    >>> func = BinaryFunction(f, compiler=compiler)
+    >>> func = BinaryFunction(f)
     >>> func.call(
-    ...     [], {"foo": BoolLiteral(True, compiler),
-    ...          "bar": IntLiteral(2, compiler)}
+    ...     [], {"foo": BoolLiteral(True), "bar": IntLiteral(2)}, compiler
     ... )
-    <...BoolLiteral object at ...> 2
-    >>> func.call(
-    ...     [NoneLiteral(compiler)], {}
-    ... )
+    <BoolLiteral object at ...> 2
+    >>> func.call([NoneLiteral()], {}, compiler)
     None 11
     """
     return _Chopper(building)
@@ -996,14 +993,11 @@ class OverloadChopped(type):
     ...     def f2(cls, compiler, a):
     ...         print("f2: ", a)
     ...         return cls.f1(compiler, a, b=10)
-    >>> func = BinaryFunction(Foo, compiler)
-    >>> func.call([BoolLiteral(True, compiler)], {})
-    f2: <...BoolLiteral object at ...>
-    f1: <...BoolLiteral object at ...> 10
-    >>> func.call(
-    ...     [BoolLiteral(False, compiler),
-    ...      IntLiteral(5, compiler)], {}
-    ... )
+    >>> func = BinaryFunction(Foo)
+    >>> func.call([BoolLiteral(True)], {}, compiler)
+    f2: <BoolLiteral object at ...>
+    f1: <BoolLiteral object at ...> 10
+    >>> func.call([BoolLiteral(False), IntLiteral(5)], {}, compiler)
     f1: <BoolLiteral object at ...> 5
     """
 

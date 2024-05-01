@@ -14,5 +14,5 @@ ctdt_generic = CTDataType("generic")
 class BinaryGeneric(ConstExprCombined):
     cdata_type = ctdt_generic
 
-    def __init__(self, compiler):
-        super().__init__(GenericDataType(compiler), compiler)
+    def __init__(self):
+        super().__init__(GenericDataType())

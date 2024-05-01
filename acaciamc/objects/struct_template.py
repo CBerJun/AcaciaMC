@@ -24,8 +24,8 @@ class StructTemplate(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_structtemplate
 
     def __init__(self, name: str, field: Dict[str, "Storable"],
-                 bases: List["StructTemplate"], compiler, source=None):
-        super().__init__(StructTemplateDataType(compiler), compiler)
+                 bases: List["StructTemplate"], source=None):
+        super().__init__(StructTemplateDataType())
         self.name = name
         self.bases = bases
         self.field_types = field
@@ -52,7 +52,9 @@ class StructTemplate(ConstExprCombined, ConstructorFunction):
         return any(base.is_subtemplate_of(template) for base in self.bases)
 
     def initialize(
-        self, instance: "Struct", args: "ARGS_T", keywords: "KEYWORDS_T"
+        self, instance: "Struct",
+        args: "ARGS_T", keywords: "KEYWORDS_T",
+        compiler
     ):
         decorators = [axe.chop, axe.star]
         for name, type_ in self.field_types.items():
@@ -61,10 +63,11 @@ class StructTemplate(ConstExprCombined, ConstructorFunction):
         def _call_me(compiler, **fields: Optional[AcaciaExpr]):
             commands = []
             for name, value in fields.items():
-                if value is not None:
-                    commands.extend(value.export(instance.vars[name]))
-            return resultlib.commands(commands, compiler)
+                if value is None:
+                    continue
+                commands.extend(value.export(instance.vars[name], compiler))
+            return resultlib.commands(commands)
         for decorator in decorators:
             _call_me = decorator(_call_me)
-        _, c = BinaryFunction(_call_me, self.compiler).call(args, keywords)
+        _, c = BinaryFunction(_call_me).call(args, keywords, compiler)
         return c

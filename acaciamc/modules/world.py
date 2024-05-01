@@ -291,10 +291,10 @@ class ItemType(Type):
                 components["minecraft:keep_on_death"] = {}
             if lock:
                 components["minecraft:item_lock"] = {"mode": lock}
-            return Item(id_, data, components, compiler)
+            return Item(id_, data, components)
 
     def datatype_hook(self):
-        return ItemDataType(self.compiler)
+        return ItemDataType()
 
     def cdatatype_hook(self):
         return ctdt_item
@@ -302,8 +302,8 @@ class ItemType(Type):
 class Item(ConstExprCombined):
     cdata_type = ctdt_item
 
-    def __init__(self, id_: str, data: int, components: dict, compiler):
-        super().__init__(ItemDataType(compiler), compiler)
+    def __init__(self, id_: str, data: int, components: dict):
+        super().__init__(ItemDataType())
         self.id = id_
         self.data = data
         self.components = components
@@ -327,10 +327,10 @@ class BlockType(Type):
             axe.AnyOf(axe.LiteralInt(), axe.LiteralBool(), axe.LiteralString())
         ), default={})
         def _new(compiler, id_: str, states: Dict[str, Union[str, int, bool]]):
-            return Block(id_, states, compiler)
+            return Block(id_, states)
 
     def datatype_hook(self):
-        return BlockDataType(self.compiler)
+        return BlockDataType()
 
     def cdatatype_hook(self):
         return ctdt_block
@@ -339,8 +339,8 @@ class Block(ConstExprCombined):
     cdata_type = ctdt_block
 
     def __init__(self, id_: str,
-                 states: Dict[str, Union[str, int, bool]], compiler):
-        super().__init__(BlockDataType(compiler), compiler)
+                 states: Dict[str, Union[str, int, bool]]):
+        super().__init__(BlockDataType())
         self.id = id_
         self.states = states
 
@@ -354,8 +354,8 @@ class Block(ConstExprCombined):
             assert isinstance(value, str)
             return '"%s"' % value
 
-    def to_str(self, fmt: str = "{id} {states}") -> str:
-        if self.compiler.cfg.mc_version >= (1, 20, 10):
+    def to_str(self, compiler: "Compiler", fmt: str = "{id} {states}") -> str:
+        if compiler.cfg.mc_version >= (1, 20, 10):
             EQ = "="
         else:
             EQ = ":"
@@ -371,7 +371,7 @@ class ArgBlock(axe.AnyOf):
     def convert(self, origin: AcaciaExpr) -> Block:
         res = super().convert(origin)
         if isinstance(res, str):
-            res = Block(res, {}, origin.compiler)
+            res = Block(res, {})
         return res
 
 class ArgItem(axe.AnyOf):
@@ -381,7 +381,7 @@ class ArgItem(axe.AnyOf):
     def convert(self, origin: AcaciaExpr) -> Item:
         res = super().convert(origin)
         if isinstance(res, str):
-            res = Item(res, 0, {}, origin.compiler)
+            res = Item(res, 0, {})
         return res
 
 ##### Block related #####
@@ -404,7 +404,7 @@ def clone(compiler: "Compiler", origin: Position, offset: PosOffset,
         origin.context,
         runs="clone ~ ~ ~ %s %s %s %s" % (offset, dest, mask, mode)
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("clone_only")
 @axe.chop
@@ -421,10 +421,10 @@ def clone_only(compiler, origin: Position, offset: PosOffset, dest: PosOffset,
         mode = "normal"
     cmd = cmds.Execute(
         origin.context, runs="clone ~ ~ ~ %s %s filtered %s %s" % (
-            offset, dest, mode, block.to_str()
+            offset, dest, mode, block.to_str(compiler)
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("fill")
 @axe.chop
@@ -442,10 +442,10 @@ def fill(compiler, origin: Position, offset: PosOffset, block: Block,
         replacement = "replace"
     cmd = cmds.Execute(
         origin.context, runs="fill ~ ~ ~ %s %s %s" % (
-            offset, block.to_str(), replacement
+            offset, block.to_str(compiler), replacement
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("fill_replace")
 @axe.chop
@@ -457,10 +457,10 @@ def fill_replace(compiler, origin: Position, offset: PosOffset, block: Block,
          replaces: Block):
     cmd = cmds.Execute(
         origin.context, runs="fill ~ ~ ~ %s %s replace %s" % (
-            offset, block.to_str(), replaces.to_str()
+            offset, block.to_str(compiler), replaces.to_str(compiler)
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("setblock")
 @axe.chop
@@ -476,10 +476,10 @@ def setblock(compiler, pos: Position, block: Block, replacement: str):
         replacement = "replace"
     cmd = cmds.Execute(
         pos.context, runs="setblock ~ ~ ~ %s %s" % (
-            block.to_str(), replacement
+            block.to_str(compiler), replacement
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 ##### Entity related #####
 
@@ -502,7 +502,7 @@ def damage(compiler, target: "MCSelector", amount: int,
     else:
         suffix = ""
     cmd = "damage %s %d%s" % (target.to_str(), amount, suffix)
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("effect_give")
 @axe.chop
@@ -516,13 +516,13 @@ def effect_give(compiler, target: "MCSelector", effect: str,
     cmd = "effect %s %s %d %d %s" % (
         target.to_str(), effect, duration, amplifier, _fmt_bool(not particle)
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("effect_clear")
 @axe.chop
 @axe.arg("target", axe.Selector())
 def effect_clear(compiler, target: "MCSelector"):
-    return resultlib.commands(["effect %s clear" % target.to_str()], compiler)
+    return resultlib.commands(["effect %s clear" % target.to_str()])
 
 @_register("enchant")
 @axe.chop
@@ -531,7 +531,7 @@ def effect_clear(compiler, target: "MCSelector"):
 @axe.arg("level", axe.RangedLiteralInt(1, None), default=1)
 def enchant(compiler, target: "MCSelector", enchantment: str, level: int):
     cmd = "enchant %s %s %d" % (target.to_str(), enchantment, level)
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("event_entity")
 @axe.chop
@@ -539,14 +539,14 @@ def enchant(compiler, target: "MCSelector", enchantment: str, level: int):
 @axe.arg("event", axe.LiteralString())
 def event_entity(compiler, target: "MCSelector", event: str):
     cmd = "event entity %s %s" % (target.to_str(), event)
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("kill")
 @axe.chop
 @axe.arg("target", axe.Selector())
 def kill(compiler, target: "MCSelector"):
     cmd = "kill %s" % target.to_str()
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("msg_me")
 @axe.chop
@@ -557,7 +557,7 @@ def msg_me(compiler, sender: "_EntityBase", message: str):
         [cmds.ExecuteEnv("as", sender.to_str())],
         runs="me %s" % message
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("replaceitem_block")
 @axe.chop
@@ -575,7 +575,7 @@ def replaceitem_block(compiler, pos: Position, slot: int, item: Item,
             item.to_str("{id} %s {data}{components}" % amount)
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("replaceitem_entity")
 @axe.chop
@@ -591,7 +591,7 @@ def replaceitem_entity(compiler, target: "MCSelector", location: str,
         target.to_str(), location, slot, "keep" if keep_old else "destroy",
         item.to_str("{id} %s {data}{components}" % amount)
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("ride_start_tp_ride")
 @axe.chop
@@ -599,7 +599,7 @@ def replaceitem_entity(compiler, target: "MCSelector", location: str,
 @axe.arg("ride", EntityDataType)
 def ride_start_tp_ride(compiler, rider: "_EntityBase", ride: "_EntityBase"):
     cmd = "ride %s start_riding %s teleport_ride" % (rider, ride)
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("ride_start_tp_rider")
 @axe.chop
@@ -612,23 +612,19 @@ def ride_start_tp_rider(compiler, rider: "MCSelector",
     cmd = "ride %s start_riding %s teleport_rider %s" % (
         rider.to_str(), ride, fill
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("ride_stop")
 @axe.chop
 @axe.arg("rider", axe.Selector())
 def ride_stop(compiler, rider: "MCSelector"):
-    return resultlib.commands([
-        "ride %s stop_riding" % rider.to_str()
-    ], compiler)
+    return resultlib.commands(["ride %s stop_riding" % rider.to_str()])
 
 @_register("ride_evict_riders")
 @axe.chop
 @axe.arg("ride", axe.Selector())
 def ride_evict_riders(compiler, ride: "MCSelector"):
-    return resultlib.commands([
-        "ride %s evict_riders" % ride.to_str()
-    ], compiler)
+    return resultlib.commands(["ride %s evict_riders" % ride.to_str()])
 
 @_register("summon_rider")
 @axe.chop
@@ -645,7 +641,7 @@ def summon_rider(compiler, ride: "MCSelector", type_: str,
     cmd = "ride %s summon_rider %s %s%s" % (
         ride.to_str(), type_, "*" if event is None else event, suffix
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("summon_ride")
 @axe.chop
@@ -665,7 +661,7 @@ def summon_ride(compiler, rider: "MCSelector", type_: str,
     cmd = "ride %s summon_ride %s %s %s %s" % (
         rider.to_str(), type_, mode, "*" if event is None else event, suffix
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("msg_say")
 @axe.chop
@@ -676,7 +672,7 @@ def msg_say(compiler, sender: "_EntityBase", message: str):
         [cmds.ExecuteEnv("as", sender.to_str())],
         "say %s" % message
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("spread")
 @axe.chop
@@ -697,7 +693,7 @@ def spread(compiler, target: "MCSelector", center: Position,
             interval, range_, target.to_str()
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("summon")
 @axe.chop
@@ -731,7 +727,7 @@ def summon(compiler: "Compiler", type_: str, pos: Position,
         cmd = cmds.Execute(
             pos.context, runs="summon %s ~ ~ ~ %s%s" % (type_, event, suffix)
         )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("tag_add")
 @axe.chop
@@ -739,7 +735,7 @@ def summon(compiler: "Compiler", type_: str, pos: Position,
 @axe.arg("tag", axe.LiteralString())
 def tag_add(compiler, target: "MCSelector", tag: str):
     cmd = "tag %s add %s" % (target.to_str(), cmds.mc_str(tag))
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("tag_remove")
 @axe.chop
@@ -747,7 +743,7 @@ def tag_add(compiler, target: "MCSelector", tag: str):
 @axe.arg("tag", axe.LiteralString())
 def tag_add(compiler, target: "MCSelector", tag: str):
     cmd = "tag %s remove %s" % (target.to_str(), cmds.mc_str(tag))
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("msg_tell")
 @axe.chop
@@ -760,7 +756,7 @@ def msg_tell(compiler, sender: "_EntityBase", receiver: "MCSelector",
         [cmds.ExecuteEnv("as", sender.to_str())],
         "tell %s %s" % (receiver.to_str(), message)
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("tp")
 @axe.chop
@@ -774,7 +770,7 @@ def tp(compiler, target: "MCSelector", dest: Position, check_for_blocks: bool):
             target.to_str(), _fmt_bool(check_for_blocks)
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("rotate")
 @axe.chop
@@ -789,7 +785,7 @@ def rotate(compiler, target: "MCSelector", rot: Rotation):
         ],
         "tp @s ~ ~ ~ ~ ~"
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("move")
 @axe.chop
@@ -807,7 +803,7 @@ def move(compiler, target: "MCSelector", x: float, y: float, z: float,
             x, y, z, _fmt_bool(check_for_blocks)
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("move_local")
 @axe.chop
@@ -825,7 +821,7 @@ def move_local(compiler, target: "MCSelector", left: float, up: float,
             left, up, front, _fmt_bool(check_for_blocks)
         )
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 ##### Player Only #####
 
@@ -839,13 +835,13 @@ def ability(compiler, player: "MCSelector", ability: str, value: bool):
     cmd = "ability %s %s %s" % (
         player.to_str(), ability, _fmt_bool(value)
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("clear_inventory")
 @axe.chop
 @axe.arg("player", axe.PlayerSelector())
 def clear_inventory(compiler, player: "MCSelector"):
-    return resultlib.commands(["clear %s" % player.to_str()], compiler)
+    return resultlib.commands(["clear %s" % player.to_str()])
 
 @_register("clear")
 @axe.chop
@@ -858,14 +854,14 @@ def clear(compiler, player: "MCSelector", item_id: str, item_data: int,
     cmd = "clear %s %s %d %d" % (
         player.to_str(), item_id, item_data, max_count
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("spawnpoint_clear")
 @axe.chop
 @axe.arg("player", axe.PlayerSelector())
 def spawnpoint_clear(compiler, player: "MCSelector"):
     cmd = "clearspawnpoint %s" % player.to_str()
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("gamemode")
 @axe.chop
@@ -875,7 +871,7 @@ def spawnpoint_clear(compiler, player: "MCSelector"):
 ))
 def gamemode(compiler, player: "MCSelector", gamemode: str):
     cmd = "gamemode %s %s" % (gamemode, player.to_str())
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("give")
 @axe.chop
@@ -887,7 +883,7 @@ def give(compiler, player: "MCSelector", item: Item, amount: int):
         player.to_str(),
         item.to_str("{id} %s {data}{components}" % amount)
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("kick")
 @axe.chop
@@ -896,7 +892,7 @@ def give(compiler, player: "MCSelector", item: Item, amount: int):
 def kick(compiler, player_name: str, reason: Optional[str]):
     reason = "" if reason is None else " " + reason
     cmd = "kick %s%s" % (cmds.mc_str(player_name), reason)
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("recipe")
 @axe.chop
@@ -910,7 +906,7 @@ def recipe(compiler, player: "MCSelector", recipe: str, unlock: bool):
         "give" if unlock else "take",
         player.to_str(), recipe
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("spawnpoint_set")
 @axe.chop
@@ -921,7 +917,7 @@ def spawnpoint_set(compiler, player: "MCSelector", pos: Position):
         pos.context,
         "spawnpoint %s ~ ~ ~" % player.to_str()
     )
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("xp_add_levels")
 @axe.chop
@@ -929,7 +925,7 @@ def spawnpoint_set(compiler, player: "MCSelector", pos: Position):
 @axe.arg("amount", axe.LiteralInt())
 def xp_add_levels(compiler, player: "MCSelector", amount: int):
     cmd = "xp %dL %s" % (amount, player.to_str())
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 @_register("xp_add_points")
 @axe.chop
@@ -937,7 +933,7 @@ def xp_add_levels(compiler, player: "MCSelector", amount: int):
 @axe.arg("amount", axe.RangedLiteralInt(0, None))
 def xp_add_points(compiler, player: "MCSelector", amount: int):
     cmd = "xp %d %s" % (amount, player.to_str())
-    return resultlib.commands([cmd], compiler)
+    return resultlib.commands([cmd])
 
 ##### Client Side #####
 ...
@@ -957,9 +953,9 @@ def xp_add_points(compiler, player: "MCSelector", amount: int):
 def is_block(compiler, pos: Position, block: Block):
     subcmds = [
         *pos.context,
-        cmds.ExecuteCond("block", "~ ~ ~ %s" % block.to_str())
+        cmds.ExecuteCond("block", "~ ~ ~ %s" % block.to_str(compiler))
     ]
-    return WildBool(subcmds, [], compiler)
+    return WildBool(subcmds, [])
 
 @_register("is_same_area")
 @axe.chop
@@ -975,7 +971,7 @@ def is_same_area(compiler, pos: Position, offset: PosOffset,
             offset, other, "masked" if ignore_air else "all"
         ))
     ]
-    return WildBool(subcmds, [], compiler)
+    return WildBool(subcmds, [])
 
 @_register("is_entity")
 @axe.chop
@@ -991,13 +987,13 @@ def is_entity(compiler: "Compiler", ent: "_EntityBase", filter: EntityFilter):
     selector.tag(tmp)
     commands = filter.dump("tag {selected} add %s" % tmp)
     subcmds = [cmds.ExecuteCond("entity", selector.to_str())]
-    return (WildBool(subcmds, commands, compiler),
+    return (WildBool(subcmds, commands),
             ["tag @e[tag={0}] remove {0}".format(tmp)])
 
 def acacia_build(compiler: "Compiler"):
     attrs = {}
     for key, value in _methods.items():
-        attrs[key] = BinaryFunction(value, compiler)
-    attrs["Block"] = BlockType(compiler)
-    attrs["Item"] = ItemType(compiler)
+        attrs[key] = BinaryFunction(value)
+    attrs["Block"] = BlockType()
+    attrs["Item"] = ItemType()
     return attrs

@@ -33,25 +33,25 @@ class MapType(Type):
         @axe.arg("iter1", axe.CTIterator())
         @axe.arg("iter2", axe.CTIterator())
         def _new(compiler, iter1: List[CTObj], iter2: List[CTObj]):
-            return CTMap(iter1, iter2, self.compiler)
+            return CTMap(iter1, iter2)
         @cmethod_of(self, "from_keys")
         @axe.chop
         @axe.arg("x", axe.CTIterator())
         @axe.slash
-        @axe.arg("fill", axe.Constant(), default=NoneLiteral(self.compiler))
+        @axe.arg("fill", axe.Constant(), default=NoneLiteral())
         def _from_keys(compiler, x: List[CTObj], fill: CTObj):
-            return CTMap(x, repeat(fill), self.compiler)
+            return CTMap(x, repeat(fill))
 
     def datatype_hook(self):
-        return MapDataType(self.compiler)
+        return MapDataType()
 
     def cdatatype_hook(self):
         return ctdt_constmap
 
 class Map(ConstExpr):
     def __init__(self, keys: Iterable[ConstExpr],
-                 values: Iterable[ConstExpr], compiler):
-        super().__init__(MapDataType(compiler), compiler)
+                 values: Iterable[ConstExpr]):
+        super().__init__(MapDataType())
         self.data: Dict[Hashable, Tuple[ConstExpr, ConstExpr]] = {}
         for key, value in zip(keys, values):
             self.set(key, value)
@@ -66,30 +66,30 @@ class Map(ConstExpr):
         @cmethod_of(self, "copy")
         @axe.chop
         def _copy(compiler):
-            res = Map([], [], compiler)
+            res = Map((), ())
             res.data = self.data.copy()
             return res
         @cmethod_of(self, "keys")
         @axe.chop
         def _keys(compiler):
-            return AcaciaList(self.iterate(), compiler)
+            return AcaciaList(self.iterate())
         @cmethod_of(self, "values")
         @axe.chop
         def _values(compiler):
-            return AcaciaList(self.values(), compiler)
+            return AcaciaList(self.values())
         @cmethod_of(self, "has")
         @axe.chop
         @axe.arg("key", axe.AnyValue())
         def _has(compiler, key: AcaciaExpr):
-            return BoolLiteral(self._get_key(key) in self.data, compiler)
+            return BoolLiteral(self._get_key(key) in self.data)
         @cmethod_of(self, "size")
         @axe.chop
         def _size(compiler):
-            return IntLiteral(len(self.data), compiler)
+            return IntLiteral(len(self.data))
         @cmethod_of(self, "get")
         @axe.chop
         @axe.arg("key", axe.AnyValue())
-        @axe.arg("default", axe.AnyValue(), default=NoneLiteral(self.compiler))
+        @axe.arg("default", axe.AnyValue(), default=NoneLiteral())
         def _get(compiler, key: AcaciaExpr, default: AcaciaExpr):
             res = self.get(key)
             if res is None:
@@ -131,20 +131,19 @@ class Map(ConstExpr):
 
     def to_ctexpr(self):
         return CTMap(list2ct(self.iterate()),
-                     list2ct(self.values()), self.compiler)
+                     list2ct(self.values()))
 
 class CTConstMap(CTObj):
     cdata_type = ctdt_constmap
 
     def __init__(self, keys: Iterable["CTExpr"],
-                 values: Iterable["CTExpr"], compiler):
+                 values: Iterable["CTExpr"]):
         super().__init__()
-        self.compiler = compiler
         self.data: Dict[Hashable, Tuple[CTObj, CTObjPtr]] = {}
         for key, value in zip(keys, values):
             self.set(key, value)
 
-        @cmethod_of(self, "__ct_getitem__", compiler)
+        @cmethod_of(self, "__ct_getitem__")
         @axe.chop
         @axe.arg("key", axe.Constant())
         def _getitem(compiler, key: CTObj):
@@ -152,36 +151,36 @@ class CTConstMap(CTObj):
             if res is None:
                 raise Error(ErrorType.MAP_KEY_NOT_FOUND)
             return abs(res)
-        @cmethod_of(self, "copy", compiler)
+        @cmethod_of(self, "copy")
         @axe.chop
         def _copy(compiler):
-            return CTMap(self.citerate(), self.values(), compiler)
-        @cmethod_of(self, "keys", compiler)
+            return CTMap(self.citerate(), self.values())
+        @cmethod_of(self, "keys")
         @axe.chop
         def _keys(compiler):
-            return CTList(self.citerate(), compiler)
-        @cmethod_of(self, "values", compiler)
+            return CTList(self.citerate())
+        @cmethod_of(self, "values")
         @axe.chop
         def _values(compiler):
-            return CTList(self.values(), compiler)
-        @cmethod_of(self, "get", compiler)
+            return CTList(self.values())
+        @cmethod_of(self, "get")
         @axe.chop
         @axe.arg("key", axe.Constant())
-        @axe.arg("default", axe.Constant(), default=NoneLiteral(compiler))
+        @axe.arg("default", axe.Constant(), default=NoneLiteral())
         def _get(compiler, key: CTObj, default: CTObj):
             res = self.get(key)
             if res is None:
                 res = default
             return abs(res)
-        @cmethod_of(self, "has", compiler)
+        @cmethod_of(self, "has")
         @axe.chop
         @axe.arg("key", axe.Constant())
         def _has(compiler, key: CTObj):
-            return BoolLiteral(self.get_key(key) in self.data, compiler)
-        @cmethod_of(self, "size", compiler)
+            return BoolLiteral(self.get_key(key) in self.data)
+        @cmethod_of(self, "size")
         @axe.chop
         def _size(compiler):
-            return IntLiteral(len(self.data), compiler)
+            return IntLiteral(len(self.data))
 
     def items(self) -> Iterable[Tuple[CTObj, CTObjPtr]]:
         return self.data.values()
@@ -218,15 +217,15 @@ class CTConstMap(CTObj):
 
     def to_rt(self):
         return Map((k.to_rt() for k in self.citerate()),
-                   (abs(v).to_rt() for v in self.values()), self.compiler)
+                   (abs(v).to_rt() for v in self.values()))
 
 class CTMap(CTConstMap):
     cdata_type = ctdt_map
 
     def __init__(self, keys: Iterable["CTExpr"],
-                 values: Iterable["CTExpr"], compiler):
-        super().__init__(keys, values, compiler)
-        @cmethod_of(self, "__ct_getitem__", compiler, runtime=False)
+                 values: Iterable["CTExpr"]):
+        super().__init__(keys, values)
+        @cmethod_of(self, "__ct_getitem__", runtime=False)
         @axe.chop
         @axe.arg("key", axe.Constant())
         def _getitem(compiler, key: "CTExpr"):
@@ -234,13 +233,13 @@ class CTMap(CTConstMap):
             if res is None:
                 raise Error(ErrorType.MAP_KEY_NOT_FOUND)
             return res
-        @cmethod_of(self, "update", compiler, runtime=False)
+        @cmethod_of(self, "update", runtime=False)
         @axe.chop
         @axe.arg("other", axe.MapOf(axe.Constant(), axe.Constant()))
         def _update(compiler, other: Dict[CTObj, CTObj]):
             for k, v in other.items():
                 self.set(k, v)
-        @cmethod_of(self, "pop", compiler, runtime=False)
+        @cmethod_of(self, "pop", runtime=False)
         @axe.chop
         @axe.arg("key", axe.Constant())
         @axe.arg("default", axe.Constant(), default=None)
@@ -252,17 +251,17 @@ class CTMap(CTConstMap):
                 else:
                     res = abs(default)
             return res
-        @cmethod_of(self, "set_default", compiler, runtime=False)
+        @cmethod_of(self, "set_default", runtime=False)
         @axe.chop
         @axe.arg("key", axe.Constant())
-        @axe.arg("default", axe.Constant(), default=NoneLiteral(compiler))
+        @axe.arg("default", axe.Constant(), default=NoneLiteral())
         def _set_default(compiler, key: CTObj, default: CTObj):
             res = self.get(key)
             if res is None:
                 self.set(key, default)
                 res = default
             return abs(res)
-        @cmethod_of(self, "clear", compiler, runtime=False)
+        @cmethod_of(self, "clear", runtime=False)
         @axe.chop
         def _clear(compiler):
             self.data.clear()

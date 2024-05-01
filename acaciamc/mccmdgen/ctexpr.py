@@ -12,6 +12,7 @@ from acaciamc.error import traced_call
 if TYPE_CHECKING:
     from acaciamc.ast import Operator
     from acaciamc.error import SourceLocation
+    from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.expr import ConstExpr
 
 class CTDataType:
@@ -106,12 +107,15 @@ class CTCallable(CTObj, metaclass=ABCMeta):
         self.func_repr = "<unknown>"
 
     @abstractmethod
-    def ccall(self, args: List["CTObj"], kwds: Dict[str, "CTObj"]) -> CTExpr:
+    def ccall(self, args: List["CTObj"], kwds: Dict[str, "CTObj"],
+              compiler: "Compiler") -> CTExpr:
         pass
 
-    def ccall_withframe(self, args: List["CTObj"], kwds: Dict[str, "CTObj"],
-                        location: Optional["SourceLocation"] = None) -> CTExpr:
+    def ccall_withframe(
+        self, args: List["CTObj"], kwds: Dict[str, "CTObj"],
+        compiler, location: Optional["SourceLocation"] = None
+    ) -> CTExpr:
         return traced_call(
             self.ccall, location, self.source, self.func_repr,
-            args, kwds
+            args, kwds, compiler
         )

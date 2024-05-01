@@ -27,10 +27,10 @@ class AbsPosType(Type):
         @axe.arg("y", axe.LiteralFloat())
         @axe.arg("z", axe.PosXZ())
         def _new(compiler, x: float, y: float, z: float):
-            return AbsPos(x, y, z, compiler)
+            return AbsPos(x, y, z)
 
     def datatype_hook(self):
-        return AbsPosDataType(self.compiler)
+        return AbsPosDataType()
 
     def cdatatype_hook(self):
         return ctdt_abspos
@@ -40,8 +40,8 @@ class AbsPos(Position, PosOffset):
 
     # XXX As you can see the inheritance is a bit weird, we can't even
     # call __init__ properly.
-    def __init__(self, x: float, y: float, z: float, compiler):
-        AcaciaExpr.__init__(self, AbsPosDataType(compiler), compiler)
+    def __init__(self, x: float, y: float, z: float):
+        AcaciaExpr.__init__(self, AbsPosDataType())
         self._context = cmds.ExecuteEnv("positioned", "")
         self.context = [self._context]
         self.values = [x, y, z]
@@ -75,12 +75,12 @@ class AbsPos(Position, PosOffset):
             return self
 
     def copy(self):
-        return AbsPos(*self.values, self.compiler)
+        return AbsPos(*self.values)
 
     def _update(self):
         self._context.args = str(self)
         for name, value in zip(XYZ, self.values):
-            self.attribute_table.set(name, Float(value, self.compiler))
+            self.attribute_table.set(name, Float(value))
 
     def set_abs(self, i: int, value: float):
         self.values[i] = value

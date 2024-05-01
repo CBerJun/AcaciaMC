@@ -52,7 +52,7 @@ class PosOffsetType(Type):
             relative with value 0.0 if neither is given.
             Consider AbsPos if all three of them are absolute.
             """
-            res = PosOffset(compiler)
+            res = PosOffset()
             if x is not None and x_abs is not None:
                 raise Error(ErrorType.POS_OFFSET_CTOR_ARG, axis="x")
             if y is not None and y_abs is not None:
@@ -77,10 +77,10 @@ class PosOffsetType(Type):
             """Offset.local(left, up, front)
             Return new object using local coordinate.
             """
-            return PosOffset.local(left, up, front, compiler)
+            return PosOffset.local(left, up, front)
 
     def datatype_hook(self):
-        return PosOffsetDataType(self.compiler)
+        return PosOffsetDataType()
 
     def cdatatype_hook(self):
         return ctdt_posoffset
@@ -88,8 +88,8 @@ class PosOffsetType(Type):
 class PosOffset(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_posoffset
 
-    def __init__(self, compiler):
-        super().__init__(PosOffsetDataType(compiler), compiler)
+    def __init__(self):
+        super().__init__(PosOffsetDataType())
         self.values: List[float] = [0.0, 0.0, 0.0]
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]
@@ -134,8 +134,8 @@ class PosOffset(ConstExprCombined, ImmutableMixin):
             self.set(2, z, coord_type)
 
     @classmethod
-    def local(cls, left: float, up: float, front: float, compiler):
-        inst = cls(compiler)
+    def local(cls, left: float, up: float, front: float):
+        inst = cls()
         inst.set(0, left, CoordinateType.LOCAL)
         inst.set(1, up, CoordinateType.LOCAL)
         inst.set(2, front, CoordinateType.LOCAL)
@@ -147,7 +147,7 @@ class PosOffset(ConstExprCombined, ImmutableMixin):
         self.value_types[index] = type_
 
     def copy(self) -> "PosOffset":
-        res = PosOffset(self.compiler)
+        res = PosOffset()
         res.values = self.values.copy()
         res.value_types = self.value_types.copy()
         return res

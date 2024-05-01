@@ -52,7 +52,7 @@ class _MethodDispatcher:
         res_type = implementation.result_type
         assert isinstance(res_type, Storable)
         if self.result_var is None:
-            self.result_var = res_type.new_var()
+            self.result_var = res_type.new_var(self.compiler)
         else:
             if not self.result_var.data_type.matches(res_type):
                 raise Error(
@@ -106,10 +106,7 @@ class _MethodDispatcher:
                 if best is None or i < best[0]:
                     best = i, impl, get_self_var
         _, impl, get_self_var = best
-        return BoundMethod(
-            entity, self.method_name, impl,
-            get_self_var, self.compiler
-        )
+        return BoundMethod(entity, self.method_name, impl, get_self_var)
 
 class _SimpleMethod:
     """Non-virtual and non-override methods."""
@@ -134,7 +131,6 @@ class _SimpleMethod:
         return BoundMethod(
             entity, self.name, self.implementation,
             None if self.is_inline else self.get_self_var,
-            self.compiler
         )
 
 def _check_override(implementation: "METHODDEF_T", method: str):
@@ -158,9 +154,9 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                  method_qualifiers: Dict[str, MethodQualifier],
                  parents: List["EntityTemplate"],
                  metas: Dict[str, AcaciaExpr],
-                 compiler,
+                 compiler: "Compiler",
                  source=None):
-        super().__init__(ETemplateDataType(compiler), compiler)
+        super().__init__(ETemplateDataType())
         self.name = name
         self.func_repr = self.name
         if source is not None:
@@ -215,7 +211,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         # *exactly* (i.e. exclude entities that use subtemplate of
         # `self`). This is added when summoning.
         # (See `entity.TaggedEntity.summon_new`)
-        self.runtime_tag = self.compiler.allocate_entity_tag()
+        self.runtime_tag = compiler.allocate_entity_tag()
         # Inherit attributes from parents
         ## MRO: We use the same C3 algorithm as Python.
         merge: List[List[EntityTemplate]] = []
@@ -285,12 +281,12 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                 if qualifier is MethodQualifier.none:
                     # This method is a simple method
                     self.simple_methods[method] = _SimpleMethod(
-                        method, implementation, self, self.compiler
+                        method, implementation, self, compiler
                     )
                 elif qualifier is MethodQualifier.virtual:
                     # This method is a virtual method
                     _check_override(implementation, method)
-                    disp = _MethodDispatcher(method, self.compiler)
+                    disp = _MethodDispatcher(method, compiler)
                     self.method_dispatchers[method] = disp
                     disp.register(self, implementation)
                 elif qualifier is MethodQualifier.override:
@@ -354,10 +350,10 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         for name, impl in template.static_methods.items():
             entity.attribute_table.set(name, impl)
 
-    def initialize(self, instance: "_EntityBase", args, keywords):
+    def initialize(self, instance: "_EntityBase", args, keywords, compiler):
         # Calling an entity template summons a new entity, the arguments
         # are passed to __init__ if it exists
-        _, commands = TaggedEntity.summon_new(self, self.compiler, instance)
+        _, commands = TaggedEntity.summon_new(self, compiler, instance)
         # Call __init__ if it exists
         initializer = instance.attribute_table.lookup("__init__")
         if initializer:
@@ -366,7 +362,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                             got=str(initializer.data_type),
                             type_=str(instance.data_type))
             res, _cmds = initializer.call_withframe(
-                args, keywords,
+                args, keywords, compiler,
                 location="<entity initializer of %s>" % self.name
             )
             commands.extend(_cmds)

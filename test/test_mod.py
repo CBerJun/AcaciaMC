@@ -3,26 +3,19 @@ Test module for `acaciamc.tools`.
 See "test/module.aca".
 """
 
-from typing import TYPE_CHECKING
-from acaciamc.tools import axe, resultlib
+from acaciamc.tools import axe
 from acaciamc.objects import *
 
-if TYPE_CHECKING:
-    from acaciamc.compiler import Compiler
-
-def _build_foo(compiler: "Compiler"):
-    @axe.chop
-    @axe.arg("x", IntDataType, "y")
-    @axe.slash
-    @axe.arg("g", EntityDataType)
-    @axe.arg("y", axe.Typed(StringDataType), "x", default=None)
-    @axe.star
-    @axe.arg("z", axe.Nullable(axe.LiteralString()), default="aa")
-    @axe.kwds("k", axe.AnyOf(axe.LiteralInt(), axe.LiteralString()))
-    def _foo(compiler, **kwds):
-        print("foo called:", kwds)
-        return resultlib.commands([], compiler)
-    return _foo
+@axe.chop
+@axe.arg("x", IntDataType, "y")
+@axe.slash
+@axe.arg("g", EntityDataType)
+@axe.arg("y", axe.Typed(StringDataType), "x", default=None)
+@axe.star
+@axe.arg("z", axe.Nullable(axe.LiteralString()), default="aa")
+@axe.kwds("k", axe.AnyOf(axe.LiteralInt(), axe.LiteralString()))
+def _foo(compiler, **kwds):
+    print("foo called:", kwds)
 
 class _bar(metaclass=axe.OverloadChopped):
     @axe.overload
@@ -30,7 +23,6 @@ class _bar(metaclass=axe.OverloadChopped):
     @axe.arg("y", axe.LiteralInt())
     def a(cls, compiler, **kwds):
         print("bar.a called:", kwds)
-        return resultlib.commands([], compiler)
 
     @axe.overload
     @axe.arg("x", IntDataType)
@@ -42,9 +34,11 @@ class _extbar(_bar):
     @axe.overload
     def c(cls, compiler, **kwds):
         print("extbar.c called")
-        return cls.b(compiler, x=IntLiteral(30, compiler), **kwds)
+        return cls.b(compiler, x=IntLiteral(30), **kwds)
 
 def acacia_build(compiler):
-    return {"foo": BinaryFunction(_build_foo(compiler), compiler),
-            "bar": BinaryFunction(_bar, compiler),
-            "extbar": BinaryFunction(_extbar, compiler)}
+    return {
+        "foo": BinaryFunction(_foo),
+        "bar": BinaryFunction(_bar),
+        "extbar": BinaryFunction(_extbar)
+    }

@@ -77,7 +77,7 @@ class TaskType(Type):
             return res, res.timer_reset()
 
     def datatype_hook(self):
-        return TaskDataType(self.compiler)
+        return TaskDataType()
 
     def cdatatype_hook(self):
         return ctdt_task
@@ -85,20 +85,21 @@ class TaskType(Type):
 class Task(ConstExprCombined):
     cdata_type = ctdt_task
 
-    def __init__(self, target: AcaciaCallable, other_arg, other_kw, compiler):
+    def __init__(self, target: AcaciaCallable, other_arg, other_kw,
+                 compiler: "Compiler"):
         """
         target: The function to call
         other_arg & other_kw: Arguments to pass to `target`
         """
-        super().__init__(TaskDataType(compiler), compiler)
+        super().__init__(TaskDataType())
         # Define an `int` which show how many ticks left before the function
         # runs; it is -1 when no request exists.
         self.timer = IntVar.new(compiler)
         # Allocate a file to call the given function
         self.target_file = cmds.MCFunctionFile()
-        self.compiler.add_file(self.target_file)
+        compiler.add_file(self.target_file)
         _res, call_cmds = target.call_withframe(
-            other_arg, other_kw, location="<schedule.Task>"
+            other_arg, other_kw, compiler, location="<schedule.Task>"
         )
         self.target_file.extend(call_cmds)
 
@@ -107,13 +108,13 @@ class Task(ConstExprCombined):
         @axe.arg("delay", IntDataType)
         def _after(compiler, delay: AcaciaExpr):
             """.after(delay: int): Run the target after `delay`"""
-            commands = delay.export(self.timer)
-            return resultlib.commands(commands, compiler)
+            commands = delay.export(self.timer, compiler)
+            return resultlib.commands(commands)
         @method_of(self, "cancel")
         @axe.chop
         def _cancel(compiler):
             """.cancel(): Cancel the schedule created by `after`."""
-            return resultlib.commands(self.timer_reset(), compiler)
+            return resultlib.commands(self.timer_reset())
         @method_of(self, "has_schedule")
         @axe.chop
         def _has_schedule(compiler):
@@ -123,7 +124,7 @@ class Task(ConstExprCombined):
             """
             # Just return whether timer >= 0
             return self.timer.compare(
-                Operator.greater_equal, IntLiteral(0, compiler)
+                Operator.greater_equal, IntLiteral(0), compiler
             )
         @method_of(self, "on_area_loaded")
         @axe.chop
@@ -139,7 +140,7 @@ class Task(ConstExprCombined):
                 runs=cmds.ScheduleFunction(
                     self.target_file, "on_area_loaded add ~ ~ ~ %s" % offset
                 ),
-            )], compiler)
+            )])
         @method_of(self, "on_circle_loaded")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -156,7 +157,7 @@ class Task(ConstExprCombined):
                     self.target_file,
                     "on_area_loaded add circle ~ ~ ~ %d" % radius
                 )
-            )], compiler)
+            )])
         @method_of(self, "on_tickingarea")
         @axe.chop
         @axe.arg("name", axe.LiteralString())
@@ -170,72 +171,66 @@ class Task(ConstExprCombined):
                     self.target_file,
                     "on_area_loaded add tickingarea %s" % name
                 ),
-            ], compiler)
+            ])
         self.attribute_table.set("_timer", self.timer)
         # Write tick.mcfunction
-        self.compiler.file_tick.write_debug("# schedule.Task")
-        self.compiler.file_tick.write(
+        compiler.file_tick.write_debug("# schedule.Task")
+        compiler.file_tick.write(
             cmds.Execute(
                 [cmds.ExecuteScoreMatch(self.timer.slot, "0")],
                 runs=cmds.InvokeFunction(self.target_file)
-            )
-        )
-        # Let the timer -1
-        self.compiler.file_tick.extend(
-            cmds.execute(
+            ),
+            # Decrease the timer by 1
+            cmds.Execute(
                 [cmds.ExecuteScoreMatch(self.timer.slot, "0..")],
-                runs=cmd
+                runs=cmds.ScbRemoveConst(self.timer.slot, 1)
             )
-            for cmd in self.timer.isub(IntLiteral(1, self.compiler))
         )
 
     def timer_reset(self) -> CMDLIST_T:
-        return IntLiteral(-1, self.compiler).export(self.timer)
+        return [cmds.ScbSetConst(self.timer.slot, -1)]
 
-def _create_register_loop(compiler):
-    @axe.chop
-    @axe.arg("target", axe.Callable())
-    @axe.arg("interval", IntDataType, default=IntLiteral(1, compiler))
-    @axe.star_arg("args", axe.AnyValue())
-    @axe.kwds("kwds", axe.AnyValue())
-    def _register_loop(compiler: "Compiler", target: AcaciaCallable,
-                       interval: AcaciaExpr, args, kwds):
-        """
-        schedule.register_loop(
-            target: function, interval: int-literal = 1, *args, **kwds
+@axe.chop
+@axe.arg("target", axe.Callable())
+@axe.arg("interval", IntDataType, default=IntLiteral(1))
+@axe.star_arg("args", axe.AnyValue())
+@axe.kwds("kwds", axe.AnyValue())
+def register_loop(compiler: "Compiler", target: AcaciaCallable,
+                  interval: AcaciaExpr, args, kwds):
+    """
+    schedule.register_loop(
+        target: function, interval: int-literal = 1, *args, **kwds
+    )
+    Call a function repeatly every `interval` ticks with `args` and `kwds`.
+    """
+    _res, tick_commands = target.call_withframe(
+        args, kwds, compiler, location="<schedule.register_loop>"
+    )
+    compiler.file_tick.write_debug("# schedule.register_loop")
+    # Optimization: if the interval is 1, no need for timer
+    if isinstance(interval, IntLiteral) and interval.value == 1:
+        compiler.file_tick.extend(tick_commands)
+        return None
+    # Allocate an int for timer
+    timer = IntVar.new(compiler)
+    # Initialize
+    init_cmds = [cmds.ScbSetConst(timer.slot, 0)]
+    # Tick loop
+    ## Call on times up AND reset timer
+    tick_commands.extend(interval.export(timer, compiler))
+    compiler.file_tick.extend(
+        cmds.execute(
+            [cmds.ExecuteScoreMatch(timer.slot, "..0")], runs=cmd
         )
-        Call a function repeatly every `interval` ticks with `args` and `kwds`.
-        """
-        _res, tick_commands = target.call_withframe(
-            args, kwds, location="<schedule.register_loop>"
-        )
-        compiler.file_tick.write_debug("# schedule.register_loop")
-        # Optimization: if the interval is 1, no need for timer
-        if isinstance(interval, IntLiteral) and interval.value == 1:
-            compiler.file_tick.extend(tick_commands)
-            return None
-        # Allocate an int for timer
-        timer = IntVar.new(compiler)
-        # Initialize
-        init_cmds = IntLiteral(0, compiler).export(timer)
-        # Tick loop
-        ## Call on times up AND reset timer
-        tick_commands.extend(interval.export(timer))
-        compiler.file_tick.extend(
-            cmds.execute(
-                [cmds.ExecuteScoreMatch(timer.slot, "..0")], runs=cmd
-            )
-            for cmd in tick_commands
-        )
-        ## Let the timer -1
-        compiler.file_tick.extend(timer.isub(IntLiteral(1, compiler)))
-        # Result
-        return resultlib.commands(init_cmds, compiler)
-    return _register_loop
+        for cmd in tick_commands
+    )
+    ## Decrease the timer by 1
+    compiler.file_tick.write(cmds.ScbRemoveConst(timer.slot, 1))
+    # Result
+    return resultlib.commands(init_cmds)
 
 def acacia_build(compiler):
-    register_loop = _create_register_loop(compiler)
     return {
-        "Task": TaskType(compiler),
-        "register_loop": BinaryFunction(register_loop, compiler)
+        "Task": TaskType(),
+        "register_loop": BinaryFunction(register_loop)
     }

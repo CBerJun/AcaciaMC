@@ -18,7 +18,7 @@ from acaciamc.parser import Parser
 from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.optimizer import Optimizer
-from acaciamc.mccmdgen.utils import InvalidOpError, unreachable
+from acaciamc.mccmdgen.utils import unreachable
 from acaciamc.objects import IntVar, BinaryModule, EntityTemplate
 import acaciamc.mccmdgen.cmds as cmds
 
@@ -174,7 +174,7 @@ class Compiler:
             generator.parse()
         ## callback
         for cb in self._before_finish_cbs:
-            cb()
+            cb(self)
         ## import caching system init
         mod_loaded_vars = [
             mod.loaded_var for mod in self._cached_modules
@@ -275,7 +275,7 @@ class Compiler:
              `scoreboard operation ... *= const2 ...`
         This method can create one.
         """
-        return IntVar(slot=self.output_mgr.int_const(value), compiler=self)
+        return IntVar(slot=self.output_mgr.int_const(value))
 
     def add_scoreboard(self) -> str:
         """Apply for a new scoreboard"""
@@ -288,7 +288,7 @@ class Compiler:
 
     # -- End allocation --
 
-    def before_finish(self, callback: Callable[[], None]):
+    def before_finish(self, callback: Callable[["Compiler"], None]):
         """Add a callback before compilation finishes."""
         self._before_finish_cbs.append(callback)
 
@@ -357,8 +357,8 @@ class Compiler:
                     mod = generator.parse_as_module()
             elif ext == ".py":
                 # Parse the binary module
-                mod = BinaryModule(path, self)
-                mod_main.extend(mod.execute())
+                mod = BinaryModule(path)
+                mod_main.extend(mod.execute(self))
             else:
                 unreachable()
             if mod_main.has_content():
@@ -409,20 +409,6 @@ class Compiler:
             if path == check or path.startswith(check + "/"):
                 return True
         return False
-
-    def swap_exprs(self, x: VarValue, y: VarValue) -> CMDLIST_T:
-        """Swap two `VarValue`s that are assignable to each other."""
-        try:
-            res = x.swap(y)
-        except InvalidOpError:
-            # Fall back
-            tmp = x.data_type.new_var()
-            res = [
-                *x.export(tmp),
-                *y.export(x),
-                *tmp.export(y)
-            ]
-        return res
 
     @contextmanager
     def _load_generator(self, path: str, mcfunc: cmds.MCFunctionFile):

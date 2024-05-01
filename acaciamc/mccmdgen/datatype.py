@@ -21,9 +21,6 @@ class DataType(metaclass=ABCMeta):
      specifies the type of an expression including extra information
      like template for entity and `Engroup`.
     """
-    def __init__(self, compiler: "Compiler"):
-        self.compiler = compiler
-
     @abstractmethod
     def __str__(self) -> str:
         pass
@@ -54,14 +51,14 @@ class DataType(metaclass=ABCMeta):
 class Storable(DataType):
     """A "storable" data type. (See `AcaciaExpr`)."""
     @abstractmethod
-    def new_var(self) -> "VarValue":
+    def new_var(self, compiler: "Compiler") -> "VarValue":
         """Construct a `VarValue` of this type."""
         pass
 
 class SupportsEntityField(DataType):
     """Data type that can be used as a field of an entity."""
     @abstractmethod
-    def new_entity_field(self) -> dict:
+    def new_entity_field(self, compiler: "Compiler") -> dict:
         """When a field of an entity template is this type, this is
         called. This should return a dict of data (which is called
         "field meta") that identifies this field application

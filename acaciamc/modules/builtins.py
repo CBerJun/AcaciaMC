@@ -31,7 +31,7 @@ any_ctdt = _AnyCTDataType("Any")
 
 class AnyType(Type):
     def datatype_hook(self):
-        return AnyDataType(self.compiler)
+        return AnyDataType()
 
     def cdatatype_hook(self):
         return any_ctdt
@@ -54,7 +54,7 @@ def swap(compiler: "Compiler", x: AcaciaExpr, y: AcaciaExpr):
             "x", "must have the same type as the other variable"
             ' (got "%s" and "%s")' % (x.data_type, y.data_type)
         )
-    return resultlib.commands(compiler.swap_exprs(x, y), compiler)
+    return resultlib.commands(swap_exprs(x, y, compiler))
 
 @axe.chop
 @axe.arg("target", axe.AnyOf(axe.LiteralString(), axe.Typed(EntityDataType)))
@@ -66,7 +66,7 @@ def scb(compiler, target: Union["_EntityBase", str], objective: str):
     used to interact with scores on scoreboard.
     """
     tg = target if isinstance(target, str) else target.to_str()
-    return IntVar(cmds.ScbSlot(tg, objective), compiler)
+    return IntVar(cmds.ScbSlot(tg, objective))
 
 @axe.chop
 @axe.arg("object", EntityDataType, rename="obj")
@@ -99,10 +99,10 @@ def acacia_build(compiler: "Compiler"):
         ('ExternEngroup', ExternEGroupGeneric),
         ('Any', AnyType),
     ):
-        res[name] = cls(compiler)
+        res[name] = cls()
     # builtin names
     res['Entity'] = compiler.base_template
-    res['swap'] = BinaryFunction(swap, compiler)
-    res['scb'] = BinaryFunction(scb, compiler)
-    res['upcast'] = BinaryFunction(upcast, compiler)
+    res['swap'] = BinaryFunction(swap)
+    res['scb'] = BinaryFunction(scb)
+    res['upcast'] = BinaryFunction(upcast)
     return res

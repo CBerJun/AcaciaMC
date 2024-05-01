@@ -27,7 +27,7 @@ class ArgFString(axe.Multityped):
     def convert(self, origin: AcaciaExpr) -> "FString":
         origin = super().convert(origin)
         if isinstance(origin, String):
-            fstr = FString([], [{"text": origin.value}], origin.compiler)
+            fstr = FString([], [{"text": origin.value}])
         else:
             assert isinstance(origin, FString)
             fstr = origin
@@ -38,13 +38,14 @@ class _FStrError(Exception):
         return self.args[0]
 
 class _FStrParser:
-    def __init__(self, pattern: str, args, keywords):
+    def __init__(self, pattern: str, args, keywords, compiler: "Compiler"):
         """Parse an fstring with `pattern` and `args` and `keywords`
         as formatted expressions."""
         self.pattern = pattern
         self.ptr = 0
         self.args = args
         self.keywords = keywords
+        self.compiler = compiler
         self.dependencies = []
         self.json = []  # the result
         self.text_cache: List[str] = []
@@ -79,7 +80,7 @@ class _FStrParser:
                 # optimize for literals
                 self.add_text(str(expr.value))
             else:
-                dependencies, var = to_IntVar(expr)
+                dependencies, var = to_IntVar(expr, self.compiler)
                 self.dependencies.extend(dependencies)
                 self.add_score(var.slot)
         elif expr.data_type.matches_cls(BoolDataType):
@@ -87,7 +88,7 @@ class _FStrParser:
                 # optimize for literals
                 self.add_text('1' if expr.value else '0')
             else:
-                dependencies, var = to_BoolVar(expr)
+                dependencies, var = to_BoolVar(expr, self.compiler)
                 self.dependencies.extend(dependencies)
                 self.add_score(var.slot)
         elif isinstance(expr, String):
@@ -164,16 +165,15 @@ class FString(ConstExprCombined):
     """A formatted string in JSON format."""
     cdata_type = ctdt_fstring
 
-    def __init__(self, dependencies: List[str], json: List[dict], compiler):
+    def __init__(self, dependencies: List[str], json: List[dict]):
         # dependencies: commands to run before json rawtext is used
         # json: JSON rawtext without {"rawtext": ...}
-        super().__init__(FStringDataType(compiler), compiler)
+        super().__init__(FStringDataType())
         self.dependencies = dependencies
         self.json = json
 
     def copy(self):
-        return FString(self.dependencies.copy(),
-                       deepcopy(self.json), self.compiler)
+        return FString(self.dependencies.copy(), deepcopy(self.json))
 
     def cadd(self, other):
         # connect strings
@@ -213,11 +213,11 @@ def _format(compiler, pattern: str, args, kwds):
      format("Val1: %0; Val2: %{value}; Name: %{1}", val1, x, value=val2)
     """
     try:
-        dependencies, json = _FStrParser(pattern, args, kwds).parse()
+        dependencies, json = _FStrParser(pattern, args, kwds, compiler).parse()
     except _FStrError as err:
         raise Error(ErrorType.ANY, message=str(err))
     # scan pattern
-    return FString(dependencies, json, compiler)
+    return FString(dependencies, json)
 
 @axe.chop
 @axe.arg("key", axe.LiteralString())
@@ -226,7 +226,7 @@ def _translate(compiler, key: str):
     Return an fstring that uses the given localization key.
     Example: format("Give me %0!", translate("item.diamond.name"))
     """
-    return FString([], [{"translate": key}], compiler)
+    return FString([], [{"translate": key}])
 
 class _FontComponent(dict):
     def __init__(self, text: str, label: str):
@@ -324,7 +324,7 @@ def _tell(compiler, text: FString, target: Optional["MCSelector"]):
         target_str = target.to_str()
     commands.extend(text.dependencies)
     commands.append(cmds.RawtextOutput("tellraw %s" % target_str, text.json))
-    return resultlib.commands(commands, compiler)
+    return resultlib.commands(commands)
 
 # Title modes
 _TITLE = 'title'
@@ -378,7 +378,7 @@ def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
         # only reset when config is not the default one
         commands.append(cmds.TitlerawResetTimes(target_str))
     ## return
-    return resultlib.commands(commands, compiler)
+    return resultlib.commands(commands)
 
 @axe.chop
 @axe.arg("target", axe.PlayerSelector(), default=None)
@@ -390,17 +390,17 @@ def _title_clear(compiler, target: Optional["MCSelector"]):
         target_str = "@a"
     else:
         target_str = target.to_str()
-    return resultlib.commands([cmds.TitlerawClear(target_str)], compiler)
+    return resultlib.commands([cmds.TitlerawClear(target_str)])
 
 def acacia_build(compiler: "Compiler"):
     return {
-        'format': BinaryCTFunction(_format, compiler),
-        'translate': BinaryCTFunction(_translate, compiler),
-        'with_font': BinaryCTFunction(_with_font, compiler),
-        'tell': BinaryFunction(_tell, compiler),
-        'title': BinaryFunction(_title, compiler),
-        'TITLE': String(_TITLE, compiler),
-        'SUBTITLE': String(_SUBTITLE, compiler),
-        'ACTIONBAR': String(_ACTIONBAR, compiler),
-        'title_clear': BinaryFunction(_title_clear, compiler)
+        'format': BinaryCTFunction(_format),
+        'translate': BinaryCTFunction(_translate),
+        'with_font': BinaryCTFunction(_with_font),
+        'tell': BinaryFunction(_tell),
+        'title': BinaryFunction(_title),
+        'TITLE': String(_TITLE),
+        'SUBTITLE': String(_SUBTITLE),
+        'ACTIONBAR': String(_ACTIONBAR),
+        'title_clear': BinaryFunction(_title_clear)
     }

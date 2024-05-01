@@ -30,16 +30,14 @@ ctdt_position = CTDataType("Pos")
 
 class PosType(Type):
     def do_init(self):
-        self.attribute_table.set(
-            "OVERWORLD", String("overworld", self.compiler)
-        )
-        self.attribute_table.set("NETHER", String("nether", self.compiler))
-        self.attribute_table.set("THE_END", String("the_end", self.compiler))
-        self.attribute_table.set("FEET", String("feet", self.compiler))
-        self.attribute_table.set("EYES", String("eyes", self.compiler))
-        self.attribute_table.set("X", String("x", self.compiler))
-        self.attribute_table.set("Y", String("y", self.compiler))
-        self.attribute_table.set("Z", String("z", self.compiler))
+        self.attribute_table.set("OVERWORLD", String("overworld"))
+        self.attribute_table.set("NETHER", String("nether"))
+        self.attribute_table.set("THE_END", String("the_end"))
+        self.attribute_table.set("FEET", String("feet"))
+        self.attribute_table.set("EYES", String("eyes"))
+        self.attribute_table.set("X", String("x"))
+        self.attribute_table.set("Y", String("y"))
+        self.attribute_table.set("Z", String("z"))
         @cmethod_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
@@ -55,7 +53,7 @@ class PosType(Type):
             @axe.arg("target", EntityDataType)
             @axe.arg("anchor", axe.LiteralString())
             def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
-                inst = Position(compiler)
+                inst = Position()
                 inst.context.append(cmds.ExecuteEnv("at", target.to_str()))
                 inst.context.append(cmds.ExecuteEnv("anchored", anchor))
                 return inst
@@ -70,17 +68,17 @@ class PosType(Type):
             @axe.arg("y", axe.LiteralFloat())
             @axe.arg("z", axe.PosXZ())
             def absolute(cls, compiler, x: float, y: float, z: float):
-                offset = PosOffset(compiler)
+                offset = PosOffset()
                 offset.set(0, x, CoordinateType.ABSOLUTE)
                 offset.set(1, y, CoordinateType.ABSOLUTE)
                 offset.set(2, z, CoordinateType.ABSOLUTE)
-                inst = Position(compiler)
+                inst = Position()
                 new_inst, cmds = (inst.attribute_table.lookup("apply")
-                                  .call([offset], {}))
+                                  .call([offset], {}, compiler))
                 return new_inst, cmds
 
     def datatype_hook(self):
-        return PosDataType(self.compiler)
+        return PosDataType()
 
     def cdatatype_hook(self):
         return ctdt_position
@@ -88,8 +86,8 @@ class PosType(Type):
 class Position(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_position
 
-    def __init__(self, compiler):
-        super().__init__(PosDataType(compiler), compiler)
+    def __init__(self):
+        super().__init__(PosDataType())
         self.context: List["_ExecuteSubcmd"] = []
 
         @cmethod_of(self, "dim")
@@ -118,7 +116,7 @@ class Position(ConstExprCombined, ImmutableMixin):
                       front: float = 0.0)
             Apply local offset to current position, using given rotation.
             """
-            offset = PosOffset.local(left, up, front, compiler)
+            offset = PosOffset.local(left, up, front)
             self.context.extend(rot.context)
             self.context.append(cmds.ExecuteEnv("positioned", str(offset)))
             return self
@@ -146,24 +144,23 @@ class Position(ConstExprCombined, ImmutableMixin):
                 raise Error(ErrorType.INVALID_POS_ALIGN, align=axis)
             self.context.append(cmds.ExecuteEnv("align", axis))
             return self
-        self.attribute_table.set("abs", BinaryFunction(_abs, self.compiler))
-        self.attribute_table.set(
-            "offset", BinaryFunction(_offset, self.compiler))
+        self.attribute_table.set("abs", BinaryFunction(_abs))
+        self.attribute_table.set("offset", BinaryFunction(_offset))
 
     def _create_offset_alias(self, method: str):
         @transform_immutable(self)
         def _offset_alias(self: Position, compiler, args, kwds):
             offset, cmds = (
-                PosOffset(compiler).attribute_table.lookup(method)
-                .call(args, kwds)
+                PosOffset().attribute_table.lookup(method)
+                .call(args, kwds, compiler)
             )
             new_obj, _cmds = (self.attribute_table.lookup("apply")
-                              .call([offset], {}))
+                              .call([offset], {}, compiler))
             cmds.extend(_cmds)
             return new_obj, cmds
         return _offset_alias
 
     def copy(self) -> "Position":
-        res = Position(self.compiler)
+        res = Position()
         res.context = self.context.copy()
         return res

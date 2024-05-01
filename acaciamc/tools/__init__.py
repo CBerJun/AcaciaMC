@@ -14,17 +14,12 @@ def method_of(obj: "expr.AcaciaExpr", name: str):
     whose implementation is decorated function.
     """
     def _decorator(func: _Callable):
-        obj.attribute_table.set(
-            name, objects.BinaryFunction(func, obj.compiler)
-        )
+        obj.attribute_table.set(name, objects.BinaryFunction(func))
         return func
     return _decorator
 
 def cmethod_of(obj: _Union[expr.AcaciaExpr, ctexpr.CTObj],
-               name: str, compiler=None, runtime=True):
-    if compiler is None:
-        assert isinstance(obj, expr.AcaciaExpr)
-        compiler = obj.compiler
+               name: str, runtime=True):
     table1 = table2 = None
     if isinstance(obj, expr.AcaciaExpr):
         table1 = obj.attribute_table
@@ -32,9 +27,9 @@ def cmethod_of(obj: _Union[expr.AcaciaExpr, ctexpr.CTObj],
         table2 = obj.attributes
     def _decorator(func):
         if runtime:
-            obj = objects.BinaryCTFunction(func, compiler)
+            obj = objects.BinaryCTFunction(func)
         else:
-            obj = objects.BinaryCTOnlyFunction(func, compiler)
+            obj = objects.BinaryCTOnlyFunction(func)
         if table1:
             table1.set(name, obj)
         if table2:

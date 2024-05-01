@@ -89,28 +89,28 @@ class CTExecuter(ASTVisitor):
         value = node.value
         # NOTE Python bool is a subclass of int!!!
         if isinstance(value, bool):
-            return BoolLiteral(value, self.compiler)
+            return BoolLiteral(value)
         elif isinstance(value, int):
-            return IntLiteral(value, self.compiler)
+            return IntLiteral(value)
         elif value is None:
-            return NoneLiteral(self.compiler)
+            return NoneLiteral()
         elif isinstance(value, float):
-            return Float(value, self.compiler)
+            return Float(value)
         unreachable()
 
     def visit_StrLiteral(self, node: StrLiteral):
         s = self.visit(node.content)
-        return String(s, self.compiler)
+        return String(s)
 
     def visit_Self(self, node: Self):
         self.error_node(node, ErrorType.SELF_OUT_OF_SCOPE)
 
     def visit_ListDef(self, node: ListDef):
-        return CTList(map(self.visit, node.items), self.compiler)
+        return CTList(map(self.visit, node.items))
 
     def visit_MapDef(self, node: MapDef):
         return CTMap(map(self.visit, node.keys),
-                     map(self.visit, node.values), self.compiler)
+                     map(self.visit, node.values))
 
     def visit_Identifier(self, node: Identifier):
         name = node.name
@@ -199,7 +199,7 @@ class CTExecuter(ASTVisitor):
                     )
             if not res:
                 final = False
-        return BoolLiteral(final, self.compiler)
+        return BoolLiteral(final)
 
     def visit_BoolOp(self, node: BoolOp):
         operands: List[CTObj] = [
@@ -219,7 +219,7 @@ class CTExecuter(ASTVisitor):
                 res = True
             elif not operand.value and operator is Operator.and_:
                 res = False
-        return BoolLiteral(res, self.compiler)
+        return BoolLiteral(res)
 
     def visit_Call(self, node: Call):
         func: CTObj = abs(self.visit(node.func))
@@ -227,7 +227,10 @@ class CTExecuter(ASTVisitor):
             self.error_node(node, ErrorType.UNCALLABLE,
                             expr_type=func.cdata_type.name)
         args, keywords = self.visit(node.table)
-        return func.ccall_withframe(args, keywords, self.node_location(node))
+        return func.ccall_withframe(
+            args, keywords, self.compiler,
+            self.node_location(node)
+        )
 
     def visit_Subscript(self, node: Subscript):
         obj: CTObj = abs(self.visit(node.object))
@@ -240,7 +243,10 @@ class CTExecuter(ASTVisitor):
         if not isinstance(meth, CTCallable):
             self.error_node(node, ErrorType.UNCALLABLE,
                             expr_type=obj.cdata_type.name)
-        return meth.ccall_withframe(subscripts, {}, self.node_location(node))
+        return meth.ccall_withframe(
+            subscripts, {}, self.compiler,
+            self.node_location(node)
+        )
 
     ## Statement visitors
 

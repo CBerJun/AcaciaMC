@@ -34,9 +34,9 @@ class BinaryModule(ConstExprCombined):
     """A binary module that is implemented in Python."""
     cdata_type = ctdt_module
 
-    def __init__(self, path: str, compiler):
+    def __init__(self, path: str):
         """`path` is path to the binary module Python file."""
-        super().__init__(ModuleDataType(compiler), compiler)
+        super().__init__(ModuleDataType())
         self.path = path
         # get the module from `path`
         self.spec = importlib.util.spec_from_file_location(
@@ -44,7 +44,7 @@ class BinaryModule(ConstExprCombined):
         )
         self.py_module = importlib.util.module_from_spec(self.spec)
 
-    def execute(self) -> CMDLIST_T:
+    def execute(self, compiler) -> CMDLIST_T:
         """
         Execute the code in the binary module Python file.
         Return the commands run by the module during initialization.
@@ -55,7 +55,7 @@ class BinaryModule(ConstExprCombined):
         # which accepts 1 argument `compiler` and should return either
         # a `BuiltModule` or a `dict` containing the attributes of the
         # module (same as `BuiltModule.attributes`).
-        res = self.py_module.acacia_build(self.compiler)
+        res = self.py_module.acacia_build(compiler)
         if isinstance(res, dict):
             res = BuiltModule(res)
         for name, value in res.attributes.items():
@@ -66,8 +66,8 @@ class AcaciaModule(ConstExprCombined):
     """An Acacia module that is implemented in Acacia."""
     cdata_type = ctdt_module
 
-    def __init__(self, table: SymbolTable, compiler):
-        super().__init__(ModuleDataType(compiler), compiler)
+    def __init__(self, table: SymbolTable):
+        super().__init__(ModuleDataType())
         for name in table.all_names():
             if not (name in table.no_export or name.startswith('_')):
                 self.attribute_table.set(name, table.get_raw(name))

@@ -13,7 +13,6 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType, CTCallable
 
 if TYPE_CHECKING:
-    from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import DataType
 
 class TypeDataType(DefaultDataType):
@@ -27,8 +26,8 @@ class Type(ConstExprCombined, AcaciaCallable, CTCallable, metaclass=ABCMeta):
     """
     cdata_type = ctdt_type
 
-    def __init__(self, compiler: "Compiler"):
-        super().__init__(TypeDataType(compiler), compiler)
+    def __init__(self):
+        super().__init__(TypeDataType())
         self.func_repr = str(self.datatype_hook())
         self.do_init()
 
@@ -36,7 +35,7 @@ class Type(ConstExprCombined, AcaciaCallable, CTCallable, metaclass=ABCMeta):
         """Initialzer for `Type`s. This exists due to historical reason."""
         pass
 
-    def call(self, args, keywords):
+    def call(self, args, keywords, compiler):
         """
         Calling a type is to create an instance of this type,
         i.e. calling `__new__`.
@@ -45,14 +44,14 @@ class Type(ConstExprCombined, AcaciaCallable, CTCallable, metaclass=ABCMeta):
         if new is None or not isinstance(new, AcaciaCallable):
             raise Error(ErrorType.CANT_CREATE_INSTANCE,
                         type_=str(self.datatype_hook()))
-        return new.call(args, keywords)
+        return new.call(args, keywords, compiler)
 
-    def ccall(self, args, keywords):
+    def ccall(self, args, keywords, compiler):
         new = self.attributes.clookup('__new__')
         if new is None or not isinstance(new, CTCallable):
             raise Error(ErrorType.CANT_CREATE_INSTANCE,
                         type_=self.cdatatype_hook().name)
-        return new.ccall(args, keywords)
+        return new.ccall(args, keywords, compiler)
 
     @abstractmethod
     def datatype_hook(self) -> "DataType":

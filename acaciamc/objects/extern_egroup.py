@@ -55,8 +55,8 @@ if TYPE_CHECKING:
     from .entity_template import EntityTemplate
 
 class ExternEGroupDataType(EGroupDataType):
-    def __init__(self, template: "EntityTemplate"):
-        super().__init__(template.compiler.external_template)
+    def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
+        super().__init__(compiler.external_template)
         self.__template = template
 
     def __str__(self) -> str:
@@ -66,16 +66,20 @@ class ExternEGroupDataType(EGroupDataType):
     def name_no_generic(cls) -> str:
         return "ExternEngroup"
 
-    def new_var(self):
-        return ExternEGroup(self.__template, self.compiler)
+    def new_var(self, compiler):
+        return ExternEGroup(self.__template, compiler)
 
 class ExternEGroupType(EGroupType):
+    def __init__(self, template, compiler):
+        super().__init__(template)
+        self.compiler = compiler
+
     def datatype_hook(self):
-        return ExternEGroupDataType(self.template)
+        return ExternEGroupDataType(self.template, self.compiler)
 
 class ExternEGroupGeneric(EGroupGeneric):
-    def __init__(self, compiler):
-        super().__init__(compiler)
+    def __init__(self):
+        super().__init__()
         @cmethod_of(self, "__getitem__")
         @axe.chop
         @axe.arg("template", ETemplateDataType)
@@ -85,25 +89,26 @@ class ExternEGroupGeneric(EGroupGeneric):
 class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_function
 
-    def __init__(self, owner: "ExternEGroup", compiler: "Compiler"):
-        super().__init__(FunctionDataType(compiler), compiler)
+    def __init__(self, owner: "ExternEGroup"):
+        super().__init__(FunctionDataType())
         self.owner = owner
         self.func_repr = "<resolve of %s>" % str(self.owner.data_type)
 
     def initialize(
             self, instance: "EntityGroup",
-            args: "ARGS_T", keywords: "KEYWORDS_T"
+            args: "ARGS_T", keywords: "KEYWORDS_T",
+            compiler: "Compiler"
         ) -> "CALLRET_T":
         template = self.owner.extern_template
         SELF = self.owner.get_selector().to_str()
-        RESOLVE_CTOR = EGroupType(template, self.compiler)
+        RESOLVE_CTOR = EGroupType(template, compiler)
         @axe.chop
         def _call_me(compiler: "Compiler"):
-            commands = RESOLVE_CTOR.initialize(instance, [], {})
+            commands = RESOLVE_CTOR.initialize(instance, [], {}, compiler)
             commands.append("tag %s add %s" % (SELF, template.runtime_tag))
             commands.append("tag %s add %s" % (SELF, instance.tag))
-            return resultlib.commands(commands, compiler)
-        _, c = BinaryFunction(_call_me, self.compiler).call(args, keywords)
+            return resultlib.commands(commands)
+        _, c = BinaryFunction(_call_me).call(args, keywords, compiler)
         return c
 
     def _var_type(self):
@@ -112,7 +117,5 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
 class ExternEGroup(EntityGroup):
     def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
         super().__init__(ExternEGroupDataType(template), compiler)
-        self.attribute_table.set(
-            "resolve", _ExternEGroupResolve(self, compiler)
-        )
+        self.attribute_table.set("resolve", _ExternEGroupResolve(self))
         self.extern_template = template

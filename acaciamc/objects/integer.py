@@ -31,7 +31,6 @@ __all__ = [
 ]
 
 from typing import TYPE_CHECKING, List, Tuple, Callable, Optional, Dict, Union
-from abc import ABCMeta, abstractmethod
 from functools import partialmethod
 import operator
 
@@ -41,7 +40,7 @@ from .boolean import (
 )
 from acaciamc.error import *
 from acaciamc.constants import INT_MIN, INT_MAX
-from acaciamc.tools import axe, resultlib, cmethod_of
+from acaciamc.tools import axe, cmethod_of
 from acaciamc.ast import Operator, COMPOP_INVERT
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import (
@@ -106,22 +105,21 @@ STR2PYINTOP: Dict[str, Callable[[int, int], int]] = {
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
 
-    def new_var(self) -> "IntVar":
-        return IntVar.new(self.compiler)
+    def new_var(self, compiler) -> "IntVar":
+        return IntVar.new(compiler)
 
-    def new_entity_field(self):
-        return {"scoreboard": self.compiler.add_scoreboard()}
+    def new_entity_field(self, compiler):
+        return {"scoreboard": compiler.add_scoreboard()}
 
-    def new_var_as_field(self, entity, **meta) -> "IntVar":
-        return IntVar(cmds.ScbSlot(entity.to_str(), meta["scoreboard"]),
-                      self.compiler)
+    def new_var_as_field(self, entity, scoreboard: str) -> "IntVar":
+        return IntVar(cmds.ScbSlot(entity.to_str(), scoreboard))
 
 ctdt_int = CTDataType("int")
 
 class IntType(Type):
     def do_init(self):
-        self.attribute_table.set('MAX', IntLiteral(INT_MAX, self.compiler))
-        self.attribute_table.set('MIN', IntLiteral(INT_MIN, self.compiler))
+        self.attribute_table.set('MAX', IntLiteral(INT_MAX))
+        self.attribute_table.set('MIN', IntLiteral(INT_MIN))
         @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("b", BoolDataType)
@@ -132,17 +130,17 @@ class IntType(Type):
             Returns 1 if `b` is True, or 0 otherwise.
             """
             if isinstance(b, BoolLiteral):
-                return resultlib.literal(int(b.value), compiler)
+                return IntLiteral(int(b.value))
             # Fallback: convert `b` to `BoolVar`,
             # Since 0 is used to store False, 1 is for True, just
             # "cast" it to `IntVar`.
-            dependencies, bool_var = to_BoolVar(b)
-            res = IntVar(bool_var.slot, self.compiler)
+            dependencies, bool_var = to_BoolVar(b, compiler)
+            res = IntVar(bool_var.slot)
             res.is_temporary = True
             return res, dependencies
 
     def datatype_hook(self):
-        return IntDataType(self.compiler)
+        return IntDataType()
 
     def cdatatype_hook(self):
         return ctdt_int
@@ -155,19 +153,19 @@ class IntCompare(CompareBase):
     """
     def __init__(
         self, left: AcaciaExpr, operator: Operator,
-        right: AcaciaExpr, compiler
+        right: AcaciaExpr
     ):
-        super().__init__(compiler)
+        super().__init__()
         self.left = left
         self.operator = operator
         self.right = right
 
-    def as_execute(self) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
+    def as_execute(self, compiler) -> Tuple[CMDLIST_T, List["_ExecuteSubcmd"]]:
         res_dependencies = []  # return[0]
         res_main = []  # return[1]
-        dependency, var_left = to_IntVar(self.left)
+        dependency, var_left = to_IntVar(self.left, compiler)
         res_dependencies.extend(dependency)
-        dependency, var_right = to_IntVar(self.right)
+        dependency, var_right = to_IntVar(self.right, compiler)
         res_dependencies.extend(dependency)
         # != is specially handled, because Minecraft does not provide
         # such syntax like 'if score ... != ...' while other 5
@@ -184,10 +182,8 @@ class IntCompare(CompareBase):
         return res_dependencies, res_main
 
     # Unary operator
-    def unarynot(self):
-        return IntCompare(
-            self.left, COMPOP_INVERT[self.operator], self.right, self.compiler
-        )
+    def unarynot(self, compiler):
+        return IntCompare(self.left, COMPOP_INVERT[self.operator], self.right)
 
 class IntLiteral(ConstExprCombined):
     """Represents a literal integer.
@@ -197,8 +193,8 @@ class IntLiteral(ConstExprCombined):
     """
     cdata_type = ctdt_int
 
-    def __init__(self, value: int, compiler):
-        super().__init__(IntDataType(compiler), compiler)
+    def __init__(self, value: int):
+        super().__init__(IntDataType())
         self.value = value
         # check overflow
         if not INT_MIN <= value <= INT_MAX:
@@ -210,7 +206,7 @@ class IntLiteral(ConstExprCombined):
     def chash(self):
         return self.value
 
-    def export(self, var: "IntVar"):
+    def export(self, var: "IntVar", compiler):
         return [cmds.ScbSetConst(var.slot, self.value)]
 
     def ccompare(self, op, other: Union[AcaciaExpr, "CTObj"]) -> bool:
@@ -224,7 +220,7 @@ class IntLiteral(ConstExprCombined):
         return self
 
     def cunaryneg(self):
-        return IntLiteral(-self.value, self.compiler)
+        return IntLiteral(-self.value)
 
     ## BINARY OPERATORS
 
@@ -234,7 +230,7 @@ class IntLiteral(ConstExprCombined):
                 v = STR2PYINTOP[op](self.value, other.value)
             except ArithmeticError as err:
                 raise Error(ErrorType.CONST_ARITHMETIC, message=str(err))
-            return IntLiteral(v, self.compiler)
+            return IntLiteral(v)
         raise InvalidOpError
 
     cadd = partialmethod(_bin_op, '+')
@@ -245,44 +241,43 @@ class IntLiteral(ConstExprCombined):
 
 class IntVar(VarValue):
     """An integer variable."""
-    def __init__(self, slot: cmds.ScbSlot, compiler):
-        super().__init__(IntDataType(compiler), compiler)
+    def __init__(self, slot: cmds.ScbSlot):
+        super().__init__(IntDataType())
         self.slot = slot
 
     @classmethod
     def new(cls, compiler: "Compiler", tmp=False):
         alloc = compiler.allocate_tmp if tmp else compiler.allocate
-        return cls(alloc(), compiler)
+        return cls(alloc())
 
-    def export(self, var: "IntVar"):
+    def export(self, var: "IntVar", compiler):
         return [cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, self.slot)]
 
-    def compare(self, op, other):
+    def compare(self, op, other, compiler):
         if not other.data_type.matches_cls(IntDataType):
             raise InvalidOpError
         if isinstance(other, IntLiteral):
-            return ScbMatchesCompare(
-                [], self.slot, op, other.value, self.compiler
-            )
-        return IntCompare(self, op, other, self.compiler)
+            return ScbMatchesCompare([], self.slot, op, other.value)
+        return IntCompare(self, op, other)
 
-    def swap(self, other: "IntVar"):
+    def swap(self, other: "IntVar", compiler):
         return [cmds.ScbOperation(cmds.ScbOp.SWAP, self.slot, other.slot)]
 
     ## UNARY OPERATORS
 
-    def unarypos(self):
+    def unarypos(self, compiler):
         return self
 
-    def unaryneg(self):
-        return IntOpGroup.from_intexpr(self).unaryneg()
+    def unaryneg(self, compiler):
+        return IntOpGroup.from_intexpr(self).unaryneg(compiler)
 
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _bin_op(self, name: str, other):
+    def _bin_op(self, name: str, other, compiler):
         # `name` is method name
         if isinstance(other, (IntLiteral, IntVar)):
-            return getattr(IntOpGroup.from_intexpr(self), name)(other)
+            meth = getattr(IntOpGroup.from_intexpr(self), name)
+            return meth(other, compiler)
         raise InvalidOpError
 
     add = partialmethod(_bin_op, 'add')
@@ -295,9 +290,10 @@ class IntVar(VarValue):
     # only `IntLiteral` might call rxxx of self
     # so just convert self to `IntOpGroup` and let this handle operation
 
-    def _r_bin_op(self, name, other):
+    def _r_bin_op(self, name, other, compiler):
         if isinstance(other, IntLiteral):
-            return getattr(IntOpGroup.from_intexpr(other), name)(self)
+            meth = getattr(IntOpGroup.from_intexpr(other), name)
+            return meth(self, compiler)
         raise InvalidOpError
 
     radd = partialmethod(_r_bin_op, 'add')
@@ -308,7 +304,8 @@ class IntVar(VarValue):
 
     # AUGMENTED ASSIGN `ixxx`
 
-    def _iadd_sub(self, other, operator: str) -> list:
+    def _iadd_sub(self, operator: str, other,
+                  compiler: "Compiler") -> CMDLIST_T:
         """Implementation of iadd and isub."""
         if isinstance(other, IntLiteral):
             cls = cmds.ScbAddConst if operator == '+' else cmds.ScbRemoveConst
@@ -318,13 +315,14 @@ class IntVar(VarValue):
                 STR2SCBOP[operator], self.slot, other.slot
             )]
         elif isinstance(other, IntOpGroup):
-            return self._aug_IntOpGroup(other, operator)
+            return self._aug_IntOpGroup(other, operator, compiler)
         raise InvalidOpError
 
-    def _imul_div_mod(self, other, operator: str) -> list:
+    def _imul_div_mod(self, operator: str, other,
+                      compiler: "Compiler") -> CMDLIST_T:
         """Implementation of imul, idiv, imod."""
         if isinstance(other, IntLiteral):
-            const = self.compiler.add_int_const(other.value)
+            const = compiler.add_int_const(other.value)
             return [cmds.ScbOperation(
                 STR2SCBOP[operator], self.slot, const.slot
             )]
@@ -333,34 +331,29 @@ class IntVar(VarValue):
                 STR2SCBOP[operator], self.slot, other.slot
             )]
         elif isinstance(other, IntOpGroup):
-            return self._aug_IntOpGroup(other, operator)
+            return self._aug_IntOpGroup(other, operator, compiler)
         raise InvalidOpError
 
-    def _aug_IntOpGroup(self, other: "IntOpGroup", operator: str):
+    def _aug_IntOpGroup(self, other: "IntOpGroup", operator: str, compiler):
         """Implementation for augmented assigns where `other` is
         `IntOpGroup`. `operator` is "+", "-", etc.
         """
         # In this condition, we convert a (op)= b to a = a (op) b
         ## Calculate
-        value = getattr(self, STR2METHOD[operator])(other)
+        value = getattr(self, STR2METHOD[operator])(other, compiler)
         ## Export
-        tmp = IntVar.new(self.compiler, tmp=True)
-        res = value.export(tmp)
+        tmp = IntVar.new(compiler, tmp=True)
+        res = value.export(tmp, compiler)
         res.extend(tmp.export(self))
         return res
 
-    def iadd(self, other):
-        return self._iadd_sub(other, '+')
-    def isub(self, other):
-        return self._iadd_sub(other, '-')
-    def imul(self, other):
-        return self._imul_div_mod(other, '*')
-    def idiv(self, other):
-        return self._imul_div_mod(other, '/')
-    def imod(self, other):
-        return self._imul_div_mod(other, '%')
+    iadd = partialmethod(_iadd_sub, '+')
+    isub = partialmethod(_iadd_sub, '-')
+    imul = partialmethod(_imul_div_mod, '*')
+    idiv = partialmethod(_imul_div_mod, '/')
+    imod = partialmethod(_imul_div_mod, '%')
 
-class IntOp(metaclass=ABCMeta):
+class IntOp:
     # This is intended to be immutable
     def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
         # Override-able
@@ -370,10 +363,21 @@ class IntOp(metaclass=ABCMeta):
         # Override-able
         return False
 
-    @abstractmethod
     def resolve(self, var: IntVar) -> CMDLIST_T:
-        # The returned list won't be modified
-        pass
+        """
+        Override this or `resolve_full`.
+        The returned list won't be modified.
+        """
+        raise NotImplementedError(
+            "Must override either `resolve` or `resolve_full`"
+        )
+
+    def resolve_full(self, var: IntVar, compiler: "Compiler") -> CMDLIST_T:
+        """
+        Override this or `resolve`.
+        The returned list won't be modified.
+        """
+        return self.resolve(var)
 
 class IntSetConst(IntOp):
     def __init__(self, value: int) -> None:
@@ -395,11 +399,11 @@ class IntOpConst(IntOp):
         self.op = op
         self.value = value
 
-    def resolve(self, var: IntVar) -> CMDLIST_T:
+    def resolve_full(self, var: IntVar, compiler: "Compiler") -> CMDLIST_T:
         if self.op == "+" or self.op == "-":
             cls = cmds.ScbAddConst if self.op == "+" else cmds.ScbRemoveConst
             return [cls(var.slot, self.value)]
-        c = var.compiler.add_int_const(self.value)
+        c = compiler.add_int_const(self.value)
         return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, c.slot)]
 
 class IntOpVar(IntOp):
@@ -445,8 +449,8 @@ class IntCmdOp(IntOp):
 
 class IntOpGroup(AcaciaExpr):
     """An `IntOpGroup` stores complex integer operations."""
-    def __init__(self, init: Optional[IntOp], compiler):
-        super().__init__(IntDataType(compiler), compiler)
+    def __init__(self, init: Optional[IntOp]):
+        super().__init__(IntDataType())
         self.ops: List[IntOp] = []
         if init is not None:
             self.ops.append(init)
@@ -459,7 +463,7 @@ class IntOpGroup(AcaciaExpr):
         """
         if isinstance(init, IntOpGroup):
             return init
-        res = cls(None, init.compiler)
+        res = cls(None)
         if isinstance(init, IntLiteral):
             res.add_op(IntSetConst(init.value))
         elif isinstance(init, IntVar):
@@ -468,53 +472,51 @@ class IntOpGroup(AcaciaExpr):
             unreachable()
         return res
 
-    def export(self, var: IntVar):
+    def export(self, var: IntVar, compiler):
         need_tmp = False
         for op in self.ops:
             if op.scb_did_read(var.slot) or op.scb_did_assign(var.slot):
                 need_tmp = True
                 break
         if need_tmp:
-            tmp = IntVar.new(self.compiler, tmp=True)
+            tmp = IntVar.new(compiler, tmp=True)
         else:
             tmp = var
         res = []
         for op in self.ops:
-            res.extend(op.resolve(tmp))
+            res.extend(op.resolve_full(tmp, compiler))
         if need_tmp:
-            res.extend(tmp.export(var))
+            res.extend(tmp.export(var, compiler))
         return res
 
     def copy(self):
-        res = IntOpGroup(init=None, compiler=self.compiler)
+        res = IntOpGroup(init=None)
         res.ops = self.ops.copy()
         return res
 
-    def compare(self, op, other):
+    def compare(self, op, other, compiler):
         if not other.data_type.matches_cls(IntDataType):
             raise InvalidOpError
         if isinstance(other, IntLiteral):
-            commands, var = to_IntVar(self)
-            return ScbMatchesCompare(
-                commands, var.slot, op, other.value, self.compiler
-            )
-        return IntCompare(self, op, other, self.compiler)
+            commands, var = to_IntVar(self, compiler)
+            return ScbMatchesCompare(commands, var.slot, op, other.value)
+        return IntCompare(self, op, other)
 
     def add_op(self, op: IntOp):
         self.ops.append(op)
 
     ## UNARY OPERATORS
 
-    def unarypos(self):
+    def unarypos(self, compiler):
         return self
 
-    def unaryneg(self):
+    def unaryneg(self, compiler):
         # -expr = expr * (-1)
-        return self.mul(self.compiler.add_int_const(-1))
+        return self.mul(compiler.add_int_const(-1))
 
     ## BINARY (SELF ... OTHER) OPERATORS
 
-    def _bin_op(self, operator: str, other):
+    def _bin_op(self, operator: str, other, compiler):
         """Implements binary operators (see `STR2SCBOP`)."""
         res = self.copy()
         if isinstance(other, IntLiteral):
@@ -522,8 +524,8 @@ class IntOpGroup(AcaciaExpr):
         elif isinstance(other, IntVar):
             res.add_op(IntOpVar(operator, other.slot))
         elif isinstance(other, IntOpGroup):
-            tmp = IntVar.new(self.compiler, tmp=True)
-            res.add_op(IntCmdOp(other.export(tmp)))
+            tmp = IntVar.new(compiler, tmp=True)
+            res.add_op(IntCmdOp(other.export(tmp, compiler)))
             res.add_op(IntOpVar(operator, tmp.slot))
         else:
             raise InvalidOpError
@@ -538,17 +540,18 @@ class IntOpGroup(AcaciaExpr):
     ## BINARY (OTHER ... SELF) OPERATORS
     # `other` in self.rxxx may be IntLiteral or IntVar
 
-    def _r_add_mul(self, name: str, other):
+    def _r_add_mul(self, name: str, other, compiler):
         # a (+ or *) b is b (+ or *) a
         if isinstance(other, (IntLiteral, IntVar)):
             return getattr(self, name)(other)
         raise InvalidOpError
 
-    def _r_sub_div_mod(self, other, name):
+    def _r_sub_div_mod(self, other, name, compiler):
         # Convert `other` to `IntOpGroup` and use this to handle this
         # operation.
         if isinstance(other, (IntLiteral, IntVar)):
-            return getattr(IntOpGroup.from_intexpr(other), name)(self)
+            meth = getattr(IntOpGroup.from_intexpr(other), name)
+            return meth(self, compiler)
         raise InvalidOpError
 
     radd = partialmethod(_r_add_mul, 'add')
@@ -558,13 +561,14 @@ class IntOpGroup(AcaciaExpr):
     rmod = partialmethod(_r_sub_div_mod, 'mod')
 
 # Utils
-def to_IntVar(expr: AcaciaExpr, tmp=True) -> Tuple[CMDLIST_T, IntVar]:
-    """Convert any integer expression to a `IntVar` and some commands.
+def to_IntVar(expr: AcaciaExpr, compiler, tmp=True) \
+        -> Tuple[CMDLIST_T, IntVar]:
+    """Convert any integer expression to an `IntVar` and some commands.
     return[0]: the commands to run
     return[1]: the `IntVar`
     """
     if isinstance(expr, IntVar):
         return [], expr
     else:
-        var = IntVar.new(expr.compiler, tmp=tmp)
-        return expr.export(var), var
+        var = IntVar.new(compiler, tmp=tmp)
+        return expr.export(var, compiler), var

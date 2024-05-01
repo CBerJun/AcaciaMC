@@ -6,6 +6,8 @@ __all__ = [
     'ConstExpr', 'ConstExprCombined',
     # Type checking
     'ARGS_T', 'KEYWORDS_T', 'CALLRET_T', 'ITERLIST_T', 'CMDLIST_T',
+    # Expression-related routines
+    'swap_exprs'
 ]
 
 from typing import List, Union, Dict, Tuple, Hashable, Optional, TYPE_CHECKING
@@ -77,9 +79,8 @@ class AcaciaExpr:
     When you are not satisfied with input operand type, please raise
     `InvalidOpError`.
     """
-    def __init__(self, type_: "DataType", compiler: "Compiler"):
+    def __init__(self, type_: "DataType"):
         super().__init__()
-        self.compiler = compiler
         self.data_type = type_
         self.attribute_table = SymbolTable()
 
@@ -87,7 +88,7 @@ class AcaciaExpr:
         """Return whether this expression is a lvalue at runtime."""
         return False
 
-    def export(self, var: "VarValue") -> CMDLIST_T:
+    def export(self, var: "VarValue", compiler: "Compiler") -> CMDLIST_T:
         """Return the commands that assigns value of `self` to `var`.
         Since we need a `VarValue` here, only "storable" types need
         to implement this.
@@ -123,40 +124,52 @@ class AcaciaExpr:
         """
         raise InvalidOpError
 
-    def compare(self, op: "Operator", other: "AcaciaExpr") -> "AcaciaExpr":
+    def compare(self, op: "Operator", other: "AcaciaExpr",
+                compiler: "Compiler") -> "AcaciaExpr":
         """
         Implement comparison operators for this expression.
         Return value should be a boolean expression.
         """
         raise InvalidOpError
 
-    def add(self, other: "AcaciaExpr") -> "AcaciaExpr":
+    def add(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
-    def sub(self, other: "AcaciaExpr") -> "AcaciaExpr":
+    def sub(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
-    def mul(self, other: "AcaciaExpr") -> "AcaciaExpr":
+    def mul(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
-    def div(self, other: "AcaciaExpr") -> "AcaciaExpr":
+    def div(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
-    def mod(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise InvalidOpError
-
-    def radd(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise InvalidOpError
-    def rsub(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise InvalidOpError
-    def rmul(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise InvalidOpError
-    def rdiv(self, other: "AcaciaExpr") -> "AcaciaExpr":
-        raise InvalidOpError
-    def rmod(self, other: "AcaciaExpr") -> "AcaciaExpr":
+    def mod(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
 
-    def unarypos(self) -> "AcaciaExpr":
+    def radd(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
-    def unaryneg(self) -> "AcaciaExpr":
+    def rsub(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
-    def unarynot(self) -> "AcaciaExpr":
+    def rmul(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
+        raise InvalidOpError
+    def rdiv(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
+        raise InvalidOpError
+    def rmod(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
+        raise InvalidOpError
+
+    def unarypos(self, compiler: "Compiler") -> "AcaciaExpr":
+        raise InvalidOpError
+    def unaryneg(self, compiler: "Compiler") -> "AcaciaExpr":
+        raise InvalidOpError
+    def unarynot(self, compiler: "Compiler") -> "AcaciaExpr":
+        raise InvalidOpError
+
+    def iadd(self, compiler: "Compiler") -> CMDLIST_T:
+        raise InvalidOpError
+    def isub(self, compiler: "Compiler") -> CMDLIST_T:
+        raise InvalidOpError
+    def imul(self, compiler: "Compiler") -> CMDLIST_T:
+        raise InvalidOpError
+    def idiv(self, compiler: "Compiler") -> CMDLIST_T:
+        raise InvalidOpError
+    def imod(self, compiler: "Compiler") -> CMDLIST_T:
         raise InvalidOpError
 
 class ConstExpr(AcaciaExpr, metaclass=ABCMeta):
@@ -177,7 +190,7 @@ class VarValue(AcaciaExpr):
     """
     is_temporary = False  # used as a temporary and is read-only
 
-    def swap(self, other: "VarValue") -> CMDLIST_T:
+    def swap(self, other: "VarValue", compiler: "Compiler") -> CMDLIST_T:
         raise InvalidOpError
 
     def is_assignable(self) -> bool:
@@ -191,7 +204,7 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
         self.func_repr = "<unknown>"
 
     def call_withframe(
-            self, args: ARGS_T, keywords: KEYWORDS_T,
+            self, args: ARGS_T, keywords: KEYWORDS_T, compiler: "Compiler",
             location: Optional[Union[SourceLocation, str]] = None
         ) -> CALLRET_T:
         """
@@ -200,11 +213,12 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
         """
         return traced_call(
             self.call, location, self.source, self.func_repr,
-            args, keywords
+            args, keywords, compiler
         )
 
     @abstractmethod
-    def call(self, args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
+    def call(self, args: ARGS_T, keywords: KEYWORDS_T,
+             compiler: "Compiler") -> CALLRET_T:
         """
         Call this expression.
         Return value:
@@ -215,16 +229,29 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
 
 class ConstExprCombined(ConstExpr, CTObj):
     def __init_subclass__(cls) -> None:
+        def ct2rt(func):
+            def newfunc(self, *args, **kwds):
+                if "compiler" in kwds:
+                    kwds.pop("compiler")
+                else:
+                    args = list(args)
+                    args.pop()
+                return func(self, *args, **kwds)
+            return newfunc
         for meth in (
             'add', 'sub', 'mul', 'div', 'mod',
             'radd', 'rsub', 'rmul', 'rdiv', 'rmod',
-            'unarypos', 'unaryneg', 'unarynot', 'hash'
+            'unarypos', 'unaryneg', 'unarynot'
         ):
+            rtfunc = getattr(cls, meth)
+            defrt = getattr(AcaciaExpr, meth)
+            if rtfunc is not defrt:
+                continue  # already defined
             cmeth = f"c{meth}"
-            func = getattr(cls, cmeth)
-            deffunc = getattr(CTObj, cmeth)
-            if func is not deffunc:
-                setattr(cls, meth, func)
+            ctfunc = getattr(cls, cmeth)
+            defct = getattr(CTObj, cmeth)
+            if ctfunc is not defct:
+                setattr(cls, meth, ct2rt(ctfunc))
 
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
@@ -239,8 +266,25 @@ class ConstExprCombined(ConstExpr, CTObj):
     def cmdstr(self):
         return self.cstringify()
 
-    def compare(self, op: "Operator", other: AcaciaExpr):
+    def compare(self, op: "Operator", other: AcaciaExpr, compiler):
         from acaciamc.objects.boolean import BoolLiteral
         b = self.ccompare(op, other)
         assert isinstance(b, bool)
-        return BoolLiteral(b, self.compiler)
+        return BoolLiteral(b)
+
+    def hash(self):
+        return self.chash()
+
+def swap_exprs(x: VarValue, y: VarValue, compiler: "Compiler") -> CMDLIST_T:
+    """Swap two `VarValue`s that are assignable to each other."""
+    try:
+        res = x.swap(y, compiler)
+    except InvalidOpError:
+        # Fall back
+        tmp = x.data_type.new_var(compiler)
+        res = [
+            *x.export(tmp, compiler),
+            *y.export(x, compiler),
+            *tmp.export(y, compiler)
+        ]
+    return res

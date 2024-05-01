@@ -260,7 +260,7 @@ class MusicType(Type):
             )
 
     def datatype_hook(self):
-        return MusicDataType(self.compiler)
+        return MusicDataType()
 
     def cdatatype_hook(self):
         return ctdt_music
@@ -275,7 +275,7 @@ class Music(ConstExprCombined):
                  note_offset: int, chunk_size: int, speed: float,
                  volume: float, channel_volume: Dict[int, float],
                  instrument: Dict[int, str], compiler: "Compiler"):
-        super().__init__(MusicDataType(compiler), compiler)
+        super().__init__(MusicDataType())
         self.midi = midi
         self.listener_str = listener_str
         self.note_offset = note_offset
@@ -333,7 +333,7 @@ class Music(ConstExprCombined):
             self.file_sep_gt.pop()
         # Add file
         for file in self.files:
-            self.compiler.add_file(file)
+            compiler.add_file(file)
         self.file_sep_gt.append(GT_LEN + 1)
         # Loop commands
         loopcmds: CMDLIST_T = [cmds.Comment("# music.Music")]
@@ -361,10 +361,10 @@ class Music(ConstExprCombined):
         compiler.file_tick.extend(loopcmds)
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
-        self.attribute_table.set("LENGTH", IntLiteral(GT_LEN, self.compiler))
+        self.attribute_table.set("LENGTH", IntLiteral(GT_LEN))
         @method_of(self, "play")
         @axe.chop
-        @axe.arg("timer", IntDataType, default=IntLiteral(0, self.compiler))
+        @axe.arg("timer", IntDataType, default=IntLiteral(0))
         def _play(compiler, timer: AcaciaExpr):
             """
             .play(timer: int = 0)
@@ -373,14 +373,14 @@ class Music(ConstExprCombined):
             of playing. When `timer` >= 0, its where the music starts
             playing.
             """
-            commands = timer.export(self.timer)
-            return resultlib.commands(commands, compiler)
+            commands = timer.export(self.timer, compiler)
+            return resultlib.commands(commands)
         @method_of(self, "stop")
         @axe.chop
         def _stop(compiler):
             """.stop(): Stop the music"""
             commands = [cmds.ScbSetConst(self.timer.slot, GT_LEN + 2)]
-            return resultlib.commands(commands, compiler)
+            return resultlib.commands(commands)
 
     def main_loop(self):
         # Read messages
@@ -467,4 +467,4 @@ def acacia_build(compiler: "Compiler"):
     except ImportError:
         raise Error(ErrorType.ANY,
                     message="Python module 'mido' is required")
-    return {"Music": MusicType(compiler)}
+    return {"Music": MusicType()}
