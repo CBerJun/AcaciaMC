@@ -9,13 +9,13 @@ from acaciamc.objects import *
 @axe.chop
 @axe.arg("x", IntDataType, "y")
 @axe.slash
-@axe.arg("g", EntityDataType)
+@axe.arg("g", EntityDataType, axe.POSITIONAL)
 @axe.arg("y", axe.Typed(StringDataType), "x", default=None)
 @axe.star
 @axe.arg("z", axe.Nullable(axe.LiteralString()), default="aa")
 @axe.kwds("k", axe.AnyOf(axe.LiteralInt(), axe.LiteralString()))
-def _foo(compiler, **kwds):
-    print("foo called:", kwds)
+def _foo(compiler, positional_entity, **kwds):
+    print(f"foo called with {kwds!r} and entity {positional_entity!r}")
 
 class _bar(metaclass=axe.OverloadChopped):
     @axe.overload

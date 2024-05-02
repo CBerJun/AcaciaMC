@@ -3,6 +3,8 @@
 __all__ = [
     # Decorators
     "chop", "arg", "slash", "star", "star_arg", "kwds",
+    # Constants
+    "POSITIONAL",
     # Overload interfaces
     "OverloadChopped", "overload", "overload_versioned",
     # Converters
@@ -77,6 +79,11 @@ class _PreconvertError(Exception):
 
 ### Building Stage
 
+class _PositionalType:
+    pass
+
+POSITIONAL = _PositionalType()
+
 _BP_ARG = 1
 _BP_STAR = 2
 _BP_STAR_ARG = 3
@@ -85,9 +92,10 @@ _BP_KWDS = 5
 
 _EXPR_T = Union[acacia.AcaciaExpr, acaciact.CTExpr]
 _CONVERTER_T = Union["Converter", "CTConverter"]
+_RENAME_T = Union[str, _PositionalType]
 
 class _Argument:
-    def __init__(self, name: str, rename: str, converter: _CONVERTER_T):
+    def __init__(self, name: str, rename: _RENAME_T, converter: _CONVERTER_T):
         self.name = name
         self.rename = rename
         self.converter = converter
@@ -104,7 +112,7 @@ class _Argument:
         raise ValueError("don't have default")
 
 class _ArgumentList:
-    def __init__(self, name: str, rename: str, converter: _CONVERTER_T):
+    def __init__(self, name: str, rename: _RENAME_T, converter: _CONVERTER_T):
         self.name = name
         self.rename = rename
         self.converter = converter
@@ -152,7 +160,7 @@ def _converter(type_: _ARG_TYPE):
     else:
         return Typed(type_)
 
-def arg(name: str, type_: _ARG_TYPE, rename: Optional[str] = None,
+def arg(name: str, type_: _ARG_TYPE, rename: Optional[_RENAME_T] = None,
         default: Any = _NO_DEFAULT):
     """Return a decorator for adding an argument"""
     if rename is None:
@@ -177,7 +185,7 @@ def star(building: _BuildingParser):
     building.push_component(_BP_STAR)
 
 def _arg_list(bd_type: int, name: str, type_: _ARG_TYPE,
-              rename: Optional[str] = None):
+              rename: Optional[_RENAME_T] = None):
     if rename is None:
         rename = name
     converter = _converter(type_)
@@ -188,11 +196,11 @@ def _arg_list(bd_type: int, name: str, type_: _ARG_TYPE,
         )
     return _decorator
 
-def star_arg(name: str, type_: _ARG_TYPE, rename: Optional[str] = None):
+def star_arg(name: str, type_: _ARG_TYPE, rename: Optional[_RENAME_T] = None):
     """Catch all positional arguments. Arguments after are keyword-only."""
     return _arg_list(_BP_STAR_ARG, name, type_, rename)
 
-def kwds(name: str, type_: _ARG_TYPE, rename: Optional[str] = None):
+def kwds(name: str, type_: _ARG_TYPE, rename: Optional[_RENAME_T] = None):
     """Catch all keyword arguments. Must at the end."""
     return _arg_list(_BP_KWDS, name, type_, rename)
 
@@ -725,7 +733,7 @@ class CTReference(CTConverter):
 
 ### Parser
 
-def _check_repeat(names: List[str], renames: List[str]):
+def _check_repeat(names: List[str], renames: List[_RENAME_T]):
     got = set()
     for name in names:
         if name in got:
@@ -733,6 +741,8 @@ def _check_repeat(names: List[str], renames: List[str]):
         got.add(name)
     got = set()
     for name in renames:
+        if not isinstance(name, str):
+            continue
         if name in got:
             raise ChopError("repeated argument rename %r" % name)
         got.add(name)
@@ -854,13 +864,20 @@ class _Chopper:
     def __call__(self, compiler: "Compiler", args: List[_EXPR_T],
                  kwds: Dict[str, _EXPR_T]):
         res: Dict[str, Any] = {}
+        res_positional: List[Any] = []
         arg_got: List[str] = []
+        def _emit(arg: Union[_Argument, _ArgumentList], value: Any):
+            if arg.rename is POSITIONAL:
+                res_positional.append(value)
+            else:
+                res[arg.rename] = value
+            arg_got.append(arg.name)
         # Positional arguments
         if len(args) > self.MAX_POS_ARG:
             if self.args is None:
                 raise AcaciaError(ErrorType.TOO_MANY_ARGS)
             else:
-                res[self.args.rename] = [
+                vargs = [
                     self._convert(
                         arg, self.args.converter,
                         "#%d(*%s)" % (i, self.args.name)
@@ -869,12 +886,9 @@ class _Chopper:
                         args[self.MAX_POS_ARG:], start=self.MAX_POS_ARG + 1
                     )
                 ]
-                arg_got.append(self.args.name)
+                _emit(self.args, vargs)
         for arg_def, arg in zip(chain(self.pos_only, self.pos_n_kw), args):
-            res[arg_def.rename] = self._convert(
-                arg, arg_def.converter, arg_def.name
-            )
-            arg_got.append(arg_def.name)
+            _emit(arg_def, self._convert(arg, arg_def.converter, arg_def.name))
         # Keyword arguments
         extra_kwds = {}
         for arg_name, arg in kwds.items():
@@ -894,20 +908,17 @@ class _Chopper:
             if arg_name in arg_got:
                 raise AcaciaError(ErrorType.ARG_MULTIPLE_VALUES, arg=arg_name)
             arg_def = self.kw_name2def[arg_name]
-            res[arg_def.rename] = self._convert(
-                arg, arg_def.converter, arg_def.name
-            )
-            arg_got.append(arg_name)
+            _emit(arg_def, self._convert(arg, arg_def.converter, arg_name))
         if extra_kwds:
             assert self.kwds
-            res[self.kwds.rename] = {
+            vkwds = {
                 arg_name: self._convert(
                     arg, self.kwds.converter,
                     "%s(**%s)" % (arg_name, self.kwds.name)
                 )
                 for arg_name, arg in extra_kwds.items()
             }
-            arg_got.append(self.kwds.name)
+            _emit(self.kwds, vkwds)
         # Check for missing arguments and fix with default values
         for arg_def in chain(self.pos_only, self.pos_n_kw, self.kw_only):
             if arg_def.name not in arg_got:
@@ -916,15 +927,13 @@ class _Chopper:
                 except ValueError:
                     raise AcaciaError(ErrorType.MISSING_ARG, arg=arg_def.name)
                 else:
-                    res[arg_def.rename] = default
-                    arg_got.append(arg_def.name)
+                    _emit(arg_def, default)
         if self.args and self.args.name not in arg_got:
-            res[self.args.rename] = []
-            arg_got.append(self.args.name)
+            _emit(self.args, [])
         if self.kwds and self.kwds.name not in arg_got:
-            res[self.kwds.rename] = {}
-            arg_got.append(self.kwds.name)
-        return _call_impl(self.implementation, arg_got, compiler, **res)
+            _emit(self.kwds, {})
+        return _call_impl(self.implementation, arg_got,
+                          compiler, *res_positional, **res)
 
 def _create_signature(arg_defs: List[_Argument]) -> str:
     return "(%s)" % ", ".join(
