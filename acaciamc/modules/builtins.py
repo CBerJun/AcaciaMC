@@ -98,6 +98,7 @@ def acacia_build(compiler: "Compiler"):
         ('AbsPos', AbsPosType),
         ('ExternEngroup', ExternEGroupGeneric),
         ('Any', AnyType),
+        ('SpawnInfo', SpawnInfoType),
     ):
         res[name] = cls()
     # builtin names

@@ -121,8 +121,8 @@ struct Size:
 
 entity PosDummy:
     #* Dummy entity that just represnts a position. *#
-    @type: "armor_stand"
-    @position: ORIGIN_POS
+    static inline def __spawn__() -> const SpawnInfo:
+        result SpawnInfo(type="armor_stand", pos=ORIGIN_POS)
 
     def __init__():
         world.effect_give(

@@ -135,6 +135,10 @@ class ErrorType(enum.Enum):
         'produce result'
     INITIALIZER_NOT_CALLABLE = '__init__ initializer for "{type_}" should ' \
         'be callable, not "{got}"'
+    SPAWN_RESULT = '__spawn__ for "{type_}" should return "SpawnInfo", not ' \
+        '"{got}"'
+    SPAWN_NOT_CALLABLE = '__spawn__ for "{type_}" should be callable, not ' \
+        '"{got}"'
     CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
     REPEAT_ENTITY_META = 'Repeated entity meta "{meta}"'
     ENTITY_META = 'Error on entity meta "{meta}": {msg}'

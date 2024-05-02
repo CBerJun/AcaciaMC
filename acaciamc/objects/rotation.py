@@ -15,8 +15,8 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
+from . import entity as entity_module
 from .types import Type
-from .entity import EntityDataType
 from .functions import BinaryCTFunction
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ class RotType(Type):
             Rot(int-literal, int-literal): absolute rotation
             """
             @axe.overload
-            @axe.arg("entity", EntityDataType)
+            @axe.arg("entity", entity_module.EntityDataType)
             def from_entity(cls, compiler, entity: "_EntityBase"):
                 inst = Rotation()
                 inst.context.append(cmds.ExecuteEnv(
@@ -56,7 +56,7 @@ class RotType(Type):
                 return inst
         @cmethod_of(self, "face_entity")
         @axe.chop
-        @axe.arg("target", EntityDataType)
+        @axe.arg("target", entity_module.EntityDataType)
         @axe.arg("anchor", axe.LiteralString(), default=DEFAULT_ANCHOR)
         def _face_entity(compiler, target: "_EntityBase", anchor: str):
             inst = Rotation()

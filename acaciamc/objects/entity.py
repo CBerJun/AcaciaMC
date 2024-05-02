@@ -9,11 +9,12 @@ from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
+from .spawn_info import SpawnInfo
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+    from acaciamc.mccmdgen.datatype import DataType
     from .entity_template import EntityTemplate
-    from .types import DataType
 
 SUMMON_Y = -75  # must be below -64 so it's not reachable
 SUMMON = "summon {type} ~ {y} ~{rot} {event}{name}"
@@ -105,34 +106,29 @@ class TaggedEntity(_EntityBase, VarValue):
     @classmethod
     def summon_new(
         cls, template: "EntityTemplate", compiler: "Compiler",
-        _instance: Optional["TaggedEntity"] = None
+        _instance: Optional["TaggedEntity"] = None,
+        info: Optional["SpawnInfo"] = None,
     ) -> Tuple["TaggedEntity", CMDLIST_T]:
         """Summon an entity of given template.
         Return a 2-tuple.
         Element 0: the `TaggedEntity`
         Element 1: initial commands to run
         """
-        # Analyze template meta
-        # NOTE meta only works when you create an entity using
-        # `Template()` (Since this code is in `from_template` method).
         e_type = compiler.cfg.entity_type
         e_pos = ([], compiler.cfg.entity_pos)
         e_event = "*"
         e_name = ""
-        for meta, value in template.metas.items():
-            if meta == "type":
-                # Entity type
-                e_type = value
-            elif meta == "position":
-                # Position to summon the entity
-                e_pos = value
-            elif meta == "spawn_event" and value is not None:
-                # Entity event to execute on spawn
-                e_event = value
-            elif meta == "name" and value is not None:
-                # Entity name
-                e_name = " %s" % cmds.mc_str(value)
         e_rot = " 0 0" if compiler.cfg.mc_version >= (1, 19, 70) else ""
+        if info is not None:
+            f = info.fields
+            if f.type is not None:
+                e_type = f.type
+            if f.pos is not None:
+                e_pos = (f.pos.context, "~ ~ ~")
+            if f.event is not None:
+                e_event = f.event
+            if f.name is not None:
+                e_name = f" {cmds.mc_str(f.name)}"
         if _instance is None:
             inst = cls.new_tag(template, compiler)
         else:

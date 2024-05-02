@@ -20,6 +20,7 @@ from .functions import (
 from .string import String
 from .none import NoneDataType
 from .position import Position
+from .spawn_info import SpawnInfoDataType
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -351,10 +352,32 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
             entity.attribute_table.set(name, impl)
 
     def initialize(self, instance: "_EntityBase", args, keywords, compiler):
-        # Calling an entity template summons a new entity, the arguments
-        # are passed to __init__ if it exists
-        _, commands = TaggedEntity.summon_new(self, compiler, instance)
-        # Call __init__ if it exists
+        """
+        Calling an entity template summons a new entity, the arguments
+        are passed to __spawn__ and __init__ if they exist.
+        """
+        location = f"<entity constructor of {self.name}>"
+        commands = []
+        info = None
+        # Call __spawn__
+        spawn = instance.template.attribute_table.lookup("__spawn__")
+        if spawn is not None:
+            if not isinstance(spawn, AcaciaCallable):
+                raise Error(ErrorType.SPAWN_NOT_CALLABLE,
+                            got=str(spawn.data_type),
+                            type_=str(instance.data_type))
+            info, _cmds = spawn.call_withframe(
+                args, keywords, compiler, location
+            )
+            commands.extend(_cmds)
+            if not info.data_type.matches_cls(SpawnInfoDataType):
+                raise Error(ErrorType.SPAWN_RESULT,
+                            got=str(info.data_type),
+                            type_=str(instance.data_type))
+        # Create instance
+        _, _cmds = TaggedEntity.summon_new(self, compiler, instance, info)
+        commands.extend(_cmds)
+        # Call __init__
         initializer = instance.attribute_table.lookup("__init__")
         if initializer:
             if not isinstance(initializer, AcaciaCallable):
@@ -362,8 +385,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                             got=str(initializer.data_type),
                             type_=str(instance.data_type))
             res, _cmds = initializer.call_withframe(
-                args, keywords, compiler,
-                location="<entity initializer of %s>" % self.name
+                args, keywords, compiler, location
             )
             commands.extend(_cmds)
             if not res.data_type.matches_cls(NoneDataType):

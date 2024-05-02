@@ -11,12 +11,12 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
+from . import entity as entity_module
 from .types import Type
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
 from .functions import BinaryFunction
 from .rotation import RotDataType
 from .string import String
-from .entity import EntityDataType
 
 if TYPE_CHECKING:
     from .rotation import Rotation
@@ -50,7 +50,7 @@ class PosType(Type):
                 by 0.5, so that the position is at block center.
             """
             @axe.overload
-            @axe.arg("target", EntityDataType)
+            @axe.arg("target", entity_module.EntityDataType)
             @axe.arg("anchor", axe.LiteralString())
             def from_entity(cls, compiler, target: "_EntityBase", anchor: str):
                 inst = Position()
@@ -59,7 +59,7 @@ class PosType(Type):
                 return inst
 
             @axe.overload
-            @axe.arg("target", EntityDataType)
+            @axe.arg("target", entity_module.EntityDataType)
             def from_entity_no_anchor(cls, compiler, target: "_EntityBase"):
                 return cls.from_entity(compiler, target, DEFAULT_ANCHOR)
 

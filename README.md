@@ -156,8 +156,8 @@ world.fill(ORIGIN, Offset(x=5, z=5),
            world.Block("concrete", {"color": "red"}))
 
 entity Test:
-    @type: "armor_stand"
-    @position: ORIGIN
+    static inline def __spawn__() -> const SpawnInfo:
+        result SpawnInfo(type="armor_stand", pos=ORIGIN)
 
     def __init__():
         world.setblock(Pos(self), "diamond_block")
@@ -167,6 +167,8 @@ entity Test:
         world.tp(self, ORIGIN)
 
 test_group := Engroup[Test]()
+instance := Test()
+test_group.add(instance)
 test_group.select(Enfilter().distance_from(ORIGIN, max=5))
 for test in test_group:
     test.foo()
