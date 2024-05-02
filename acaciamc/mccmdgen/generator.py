@@ -713,7 +713,6 @@ class Generator(ASTVisitor):
         field_metas = {}  # Field name to field meta
         methods = {}  # Method name to function `AcaciaExpr`
         method_qualifiers = {}  # Method name to qualifier
-        metas = {}  # Meta name to value
         # Handle parents
         parents = []
         for parent_ast in node.parents:
@@ -743,17 +742,13 @@ class Generator(ASTVisitor):
                     and decl.qualifier is not MethodQualifier.static
                 ):
                     methods_2ndpass.append((res, decl.content))
-            elif isinstance(decl, EntityMeta):
-                # `res` is (meta name, meta value)
-                key, value = res
-                if key in metas:
-                    self.error_c(ErrorType.REPEAT_ENTITY_META, meta=key)
-                metas[key] = value
+            else:
+                assert isinstance(decl, Pass)
         # generate the template before 2nd pass, since `self` value
         # needs the template specified.
         template = EntityTemplate(
             node.name, field_types, field_metas,
-            methods, method_qualifiers, parents, metas,
+            methods, method_qualifiers, parents,
             self.compiler, source=self.node_location(node)
         )
         # 2nd Pass: parse body of non-inline non-static methods.
@@ -807,9 +802,6 @@ class Generator(ASTVisitor):
             func = self.handle_const_func(content)
         func.source = self.node_location(node)
         return func
-
-    def visit_EntityMeta(self, node: EntityMeta):
-        return node.name, self.visit(node.value)
 
     def visit_For(self, node: For):
         iterable = self.visit(node.expr)

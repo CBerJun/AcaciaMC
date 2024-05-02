@@ -490,15 +490,6 @@ class Parser:
             type_ = self.type_spec()
             self.eat(TokenType.new_line)
             return EntityField(name, type_, **pos)
-        elif self.current_token.type is TokenType.at:
-            # meta_decl
-            self.eat()  # eat "@"
-            name = self.current_token.value
-            self.eat(TokenType.identifier)
-            self.eat(TokenType.colon)
-            value = self.expr()
-            self.eat(TokenType.new_line)
-            return EntityMeta(name, value, **pos)
         elif self.current_token.type is TokenType.pass_:
             res = self.pass_stmt()
             self.eat(TokenType.new_line)
@@ -534,9 +525,8 @@ class Parser:
           (VIRTUAL | OVERRIDE | STATIC)? (def_stmt | inline_def_stmt)
           | (STATIC const_def_stmt)
         )
-        meta_decl := AT IDENTIFIER COLON expr
-        entity_body := method_decl | (
-          (entity_field_decl | meta_decl | pass_stmt) NEW_LINE)
+        entity_body := method_decl
+          | ((entity_field_decl | pass_stmt) NEW_LINE)
         """
         pos = self.current_pos
         self.eat(TokenType.entity)

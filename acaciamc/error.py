@@ -140,9 +140,6 @@ class ErrorType(enum.Enum):
     SPAWN_NOT_CALLABLE = '__spawn__ for "{type_}" should be callable, not ' \
         '"{got}"'
     CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
-    REPEAT_ENTITY_META = 'Repeated entity meta "{meta}"'
-    ENTITY_META = 'Error on entity meta "{meta}": {msg}'
-    INVALID_ENTITY_META = 'Invalid entity meta name "{meta}"'
     MRO = 'Invalid base templates (failed to create MRO)'
     OVERRIDE_RESULT_MISMATCH = 'Override method "{name}" should have same ' \
         'result type "{expect}" as its parent, not "{got}"'

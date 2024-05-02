@@ -243,16 +243,10 @@ class EntityMethod(Statement):  # entity method definition
         assert (not isinstance(content, ConstFuncDef)
                 or qualifier is MethodQualifier.static)
 
-class EntityMeta(Statement):  # entity meta like @type
-    def __init__(self, name: str, value: Expression, lineno, col):
-        super().__init__(lineno, col)
-        self.name = name
-        self.value = value
-
 class EntityTemplateDef(Statement):  # entity statement
     def __init__(
         self, name: str, parents: _List[Expression],
-        body: _List[_Union[EntityMethod, EntityField, EntityMeta, Pass]],
+        body: _List[_Union[EntityMethod, EntityField, Pass]],
         lineno, col
     ):
         super().__init__(lineno, col)

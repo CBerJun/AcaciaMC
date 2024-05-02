@@ -154,7 +154,6 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                  methods: Dict[str, AcaciaCallable],
                  method_qualifiers: Dict[str, MethodQualifier],
                  parents: List["EntityTemplate"],
-                 metas: Dict[str, AcaciaExpr],
                  compiler: "Compiler",
                  source=None):
         super().__init__(ETemplateDataType())
@@ -163,7 +162,6 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         if source is not None:
             self.source = source
         self.parents = parents
-        self._orig_metas = {}  # Metas are to be handled below
         self._orig_field_types = field_types
         self._orig_field_metas = field_metas
         self.field_types: Dict[str, "SupportsEntityField"] = {}
@@ -172,40 +170,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         self.method_dispatchers: Dict[str, _MethodDispatcher] = {}
         self.simple_methods: Dict[str, _SimpleMethod] = {}
         self.static_methods: Dict[str, AcaciaCallable] = {}
-        self.metas: Dict[str, Any] = {}
         self.mro_: List[EntityTemplate] = [self]  # Method Resolution Order
-        # Handle meta
-        def _meta_error(name: str, expect: str):
-            raise Error(ErrorType.ENTITY_META, meta=name,
-                        msg='should be %s, got "%s"'
-                        % (expect, str(meta.data_type)))
-        # We convert meta `AcaciaExpr`s to Python objects here:
-        #  `@type`: str
-        #  `@position`: Tuple[List[str], str]  # context, position
-        #  `@spawn_event`: str
-        #  `@name`: str
-        for name, meta in metas.items():
-            if name == "type":
-                if not isinstance(meta, String):
-                    _meta_error(name, "str")
-                converted = meta.value
-            elif name == "position":
-                if isinstance(meta, Position):
-                    converted = (meta.context, "~ ~ ~")
-                elif isinstance(meta, String):
-                    converted = ([], meta.value)
-                else:
-                    _meta_error(name, "str or Pos")
-            elif name == "spawn_event" or name == "name":
-                if isinstance(meta, String):
-                    converted = meta.value
-                elif meta.data_type.matches_cls(NoneDataType):
-                    converted = "*"
-                else:
-                    _meta_error(name, "str or None")
-            else:
-                raise Error(ErrorType.INVALID_ENTITY_META, meta=name)
-            self._orig_metas[name] = converted
         # Runtime identification tag
         # Mark which template an entity is using at runtime.
         # This tag is added to all entities that uses this template
@@ -244,7 +209,6 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
             for attr in itertools.chain(field_types, methods):
                 if attr in self.field_types:
                     raise Error(ErrorType.EFIELD_MULTIPLE_DEFS, attr=attr)
-            self.metas.update(parent._orig_metas)
             self.field_types.update(parent._orig_field_types)
             self.field_metas.update(parent._orig_field_metas)
         ## Handle methods

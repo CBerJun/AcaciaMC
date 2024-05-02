@@ -158,12 +158,12 @@ class Compiler:
         self.base_template = EntityTemplate(
             name="Entity",
             field_types={}, field_metas={}, methods={},
-            method_qualifiers={}, parents=[], metas={}, compiler=self
+            method_qualifiers={}, parents=[], compiler=self
         )
         self.external_template = EntityTemplate(
             "ExternalEntity",
             field_types={}, field_metas={}, methods={},
-            method_qualifiers={}, parents=[], metas={}, compiler=self
+            method_qualifiers={}, parents=[], compiler=self
         )
         builtin_mod = self.get_module(ModuleMeta("builtins"), self.file_main)
         self.builtins = builtin_mod.attribute_table
