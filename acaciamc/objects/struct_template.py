@@ -11,6 +11,7 @@ from acaciamc.tools import axe, resultlib
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.utils import apply_decorators
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import Storable
@@ -56,10 +57,12 @@ class StructTemplate(ConstExprCombined, ConstructorFunction):
         args: "ARGS_T", keywords: "KEYWORDS_T",
         compiler
     ):
-        decorators = [axe.chop, axe.star]
-        for name, type_ in self.field_types.items():
-            decorators.append(axe.arg(name, type_, default=None))
-        decorators.reverse()
+        @axe.chop
+        @axe.star
+        @apply_decorators([
+            axe.arg(name, type_, default=None)
+            for name, type_ in self.field_types.items()
+        ])
         def _call_me(compiler, **fields: Optional[AcaciaExpr]):
             commands = []
             for name, value in fields.items():
@@ -67,7 +70,5 @@ class StructTemplate(ConstExprCombined, ConstructorFunction):
                     continue
                 commands.extend(value.export(instance.vars[name], compiler))
             return resultlib.commands(commands)
-        for decorator in decorators:
-            _call_me = decorator(_call_me)
         _, c = BinaryFunction(_call_me).call(args, keywords, compiler)
         return c
