@@ -93,7 +93,9 @@ class CTExecuter(ASTVisitor):
         elif isinstance(value, int):
             return IntLiteral(value)
         elif value is None:
-            return NoneLiteral()
+            r = NoneLiteral()
+            r.is_temporary = True
+            return r
         elif isinstance(value, float):
             return Float(value)
         unreachable()

@@ -3,13 +3,21 @@
 __all__ = ['NoneDataType', 'NoneLiteral']
 
 from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
+from acaciamc.mccmdgen.datatype import (
+    DefaultDataType, Storable, SupportsEntityField
+)
 from acaciamc.mccmdgen.ctexpr import CTDataType
 
-class NoneDataType(DefaultDataType, Storable):
+class NoneDataType(DefaultDataType, Storable, SupportsEntityField):
     name = 'None'
 
     def new_var(self, compiler) -> "NoneLiteral":
+        return NoneLiteral()
+
+    def new_entity_field(self, compiler) -> dict:
+        return {}
+
+    def new_var_as_field(self, entity) -> VarValue:
         return NoneLiteral()
 
 ctdt_none = CTDataType("None")
@@ -20,7 +28,6 @@ class NoneLiteral(ConstExprCombined, VarValue):
 
     def __init__(self):
         super().__init__(NoneDataType())
-        self.is_temporary = True  # Assignment to None is always disallowed
 
     def export(self, var: "NoneLiteral", compiler):
         return []
