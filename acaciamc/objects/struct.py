@@ -71,7 +71,8 @@ class Struct(VarValue):
     def export(self, other_struct: "Struct", compiler) -> CMDLIST_T:
         return list(chain.from_iterable(
             self.vars[name].export(other_struct.vars[name], compiler)
-            for name in self.vars
+            for name in other_struct.vars
+            # `self` may have fields that `other_struct` doesn't have.
         ))
 
     def swap(self, other: "Struct", compiler) -> CMDLIST_T:
