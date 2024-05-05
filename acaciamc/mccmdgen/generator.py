@@ -909,6 +909,7 @@ class Generator(ASTVisitor):
                                 result_type=str(dt))
                 if self.ctx.inline_result is None:
                     self.ctx.inline_result = dt.new_var(self.compiler)
+                    self.ctx.inline_result.is_temporary = True
                 self.current_file.extend(
                     value.export(self.ctx.inline_result, self.compiler)
                 )
