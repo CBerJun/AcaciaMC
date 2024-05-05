@@ -727,14 +727,21 @@ class Generator(ASTVisitor):
         # 1st Pass: get all the attributes and give every non-inline
         # method a `MCFunctionFile` without parsing its body.
         methods_2ndpass: List[Tuple[AcaciaFunction, FuncDef]] = []
+        names_seen = set()
+        def _name(node: AST, name: str):
+            if name in names_seen:
+                self.error_node(node, ErrorType.DUPLICATE_EFIELD, name=name)
+            names_seen.add(name)
         for decl in node.body:
             res = self.visit(decl)
             if isinstance(decl, EntityField):
                 # `res` is (field type, field meta)
+                _name(decl, decl.name)
                 field_types[decl.name], field_metas[decl.name] = res
             elif isinstance(decl, EntityMethod):
                 # `res` is `AcaciaFunction`, `InlineFunction` or
                 # `AcaciaCTFunction`
+                _name(decl, decl.content.name)
                 methods[decl.content.name] = res
                 method_qualifiers[decl.content.name] = decl.qualifier
                 if (

@@ -1,11 +1,27 @@
-"""Entity template of Acacia."""
+"""
+Entity template of Acacia.
+
+Method override rule:
+    Y: ok, X: error
+            Simple  Virtual  Static  NotDefined    [Method in base]
+    (none)    Y        X        X        Y
+    static    X        X        Y        Y
+    virtual   X        X        X        Y
+    override  X        Y        X        X
+    [Qualifier]
+
+Attributes can only be defined once.
+Methods may be defined multiple times, if any of the following is true:
+    - all of them are static, or
+    - all of them are non-static, non-virtual and non-override, or
+    - exactly one is virtual and all others override it.
+Attributes and methods cannot have the same name.
+"""
 
 __all__ = ["ETemplateDataType", "EntityTemplate"]
 
-from typing import (
-    List, Tuple, Dict, Union, Any, Optional, Callable, TYPE_CHECKING
-)
-import itertools
+from typing import List, Tuple, Dict, Union, Optional, Callable, TYPE_CHECKING
+from itertools import chain
 
 from acaciamc.ast import MethodQualifier
 from acaciamc.error import *
@@ -17,9 +33,7 @@ from .entity import TaggedEntity, EntityDataType
 from .functions import (
     BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction
 )
-from .string import String
 from .none import NoneDataType
-from .position import Position
 from .spawn_info import SpawnInfoDataType
 
 if TYPE_CHECKING:
@@ -156,16 +170,18 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                  parents: List["EntityTemplate"],
                  compiler: "Compiler",
                  source=None):
+        """
+        NOTE it is the responsibility of the caller to make sure that
+        `field_types` does not contain a key that is also in `methods`.
+        """
         super().__init__(ETemplateDataType())
         self.name = name
         self.func_repr = self.name
         if source is not None:
             self.source = source
         self.parents = parents
-        self._orig_field_types = field_types
-        self._orig_field_metas = field_metas
-        self.field_types: Dict[str, "SupportsEntityField"] = {}
-        self.field_metas: Dict[str, dict] = {}
+        self.field_types: Dict[str, "SupportsEntityField"] = field_types
+        self.field_metas: Dict[str, dict] = field_metas
         # method_dispatchers: for virtual methods AND override methods
         self.method_dispatchers: Dict[str, _MethodDispatcher] = {}
         self.simple_methods: Dict[str, _SimpleMethod] = {}
@@ -202,83 +218,103 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                     break
             else:
                 raise Error(ErrorType.MRO)
+        ## Check attribute name conlicts
+        # Attributes may appear only once
+        attr_list = list(chain(
+            field_types,
+            chain.from_iterable(t.field_types for t in parents)
+        ))
+        seen = set()
+        for attr in attr_list:
+            if attr in seen:
+                raise Error(ErrorType.EFIELD_MULTIPLE_DEFS, attr=attr)
+            else:
+                seen.add(attr)
         ## Inherit attributes
-        # We reverse MRO here because we want the former ones to
-        # override latter ones
-        for parent in reversed(self.mro_):
-            for attr in itertools.chain(field_types, methods):
-                if attr in self.field_types:
-                    raise Error(ErrorType.EFIELD_MULTIPLE_DEFS, attr=attr)
-            self.field_types.update(parent._orig_field_types)
-            self.field_metas.update(parent._orig_field_metas)
+        for parent in parents:
+            self.field_types.update(parent.field_types)
+            self.field_metas.update(parent.field_metas)
+        ## Check method name conflicts
+        # Methods can appear multiple times, but all override/virtual
+        # methods must override from the same template (same
+        # `_MethodDispatcher`).
+        def _check(mx1, mx2, m):
+            if m in mx1 or m in mx2:
+                raise Error(ErrorType.EMETHOD_MULTIPLE_DEFS, method=m)
+            if m in self.field_types:
+                raise Error(ErrorType.METHOD_ATTR_CONFLICT, name=m)
+        # `m_*` records methods that exist in base templates.
+        m_virtual: Dict[str, _MethodDispatcher] = {}
+        m_simple: Dict[str, _SimpleMethod] = {}
+        m_static: Dict[str, AcaciaCallable] = {}
+        for parent in reversed(self.mro_[1:]):
+            for method, disp in parent.method_dispatchers.items():
+                _check(m_simple, m_static, method)
+                if m_virtual.setdefault(method, disp) is not disp:
+                    raise Error(ErrorType.MULTIPLE_VIRTUAL_METHOD,
+                                method=method)
+            for method, mgr in parent.simple_methods.items():
+                _check(m_virtual, m_static, method)
+                m_simple[method] = mgr
+            for method, impl in parent.static_methods.items():
+                _check(m_virtual, m_simple, method)
+                m_static[method] = impl
+        ## Make sure field names do not conflict with method names
+        for attr in attr_list:
+            if attr in m_virtual or attr in m_simple or attr in m_static:
+                raise Error(ErrorType.METHOD_ATTR_CONFLICT, name=attr)
         ## Handle methods
         for method, implementation in methods.items():
+            if method in self.field_types:
+                raise Error(ErrorType.METHOD_ATTR_CONFLICT, name=method)
             qualifier = method_qualifiers[method]
-            for parent in self.mro_:
-                if method in parent.method_dispatchers:
-                    if qualifier is MethodQualifier.override:
-                        # This method is overriding a virtual method
-                        _check_override(implementation, method)
-                        disp = parent.method_dispatchers[method]
-                        self.method_dispatchers[method] = disp
-                        disp.register(self, implementation)
-                        break
-                    else:
-                        # This method is overriding a virtual method but
-                        # did not use `override` qualifier. Complain.
-                        raise Error(ErrorType.OVERRIDE_QUALIFIER,
-                                    name=method, got=qualifier.value)
-                if (
-                    method in parent.simple_methods
-                    and qualifier is MethodQualifier.static
-                ):
-                    # This static method tries to override an
-                    # instance method
-                    raise Error(ErrorType.STATIC_OVERRIDE_INST, name=method)
-                if (
-                    method in parent.static_methods
-                    and qualifier is not MethodQualifier.static
-                ):
-                    # This instance method tries to override a static
-                    # method
+            if method in m_virtual:
+                if qualifier is not MethodQualifier.override:
+                    raise Error(ErrorType.OVERRIDE_QUALIFIER,
+                                got=qualifier.value, name=method)
+                _check_override(implementation, method)
+                disp = parent.method_dispatchers[method]
+                self.method_dispatchers[method] = disp
+                disp.register(self, implementation)
+                continue
+            if qualifier is MethodQualifier.none:
+                if method in m_static:
                     raise Error(ErrorType.INST_OVERRIDE_STATIC, name=method)
+                self.simple_methods[method] = _SimpleMethod(
+                    method, implementation, self, compiler
+                )
+            elif qualifier is MethodQualifier.static:
+                if method in m_simple:
+                    raise Error(ErrorType.STATIC_OVERRIDE_INST, name=method)
+                self.static_methods[method] = implementation
+            elif qualifier is MethodQualifier.virtual:
+                if method in m_static:
+                    raise Error(ErrorType.INST_OVERRIDE_STATIC, name=method)
+                if method in m_simple:
+                    raise Error(ErrorType.VIRTUAL_OVERRIDE_SIMPLE, name=method)
+                _check_override(implementation, method)
+                disp = _MethodDispatcher(method, compiler)
+                self.method_dispatchers[method] = disp
+                disp.register(self, implementation)
+            elif qualifier is MethodQualifier.override:
+                assert method not in m_virtual  # we handled it above
+                raise Error(ErrorType.NOT_OVERRIDING, name=method)
             else:
-                if qualifier is MethodQualifier.none:
-                    # This method is a simple method
-                    self.simple_methods[method] = _SimpleMethod(
-                        method, implementation, self, compiler
-                    )
-                elif qualifier is MethodQualifier.virtual:
-                    # This method is a virtual method
-                    _check_override(implementation, method)
-                    disp = _MethodDispatcher(method, compiler)
-                    self.method_dispatchers[method] = disp
-                    disp.register(self, implementation)
-                elif qualifier is MethodQualifier.override:
-                    # This method is marked as override, but actually
-                    # did not override any virtual method. Complain.
-                    raise Error(ErrorType.NOT_OVERRIDING, name=method)
-                else:
-                    assert qualifier is MethodQualifier.static
-                    # This method is a static method
-                    self.static_methods[method] = implementation
-        fields_got = frozenset(itertools.chain(
-            self.method_dispatchers, self.simple_methods, self.static_methods
-        ))
-        for parent in self.mro_:
-            for method, disp in parent.method_dispatchers.items():
-                if method not in fields_got:
-                    # Inherited override methods
-                    self.method_dispatchers[method] = disp
-                    disp.register_inherit(self, parent)
-            for method, mgr in parent.simple_methods.items():
-                if method not in fields_got:
-                    # Inherited simple methods
-                    self.simple_methods[method] = mgr
-            for method, impl in parent.static_methods.items():
-                if method not in fields_got:
-                    # Inherited static methods
-                    self.static_methods[method] = impl
+                unreachable()
+        ## Inherit methods
+        for method, disp in m_virtual.items():
+            if method not in self.method_dispatchers:
+                # Inherited override methods
+                self.method_dispatchers[method] = disp
+                disp.register_inherit(self, parent)
+        for method, mgr in m_simple.items():
+            if method not in self.simple_methods:
+                # Inherited simple methods
+                self.simple_methods[method] = mgr
+        for method, impl in m_static.items():
+            if method not in self.static_methods:
+                # Inherited static methods
+                self.static_methods[method] = impl
         ## Register static methods to attribute table
         for name, impl in self.static_methods.items():
             self.attribute_table.set(name, impl)

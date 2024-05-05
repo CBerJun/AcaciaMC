@@ -116,7 +116,15 @@ class ErrorType(enum.Enum):
         '"{arg}" does not match type of default value "{default_type}"'
     # ARG_MULTIPLE_VALUES is used by both Generator and Parser
     ARG_MULTIPLE_VALUES = 'Multiple values for argument "{arg}"'
-    EFIELD_MULTIPLE_DEFS = 'Multiple definitions for entity attribute "{attr}"'
+    DUPLICATE_EFIELD = 'Duplicate entity field "{name}"'
+    EFIELD_MULTIPLE_DEFS = 'Conflict with base template(s): multiple ' \
+        'definitions for entity attribute "{attr}"'
+    EMETHOD_MULTIPLE_DEFS = 'Conflict in base templates: multiple ' \
+        'incompatible definitions for entity method "{method}"'
+    MULTIPLE_VIRTUAL_METHOD = 'Conflict in base templates: multiple virtual ' \
+        'definitions for entity method "{method}"'
+    METHOD_ATTR_CONFLICT = 'Conflict with base template(s): the name ' \
+        '"{name}" is used as both a method name and an attribute name'
     SFIELD_MULTIPLE_DEFS = 'Multiple definitions for struct attribute "{attr}"'
     MISSING_ARG = 'Required argument "{arg}" is missing'
     RESULT_OUT_OF_SCOPE = 'Found "result" out of function'
@@ -150,9 +158,11 @@ class ErrorType(enum.Enum):
     NOT_OVERRIDING = 'Method "{name}" is marked as "override" but did not ' \
         'actually override a virtual method'
     INST_OVERRIDE_STATIC = 'Non-static method "{name}" has the same name ' \
-        'with a static method in base class'
+        'with a static method in base template'
     STATIC_OVERRIDE_INST = 'Static method "{name}" has the same name with ' \
-        'a non-static method in base class'
+        'a non-static method in base template'
+    VIRTUAL_OVERRIDE_SIMPLE = 'Virtual method "{name}" has the same name ' \
+        'with a non-virtual method in base template'
     UNINITIALIZED_CONST = 'Uninitialized variable in compile time function'
     INVALID_CONST_STMT = 'Invalid statement in compile time function'
     POS_OFFSET_CTOR_ARG = 'At most one of the arguments "{axis}" and "{axis}' \
