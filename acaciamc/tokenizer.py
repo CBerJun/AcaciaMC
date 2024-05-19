@@ -111,6 +111,7 @@ class TokenType(enum.Enum):
     override = 'override'
     const = 'const'
     static = 'static'
+    new = 'new'
     false = 'False'  # must at end of keyword part
 
 KEYWORDS: Dict[str, TokenType] = {}

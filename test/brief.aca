@@ -158,17 +158,21 @@ import world
 # Entities of the same template has same meaning.
 # Create an entity template with "entity" keyword:
 entity Test:
-    static inline def __spawn__() -> const SpawnInfo:
+    # Functions inside an entity template are called "methods". They
+    # are the actions that can be done on this kind of entities.
+    # You can "call the method of a specific entity". Usually we define
+    # a method using the `def` keyword (just like how we define
+    # functions). The `new` keyword is used to define a special type of
+    # method called "constructor", which is called when the entity is
+    # summoned.
+    new():
+        # Inside the `new` constructor, we should tell the compiler how
+        # to summon the entity and initialize the entity. This `new`
+        # method summons an invisible Armor Stand.
         # Tell the compiler that when spawning an entity with this
         # template (`Test`), spawn an Armor Stand at world position
         # 10, -50, 10 (we'll explain `Pos` later).
-        result SpawnInfo(type="armor_stand", pos=Pos(10, -50, 10))
-    # Functions inside an entity template are called "methods". They
-    # are the actions that can be done on this kind of entities.
-    # You can "call the method of a specific entity".
-    # When an entity is summoned, system will "call the __init__
-    # method of this entity".
-    def __init__():
+        new(type="armor_stand", pos=Pos(10, -50, 10))
         # `self` inside a method refers to "the specific entity"
         # mentioned above.
         # This statement gives `self` invisibility buff for 600 ticks.
@@ -179,9 +183,9 @@ entity Test:
 test_entity := Test()
 # You can define a template that "extends" another template:
 entity Subtemplate extends Test:
-    def __init__():
-        # Call __init__ defined in Test:
-        upcast(self, Test).__init__()
+    new():
+        # Use the `new` defined in Test:
+        Test.new()
         # Then do extra things added by this template:
         print.tell("It's Subtemplate here!")
 # This creates a template that prints a message in chat when any entity

@@ -18,29 +18,41 @@ Methods may be defined multiple times, if any of the following is true:
 Attributes and methods cannot have the same name.
 """
 
-__all__ = ["ETemplateDataType", "EntityTemplate"]
+__all__ = [
+    "ETemplateDataType", "EntityTemplate",
+    "AcaciaNewFunction", "DEFAULT_ENTITY_NEW",
+]
 
-from typing import List, Tuple, Dict, Union, Optional, Callable, TYPE_CHECKING
+from typing import (
+    List, Tuple, Dict, Union, Optional, Callable, NamedTuple, TYPE_CHECKING
+)
 from itertools import chain
 
 from acaciamc.ast import MethodQualifier
 from acaciamc.error import *
+from acaciamc.tools import axe, resultlib
+from acaciamc.mccmdgen import cmds
 from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import unreachable
 from .entity import TaggedEntity, EntityDataType
 from .functions import (
-    BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction
+    BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction,
+    BinaryFunction
 )
+from .position import PosDataType
 from .none import NoneDataType
-from .spawn_info import SpawnInfoDataType
+from .integer import IntVar, IntLiteral
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import SupportsEntityField
-    from .functions import METHODDEF_T
+    from .functions import METHODDEF_T, AcaciaFunction
     from .entity import _EntityBase
+    from .position import Position
+
+SUMMON_Y = -75  # must be below -64 so it's not reachable
 
 class ETemplateDataType(DefaultDataType):
     name = 'entity_template'
@@ -159,6 +171,67 @@ def _check_override(implementation: "METHODDEF_T", method: str):
             raise Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
                         name=method, type_=str(res_type))
 
+def default_entity_new(
+    compiler, template_id: AcaciaExpr, tag: str, args, keywords
+):
+    @axe.chop
+    @axe.arg("type", axe.Nullable(axe.LiteralString()),
+            rename="type_", default=None)
+    @axe.arg("pos", axe.Nullable(axe.Typed(PosDataType)), default=None)
+    @axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
+    @axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
+    def new_entity(
+        compiler: "Compiler", type_: Optional[str], pos: Optional["Position"],
+        name: Optional[str], event: Optional[str]
+    ):
+        e_type = compiler.cfg.entity_type
+        e_pos = ([], compiler.cfg.entity_pos)
+        e_event = "*"
+        e_name = ""
+        e_rot = " 0 0" if compiler.cfg.mc_version >= (1, 19, 70) else ""
+        if type_ is not None:
+            e_type = type_
+        if pos is not None:
+            e_pos = (pos.context, "~ ~ ~")
+        if event is not None:
+            e_event = event
+        if name is not None:
+            e_name = f" {cmds.mc_str(name)}"
+        return resultlib.commands([
+            cmds.Execute(
+                [cmds.ExecuteEnv("at", "@p")],
+                f"summon {e_type} ~ {SUMMON_Y} ~{e_rot} {e_event}{e_name}"
+            ),
+            cmds.Execute(
+                [cmds.ExecuteEnv("at", "@p")],
+                f"tag @e[x=~,y={SUMMON_Y},z=~,dx=0,dy=0,dz=0] add {tag}"
+            ),
+            cmds.Execute(e_pos[0], f"tp @e[tag={tag}] {e_pos[1]}"),
+            *template_id.export(
+                IntVar(cmds.ScbSlot(
+                    f"@e[tag={tag}]", compiler.etemplate_id_scb
+                )),
+                compiler
+            )
+        ])
+    _, commands = BinaryFunction(new_entity).call(args, keywords, compiler)
+    return commands
+
+def get_deleted_entity_new(template_name: str):
+    def _res(compiler, template_id: AcaciaExpr, tag: str, args, keywords):
+        raise Error(ErrorType.CANT_CREATE_ENTITY, type_=template_name)
+    return _res
+
+class AcaciaNewFunction(NamedTuple):
+    impl: "AcaciaFunction"
+    self_tag: str
+    template_id_var: cmds.ScbSlot
+
+class _DefaultEntityNewType:
+    pass
+
+DEFAULT_ENTITY_NEW = _DefaultEntityNewType()
+
 class EntityTemplate(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_etemplate
 
@@ -167,6 +240,8 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                  field_metas: Dict[str, dict],
                  methods: Dict[str, AcaciaCallable],
                  method_qualifiers: Dict[str, MethodQualifier],
+                 method_new: Union[AcaciaNewFunction, InlineFunction,
+                                   _DefaultEntityNewType, None],
                  parents: List["EntityTemplate"],
                  compiler: "Compiler",
                  source=None):
@@ -187,14 +262,13 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         self.simple_methods: Dict[str, _SimpleMethod] = {}
         self.static_methods: Dict[str, AcaciaCallable] = {}
         self.mro_: List[EntityTemplate] = [self]  # Method Resolution Order
-        # Runtime identification tag
+        # Runtime identification number
         # Mark which template an entity is using at runtime.
-        # This tag is added to all entities that uses this template
-        # *exactly* (i.e. exclude entities that use subtemplate of
-        # `self`). This is added when summoning.
-        # (See `entity.TaggedEntity.summon_new`)
-        self.runtime_tag = compiler.allocate_entity_tag()
-        # Inherit attributes from parents
+        # All entities managed by Acacia have a id on scoreboard
+        # `compiler.etemplate_id_scb` that represents which template it
+        # is using. This `runtime_id` is the number assigned to entity
+        # of this template.
+        self.runtime_id = compiler.allocate_etemplate_id()
         ## MRO: We use the same C3 algorithm as Python.
         merge: List[List[EntityTemplate]] = []
         for parent in self.parents:
@@ -315,6 +389,53 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
             if method not in self.static_methods:
                 # Inherited static methods
                 self.static_methods[method] = impl
+        ## `new` method
+        if method_new is None:
+            if len(self.mro_) > 1:
+                mnew = self.mro_[1].method_new
+            else:
+                # This template has no base
+                mnew = get_deleted_entity_new(self.name)
+            mnew_src = None
+        elif isinstance(method_new, AcaciaNewFunction):
+            def mnew(compiler, template_id: AcaciaExpr, tag: str,
+                     args, keywords):
+                commands: CMDLIST_T = template_id.export(
+                    IntVar(method_new.template_id_var), compiler
+                )
+                _, c = method_new.impl.call(args, keywords, compiler)
+                commands.extend(c)
+                # We don't need to clear `method_new.self_tag` here
+                # because this is already done at top of the mcfunction
+                # (see `Generator.visit_EntityTemplateDef`).
+                commands.append(f"tag @e[tag={method_new.self_tag}] add {tag}")
+                return commands
+            mnew_src = method_new.impl.source
+        elif isinstance(method_new, _DefaultEntityNewType):
+            mnew = default_entity_new
+            mnew_src = None
+        else:
+            def mnew(compiler, template_id: AcaciaExpr, tag: str,
+                     args, keywords):
+                method_new.context.entity_new_data = (template_id, tag)
+                method_new.context.self_value = TaggedEntity(tag, self)
+                r, c = method_new.call(args, keywords, compiler)
+                if not r.data_type.matches_cls(NoneDataType):
+                    raise Error(
+                        ErrorType.ENTITY_NEW_RETURN_TYPE, got=r.data_type
+                    )
+                # For the sake of gc...
+                method_new.context.entity_new_data = None
+                method_new.context.self_value = None
+                return c
+            mnew_src = method_new.source
+        # method_new: NOTE that it is the caller's responsibility to
+        # clear the given tag (third parameter).
+        self.method_new: Callable[
+            ["Compiler", AcaciaExpr, str, ARGS_T, KEYWORDS_T],
+            CMDLIST_T
+        ] = mnew
+        self.method_new_source = mnew_src
         ## Register static methods to attribute table
         for name, impl in self.static_methods.items():
             self.attribute_table.set(name, impl)
@@ -351,47 +472,19 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         for name, impl in template.static_methods.items():
             entity.attribute_table.set(name, impl)
 
-    def initialize(self, instance: "_EntityBase", args, keywords, compiler):
+    def initialize(self, instance: "TaggedEntity", args, keywords,
+                   compiler: "Compiler"):
         """
         Calling an entity template summons a new entity, the arguments
-        are passed to __spawn__ and __init__ if they exist.
+        are passed to the constructor.
         """
-        location = f"<entity constructor of {self.name}>"
-        commands = []
-        info = None
-        # Call __spawn__
-        spawn = instance.template.attribute_table.lookup("__spawn__")
-        if spawn is not None:
-            if not isinstance(spawn, AcaciaCallable):
-                raise Error(ErrorType.SPAWN_NOT_CALLABLE,
-                            got=str(spawn.data_type),
-                            type_=str(instance.data_type))
-            info, _cmds = spawn.call_withframe(
-                args, keywords, compiler, location
+        return [
+            *instance.clear(),
+            *self.method_new(
+                compiler, IntLiteral(self.runtime_id),
+                instance.tag, args, keywords
             )
-            commands.extend(_cmds)
-            if not info.data_type.matches_cls(SpawnInfoDataType):
-                raise Error(ErrorType.SPAWN_RESULT,
-                            got=str(info.data_type),
-                            type_=str(instance.data_type))
-        # Create instance
-        _, _cmds = TaggedEntity.summon_new(self, compiler, instance, info)
-        commands.extend(_cmds)
-        # Call __init__
-        initializer = instance.attribute_table.lookup("__init__")
-        if initializer:
-            if not isinstance(initializer, AcaciaCallable):
-                raise Error(ErrorType.INITIALIZER_NOT_CALLABLE,
-                            got=str(initializer.data_type),
-                            type_=str(instance.data_type))
-            res, _cmds = initializer.call_withframe(
-                args, keywords, compiler, location
-            )
-            commands.extend(_cmds)
-            if not res.data_type.matches_cls(NoneDataType):
-                raise Error(ErrorType.INITIALIZER_RESULT,
-                            type_=str(instance.data_type))
-        return commands
+        ]
 
     def is_subtemplate_of(self, other: "EntityTemplate") -> bool:
         # Return whether `self` is a subtemplate of `other`. A

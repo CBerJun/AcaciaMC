@@ -71,7 +71,7 @@ from .none import NoneLiteral
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
-    from acaciamc.ast import InlineFuncDef, ConstFuncDef
+    from acaciamc.ast import InlineFuncData, ConstFuncData
     from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.mccmdgen.generator import Generator, Context
     from .entity import _EntityBase, TaggedEntity
@@ -200,17 +200,17 @@ class AcaciaFunction(ConstExprCombined, AcaciaCallable):
 class InlineFunction(ConstExprCombined, AcaciaCallable):
     cdata_type = ctdt_function
 
-    def __init__(self, node: "InlineFuncDef",
+    def __init__(self, name: str, node: "InlineFuncData",
                  args, arg_types, arg_defaults, arg_ports,
                  returns: "DataType", result_port: FuncPortType,
                  context: "Context", owner: "Generator",
                  source=None):
         super().__init__(FunctionDataType())
-        # We store the InlineFuncDef node directly
+        # We store the InlineFuncData node directly
         self.node = node
         self.owner = owner
         self.context = context
-        self.name = node.name
+        self.name = name
         self.result_type = returns
         self.result_port = result_port
         self.arg_handler = AcaciaArgHandler(args, arg_types, arg_defaults)
@@ -294,7 +294,7 @@ class CTArgHandler(ArgumentHandler[
 class AcaciaCTFunction(ConstExprCombined, AcaciaCallable, CTCallable):
     cdata_type = ctdt_function
 
-    def __init__(self, node: "ConstFuncDef",
+    def __init__(self, name: str, node: "ConstFuncData",
                  args, arg_types, arg_defaults,
                  returns: "CTDataType",
                  context: "Context", owner: "Generator",
@@ -303,7 +303,7 @@ class AcaciaCTFunction(ConstExprCombined, AcaciaCallable, CTCallable):
         self.node = node
         self.owner = owner
         self.context = context
-        self.name = node.name
+        self.name = name
         self.result_type = returns
         self.arg_handler = CTArgHandler(args, arg_types, arg_defaults)
         # For error hint
@@ -506,7 +506,9 @@ class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
                     % (", ".join(template.name for template in templates))
                 )
                 sel = MCSelector("s")
-                sel.tag_n(*[template.runtime_tag for template in templates])
+                for template in templates:
+                    sel.scores(compiler.etemplate_id_scb,
+                               f"!{template.runtime_id}")
                 sel_s = sel.to_str()
                 commands = _call_bm(args, keywords, impl)
                 if not commands:

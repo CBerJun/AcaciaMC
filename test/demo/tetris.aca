@@ -121,10 +121,8 @@ struct Size:
 
 entity PosDummy:
     #* Dummy entity that just represnts a position. *#
-    static inline def __spawn__() -> const SpawnInfo:
-        result SpawnInfo(type="armor_stand", pos=ORIGIN_POS)
-
-    def __init__():
+    new():
+        new(type="armor_stand", pos=ORIGIN_POS)
         world.effect_give(
             self, "invisibility", duration=int.MAX, particle=False
         )

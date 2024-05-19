@@ -88,10 +88,8 @@ const (
 const OFFSET_TABLE = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
 
 entity Dummy:
-    static inline def __spawn__(const pos: Pos) -> const SpawnInfo:
-        result SpawnInfo(type=DUMMY_ENTITY, pos=pos)
-
-    inline def __init__(const pos: Pos) -> None:
+    inline new(const pos: Pos):
+        new(type=DUMMY_ENTITY, pos=pos)
         world.effect_give(
             self, "invisibility", duration=int.MAX, particle=False
         )

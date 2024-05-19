@@ -522,12 +522,16 @@ class FunctionsManager:
         self._int_consts: Dict[int, ScbSlot] = {}
         self._scb_id = 0
         self._extra_obj = self.EXTRA_OBJ % scoreboard
+        self.default_scb = self.add_scoreboard()
 
     def generate_init(self) -> List[Command]:
         res = []
-        # Default scoreboard
-        res.append(Comment('# Register scoreboard'))
-        res.append(ScbObjAdd(self.scoreboard))
+        # Scoreboards
+        res.append(Comment('# Register scoreboard(s)'))
+        res.extend([
+            ScbObjAdd(self._extra_obj.format(id=i))
+            for i in range(1, self._scb_id + 1)
+        ])
         # Constants
         if self._int_consts:
             res.append(Comment('# Load constants'))
@@ -535,18 +539,11 @@ class FunctionsManager:
                 ScbSetConst(slot, num)
                 for num, slot in self._int_consts.items()
             ])
-        # Extra scoreboard
-        if self._scb_id >= 1:
-            res.append(Comment('# Additional scoreboards'))
-            res.extend([
-                ScbObjAdd(self._extra_obj.format(id=i))
-                for i in range(1, self._scb_id + 1)
-            ])
         return res
 
     def allocate(self) -> ScbSlot:
         self._alloc_id += 1
-        return ScbSlot("acacia%d" % self._alloc_id, self.scoreboard)
+        return ScbSlot("acacia%d" % self._alloc_id, self.default_scb)
 
     def add_file(self, file: "MCFunctionFile"):
         self.files.append(file)

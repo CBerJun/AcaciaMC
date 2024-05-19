@@ -198,8 +198,17 @@ f
 /*${"xx\${xx${{xxx}[0] + "qqq${1}ppp"}ggg"}*/
 '''
 
+new_test = '''
+entity X:
+    new(x: int):
+        new(xxx)
+entity Y extends X:
+    inline new(&y: bool):
+        X.new(yyy)
+'''
+
 try:
-    test(command_test)
+    test(new_test)
 except Error as err:
     err.location.file = "<testsrc>"
     print("Error:", err)

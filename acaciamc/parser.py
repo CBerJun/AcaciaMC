@@ -2,7 +2,9 @@
 
 __all__ = ['Parser']
 
-from typing import Callable, Optional, List, Tuple, TYPE_CHECKING
+from typing import (
+    Callable, Optional, List, Tuple, NamedTuple, Type, TYPE_CHECKING
+)
 
 from acaciamc.error import *
 from acaciamc.tokenizer import TokenType, BRACKETS
@@ -11,9 +13,27 @@ from acaciamc.ast import *
 if TYPE_CHECKING:
     from acaciamc.tokenizer import Tokenizer
 
-NORMAL_FUNC_PORTS = CONST_FUNC_PORTS = (FuncPortType.by_value,)
-INLINE_FUNC_PORTS = (FuncPortType.by_value, FuncPortType.by_reference,
-                     FuncPortType.const)
+class FuncType(NamedTuple):
+    allowed_ports: Tuple[FuncPortType, ...]
+    type_required: bool
+    ast_class: Type[FuncData]
+
+FUNC_NORMAL = FuncType(
+    allowed_ports=(FuncPortType.by_value,),
+    type_required=True,
+    ast_class=NormalFuncData
+)
+FUNC_INLINE = FuncType(
+    allowed_ports=(FuncPortType.by_value, FuncPortType.by_reference,
+                   FuncPortType.const),
+    type_required=False,
+    ast_class=InlineFuncData
+)
+FUNC_CONST = FuncType(
+    allowed_ports=(FuncPortType.by_value,),
+    type_required=False,
+    ast_class=ConstFuncData
+)
 
 class Parser:
     def __init__(self, tokenizer: "Tokenizer"):
@@ -172,10 +192,16 @@ class Parser:
             self.eat(TokenType.rbrace)
             return ListDef(items, **pos)
 
+    def new_call(self):
+        """new_call := NEW call_table"""
+        pos = self.current_pos
+        self.eat(TokenType.new)
+        return NewCall(None, self.call_table(), **pos)
+
     def expr_l0(self):
         """
         level 0 expression := (LPAREN expr RPAREN) | literal
-          | identifier | str_literal | self | list | map
+          | identifier | str_literal | self | list | map | new_call
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -195,6 +221,8 @@ class Parser:
             return self.self()
         elif self.current_token.type is TokenType.lbrace:
             return self.list_or_map()
+        elif self.current_token.type is TokenType.new:
+            return self.new_call()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
 
@@ -204,6 +232,7 @@ class Parser:
           (POINT IDENTIFIER)
           | call_table
           | paren_list_of{LBRACKET, expr, RBRACKET}
+          | (POINT NEW call_table)
         )*
         """
         node = self.expr_l0()
@@ -230,10 +259,19 @@ class Parser:
                 node, subscripts, lineno=node.lineno, col=node.col
             )
 
+        def _new_call(node: Expression):
+            self.eat(TokenType.point)
+            self.eat(TokenType.new)
+            return NewCall(node, self.call_table(), node.lineno, node.col)
+
         # start
         while True:
             if self.current_token.type is TokenType.point:
-                node = _attribute(node)
+                self.peek()
+                if self.next_token.type is TokenType.new:
+                    node = _new_call(node)
+                else:
+                    node = _attribute(node)
             elif self.current_token.type is TokenType.lparen:
                 node = _call(node)
             elif self.current_token.type is TokenType.lbracket:
@@ -424,7 +462,7 @@ class Parser:
 
     def _func_port_qualifier(self, allowed_ports: Tuple[FuncPortType]) \
             -> FuncPortType:
-        """func_port_qualifier := (CONST | AMPERSAND)?"""
+        """func_port_inline := (CONST | AMPERSAND)?"""
         pos = self.current_pos
         if self.current_token.type is TokenType.const:
             self.eat()
@@ -438,47 +476,62 @@ class Parser:
             self.error(ErrorType.INVALID_FUNC_PORT, **pos, port=res.value)
         return res
 
-    def _function_def(self, allowed_ports: Tuple[FuncPortType],
-                      type_required: bool):
-        """
-        function_def := DEF IDENTIFIER argument_table
-          (ARROW func_port_qualifier type_spec)? COLON statement_block
-        """
+    def _def_head(self) -> str:
+        """def_head := DEF IDENTIFIER"""
         self.eat(TokenType.def_)
         name = self.current_token.value
         self.eat(TokenType.identifier)
-        arg_table = self.argument_table(allowed_ports, type_required)
+        return name
+
+    def _function_def(self, t: FuncType) -> FuncData:
+        pos = self.current_pos
+        arg_table = self.argument_table(t.allowed_ports, t.type_required)
         if self.current_token.type is TokenType.arrow:
             self.eat()
             pos = self.current_pos
-            qualifier = self._func_port_qualifier(allowed_ports)
+            qualifier = self._func_port_qualifier(t.allowed_ports)
             ret_type = self.type_spec()
             returns = FunctionPort(ret_type, qualifier, **pos)
         else:
             returns = None
         self.eat(TokenType.colon)
         stmts = self.statement_block()
-        return name, arg_table, stmts, returns
+        return t.ast_class(arg_table, stmts, returns, **pos)
 
     def const_def_stmt(self):
-        """const_def_stmt := CONST function_def"""
+        """
+        funcdef_const := argtable_const (ARROW type_spec)?
+          COLON statement_block
+        const_def_stmt := CONST def_head fundef_const
+        """
         pos = self.current_pos
         self.eat(TokenType.const)
-        func_data = self._function_def(CONST_FUNC_PORTS, type_required=False)
-        return ConstFuncDef(*func_data, **pos)
+        name = self._def_head()
+        func_data = self._function_def(FUNC_CONST)
+        return FuncDef(name, func_data, **pos)
 
     def inline_def_stmt(self):
-        """inline_def_stmt := INLINE function_def"""
+        """
+        funcdef_inline := argtable_inline (ARROW func_port_inline type_spec)?
+          COLON statement_block
+        inline_def_stmt := INLINE def_head funcdef_inline
+`        """
         pos = self.current_pos
         self.eat(TokenType.inline)
-        func_data = self._function_def(INLINE_FUNC_PORTS, type_required=False)
-        return InlineFuncDef(*func_data, **pos)
+        name = self._def_head()
+        func_data = self._function_def(FUNC_INLINE)
+        return FuncDef(name, func_data, **pos)
 
     def def_stmt(self):
-        """def_stmt := function_def"""
+        """
+        funcdef_normal := argtable_normal (ARROW type_spec)?
+          COLON statement_block
+        def_stmt := def_head funcdef_normal
+        """
         pos = self.current_pos
-        func_data = self._function_def(NORMAL_FUNC_PORTS, type_required=True)
-        return FuncDef(*func_data, **pos)
+        name = self._def_head()
+        func_data = self._function_def(FUNC_NORMAL)
+        return FuncDef(name, func_data, **pos)
 
     def _entity_body(self):
         pos = self.current_pos
@@ -495,7 +548,25 @@ class Parser:
             self.eat(TokenType.new_line)
             return res
         else:
-            # method_decl
+            # method_decl or new_method_decl
+            if self.current_token.type is TokenType.const:
+                self.peek()
+                if self.next_token.type is TokenType.new:
+                    self.error(ErrorType.CONST_NEW_METHOD, **pos)
+            if self.current_token.type is TokenType.inline:
+                self.peek()
+                tok = self.next_token
+            else:
+                tok = self.current_token
+            if tok.type is TokenType.new:
+                if self.current_token.type is TokenType.inline:
+                    self.eat()
+                    t = FUNC_INLINE
+                else:
+                    t = FUNC_NORMAL
+                self.eat(TokenType.new)
+                data = self._function_def(t)
+                return NewMethod(data, **pos)
             qualifier = MethodQualifier.none
             if self.current_token.type is TokenType.virtual:
                 self.eat()  # eat "virtual"
@@ -525,7 +596,8 @@ class Parser:
           (VIRTUAL | OVERRIDE | STATIC)? (def_stmt | inline_def_stmt)
           | (STATIC const_def_stmt)
         )
-        entity_body := method_decl
+        new_method_decl := (NEW funcdef_normal) | (INLINE NEW funcdef_inline)
+        entity_body := (method_decl | new_method_decl)
           | ((entity_field_decl | pass_stmt) NEW_LINE)
         """
         pos = self.current_pos
@@ -541,7 +613,15 @@ class Parser:
                 parents.append(self.expr())
         self.eat(TokenType.colon)
         body = self._block(self._entity_body)
-        return EntityTemplateDef(name, parents, body, **pos)
+        new_methods = [v for v in body if isinstance(v, NewMethod)]
+        if len(new_methods) > 1:
+            self.error(ErrorType.MULTIPLE_NEW_METHODS, **pos)
+        elif new_methods:
+            new_method = new_methods[0]
+            body.remove(new_method)
+        else:
+            new_method = None
+        return EntityTemplateDef(name, parents, body, new_method, **pos)
 
     def formatted_str(self):
         """formatted_str := (STRING_BODY | (DOLLAR_LBRACE expr RBRACE))*"""
@@ -839,13 +919,14 @@ class Parser:
         """
         type_decl := COLON type_spec
         default_decl := EQUAL expr
-        When `type_required`:
-          arg_decl := func_port_qualifier IDENTIFIER
+        arg_normal := IDENTIFIER
             ((type_decl | default_decl) | (type_decl default_decl))
-        Else:
-          arg_decl := func_port_qualifier IDENTIFIER type_decl?
+        arg_inline := func_port_inline IDENTIFIER type_decl?
             default_decl?
-        argument_table := paren_list_of{LPAREN, arg_decl, RPAREN}
+        arg_const := IDENTIFIER type_decl? default_decl?
+        argtable_normal := paren_list_of{LPAREN, arg_normal, RPAREN}
+        argtable_inline := paren_list_of{LPAREN, arg_inline, RPAREN}
+        argtable_const := paren_list_of{LPAREN, arg_const, RPAREN}
         """
         arg_table = ArgumentTable(**self.current_pos)
         got_default = False

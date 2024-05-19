@@ -19,7 +19,9 @@ from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.optimizer import Optimizer
 from acaciamc.mccmdgen.utils import unreachable
-from acaciamc.objects import IntVar, BinaryModule, EntityTemplate
+from acaciamc.objects import (
+    IntVar, BinaryModule, EntityTemplate, DEFAULT_ENTITY_NEW
+)
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -153,16 +155,20 @@ class Compiler:
         self._cached_modules: List[CachedModule] = []
         self._loading_files = []  # paths of Acacia modules that are loading
         self._before_finish_cbs = []  # callbacks to run before finish
+        self._entity_template_id_max = 0  # max id of entity template
+        self.etemplate_id_scb = self.add_scoreboard()
 
         # --- BUILTINS ---
         self.base_template = EntityTemplate(
             name="Entity",
             field_types={}, field_metas={}, methods={},
+            method_new=DEFAULT_ENTITY_NEW,
             method_qualifiers={}, parents=[], compiler=self
         )
         self.external_template = EntityTemplate(
             "ExternalEntity",
             field_types={}, field_metas={}, methods={},
+            method_new=None,
             method_qualifiers={}, parents=[], compiler=self
         )
         builtin_mod = self.get_module(ModuleMeta("builtins"), self.file_main)
@@ -285,6 +291,11 @@ class Compiler:
         """Return a new entity tag."""
         self._entity_tag_max += 1
         return self.cfg.entity_tag + str(self._entity_tag_max)
+
+    def allocate_etemplate_id(self) -> int:
+        """Return a new entity template id."""
+        self._entity_template_id_max += 1
+        return self._entity_template_id_max
 
     # -- End allocation --
 

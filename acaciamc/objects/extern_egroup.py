@@ -43,6 +43,7 @@ __all__ = [
 from typing import TYPE_CHECKING
 
 from acaciamc.tools import axe, resultlib, cmethod_of
+from acaciamc.mccmdgen import cmds
 from acaciamc.mccmdgen.expr import *
 from .entity_group import *
 from .entity_template import ETemplateDataType
@@ -105,7 +106,10 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
         @axe.chop
         def _call_me(compiler: "Compiler"):
             commands = RESOLVE_CTOR.initialize(instance, [], {}, compiler)
-            commands.append("tag %s add %s" % (SELF, template.runtime_tag))
+            commands.append(cmds.ScbSetConst(
+                cmds.ScbSlot(SELF, compiler.etemplate_id_scb),
+                template.runtime_id
+            ))
             commands.append("tag %s add %s" % (SELF, instance.tag))
             return resultlib.commands(commands)
         _, c = BinaryFunction(_call_me).call(args, keywords, compiler)

@@ -53,6 +53,8 @@ class Context:
         self.function_state: str = FUNC_NONE
         # self_value: value of `self` keyword
         self.self_value: Optional[AcaciaExpr] = None
+        # entity_new_data: used by entity `new` system
+        self.entity_new_data: Optional[Tuple[AcaciaExpr, str]] = None
 
     def copy(self):
         res = Context(self.scope)
@@ -60,6 +62,7 @@ class Context:
         res.inline_result = self.inline_result
         res.function_state = self.function_state
         res.self_value = self.self_value
+        res.entity_new_data = self.entity_new_data
         return res
 
     def new_scope(self):
@@ -532,7 +535,7 @@ class Generator(ASTVisitor):
             keywords[arg] = self.visit(value)
         return args, keywords
 
-    def _func_expr(self, node: FuncDef) -> AcaciaFunction:
+    def _func_expr(self, fname: str, node: NormalFuncData) -> AcaciaFunction:
         """Return the function object to a function definition
         without parsing the body.
         """
@@ -566,7 +569,7 @@ class Generator(ASTVisitor):
                              arg=name, arg_type=str(value))
         # create function
         return AcaciaFunction(
-            name=node.name, args=args, arg_types=types, arg_defaults=defaults,
+            name=fname, args=args, arg_types=types, arg_defaults=defaults,
             returns=returns, compiler=self.compiler,
             source=self.node_location(node)
         )
@@ -579,7 +582,8 @@ class Generator(ASTVisitor):
             self.ctx.function_state = FUNC_NORMAL
             yield
 
-    def handle_inline_func(self, node: InlineFuncDef) -> InlineFunction:
+    def visit_InlineFuncData(self, node: InlineFuncData, name: str) \
+            -> InlineFunction:
         # Return the inline function object to a function definition
         if node.returns is None:
             returns = NoneDataType()
@@ -601,21 +605,22 @@ class Generator(ASTVisitor):
                         ErrorType.NONREF_ARG_DEFAULT_NOT_CONST, arg=arg
                     )
         return InlineFunction(
-            node,
+            name, node,
             args, arg_types, arg_defaults, arg_ports,
-            returns, res_port, self.ctx, owner=self,
+            returns, res_port, self.ctx.copy(), owner=self,
             source=self.node_location(node)
         )
 
-    def handle_normal_func(self, node: FuncDef) -> AcaciaFunction:
-        func = self._func_expr(node)
+    def visit_NormalFuncData(self, node: NormalFuncData, name: str) \
+            -> AcaciaFunction:
+        func = self._func_expr(name, node)
         with self._in_noninline_func(func), \
              self.new_mcfunc_file() as body_file:
             # Register arguments to scope
             for arg, var in func.arg_vars.items():
                 self.register_symbol(arg, var)
             # Write file
-            self.write_debug('Function definition of %s()' % node.name)
+            self.write_debug('Function definition of %s()' % name)
             for stmt in node.body:
                 self.visit(stmt)
         # Add file
@@ -626,7 +631,8 @@ class Generator(ASTVisitor):
             self.write_debug('No commands generated')
         return func
 
-    def handle_const_func(self, node: ConstFuncDef) -> AcaciaCTFunction:
+    def visit_ConstFuncData(self, node: ConstFuncData, name: str) \
+            -> AcaciaCTFunction:
         args = node.arg_table.args
         arg_types: Dict[str, Optional["CTDataType"]] = dict.fromkeys(args)
         defaults: Dict[str, Optional[CTObj]] = dict.fromkeys(args)
@@ -655,21 +661,14 @@ class Generator(ASTVisitor):
         else:
             returns = ctexec.visittop(node.returns.type)
         return AcaciaCTFunction(
-            node, args, arg_types, defaults,
+            name, node, args, arg_types, defaults,
             returns, self.ctx, owner=self,
             source=self.node_location(node)
         )
 
     def visit_FuncDef(self, node: FuncDef):
-        func = self.handle_normal_func(node)
-        self.register_symbol(node.name, func)
-
-    def visit_InlineFuncDef(self, node: InlineFuncDef):
-        func = self.handle_inline_func(node)
-        self.register_symbol(node.name, func)
-
-    def visit_ConstFuncDef(self, node: ConstFuncDef):
-        func = self.handle_const_func(node)
+        func: AcaciaCallable = self.visit(node.data, name=node.name)
+        func.source = self.node_location(node)
         self.register_symbol(node.name, func)
 
     def module_traced(self, meta: ModuleMeta, lineno: int, col: int):
@@ -708,11 +707,30 @@ class Generator(ASTVisitor):
             self.register_symbol(name, self.attribute_of(module, name))
             self.ctx.scope.no_export.add(name)
 
+    def _method_body(
+        self, method: AcaciaFunction, self_var: TaggedEntity,
+        template_name: str, body: List[Statement]
+    ):
+        with self._in_noninline_func(method):
+            # Set self
+            self.ctx.self_value = self_var
+            # Register arguments to scope
+            for arg, var in method.arg_vars.items():
+                self.register_symbol(arg, var)
+            # Write commands
+            with self.set_mcfunc_file(method.file):
+                self.write_debug('Entity method definition of %s.%s()' %
+                                 (template_name, method.name))
+                for stmt in body:
+                    self.visit(stmt)
+
     def visit_EntityTemplateDef(self, node: EntityTemplateDef):
         field_types = {}  # Field name to `DataType`
         field_metas = {}  # Field name to field meta
         methods = {}  # Method name to function `AcaciaExpr`
         method_qualifiers = {}  # Method name to qualifier
+        method_new = (None if node.new_method is None
+                      else self.visit(node.new_method))
         # Handle parents
         parents = []
         for parent_ast in node.parents:
@@ -755,30 +773,35 @@ class Generator(ASTVisitor):
         # needs the template specified.
         template = EntityTemplate(
             node.name, field_types, field_metas,
-            methods, method_qualifiers, parents,
+            methods, method_qualifiers, method_new, parents,
             self.compiler, source=self.node_location(node)
         )
         # 2nd Pass: parse body of non-inline non-static methods.
         for method, ast in methods_2ndpass:
-            with self._in_noninline_func(method):
-                if ast.name in template.method_dispatchers:
-                    disp = template.method_dispatchers[ast.name]
-                    _, gself = disp.impls[method]
-                    self_var = gself()
-                else:
-                    assert ast.name in template.simple_methods
-                    self_var = template.simple_methods[ast.name].get_self_var()
-                assert self_var is not None
-                self.ctx.self_value = self_var
-                # Register arguments to scope
-                for arg, var in method.arg_vars.items():
-                    self.register_symbol(arg, var)
-                # Write file
-                with self.set_mcfunc_file(method.file):
-                    self.write_debug('Entity method definition of %s.%s()' %
-                                     (node.name, ast.name))
-                    for stmt in ast.body:
-                        self.visit(stmt)
+            if ast.name in template.method_dispatchers:
+                disp = template.method_dispatchers[ast.name]
+                _, gself = disp.impls[method]
+                self_var = gself()
+            else:
+                assert ast.name in template.simple_methods
+                self_var = template.simple_methods[ast.name].get_self_var()
+            assert self_var is not None
+            data = ast.data
+            assert isinstance(data, NormalFuncData)
+            self._method_body(method, self_var, node.name, data.body)
+        # Also 2nd pass the `new` method if needed
+        if isinstance(method_new, AcaciaNewFunction):
+            nd_slot = method_new.template_id_var
+            nd_tag = method_new.self_tag
+            f = method_new.impl.file
+            f.write_debug("## Clear tag used by `new` methods")
+            f.write(f"tag @e[tag={nd_tag}] remove {nd_tag}")
+            with self.new_ctx():
+                self.ctx.entity_new_data = (IntVar(nd_slot), nd_tag)
+                self._method_body(
+                    method_new.impl, TaggedEntity(nd_tag, template),
+                    node.name, node.new_method.data.body
+                )
         # Register
         self.register_symbol(node.name, template)
 
@@ -791,23 +814,40 @@ class Generator(ASTVisitor):
         return data_type, field_meta
 
     def visit_EntityMethod(self, node: EntityMethod):
-        content = node.content
-        if isinstance(content, FuncDef):
-            if node.qualifier is MethodQualifier.static:
-                func = self.handle_normal_func(content)
-            else:
-                func = self._func_expr(content)
-                # Give this function a file
-                file = cmds.MCFunctionFile()
-                func.file = file
-                self.compiler.add_file(file)
-        elif isinstance(content, InlineFuncDef):
-            func = self.handle_inline_func(content)
+        data = node.content.data
+        name = node.content.name
+        if (isinstance(data, NormalFuncData)
+                and node.qualifier is not MethodQualifier.static):
+            func = self._func_expr(name, data)
+            # Give this function a file
+            file = cmds.MCFunctionFile()
+            func.file = file
+            self.compiler.add_file(file)
         else:
-            assert isinstance(content, ConstFuncDef)
-            assert node.qualifier is MethodQualifier.static
-            func = self.handle_const_func(content)
+            func = self.visit(data, name=name)
         func.source = self.node_location(node)
+        return func
+
+    def visit_NewMethod(self, node: NewMethod):
+        d = node.data
+        inline = isinstance(d, InlineFuncData)
+        if inline:
+            func = self.visit(d, name="<new>")
+        else:
+            func = self._func_expr("<new>", d)
+            if not func.result_type.matches_cls(NoneDataType):
+                self.error_c(ErrorType.ENTITY_NEW_RETURN_TYPE,
+                             got=func.result_type)
+            # Give this function a file
+            file = cmds.MCFunctionFile()
+            func.file = file
+            self.compiler.add_file(file)
+        func.source = self.node_location(node)
+        if not inline:
+            # Allocate data needed by `new` system
+            nd_slot = self.compiler.allocate()
+            nd_tag = self.compiler.allocate_entity_tag()
+            func = AcaciaNewFunction(func, nd_tag, nd_slot)
         return func
 
     def visit_For(self, node: For):
@@ -1104,21 +1144,6 @@ class Generator(ASTVisitor):
         self.current_file.extend(commands)
         return res
 
-    def _get_inline_result(self, expect_type: Optional["DataType"]):
-        result = self.ctx.inline_result
-        if result is None:
-            # didn't specify result
-            if expect_type is None or expect_type.matches_cls(NoneDataType):
-                result = NoneLiteral()
-            else:
-                self.error_c(ErrorType.NEVER_RESULT)
-        else:
-            got = result.data_type
-            if (expect_type is not None) and (not expect_type.matches(got)):
-                self.error_c(ErrorType.WRONG_RESULT_TYPE,
-                            expect=str(expect_type), got=str(got))
-        return result
-
     def call_inline_func(self, func: InlineFunction,
                          args: ARGS_T, keywords: KEYWORDS_T) -> CALLRET_T:
         # We visit the AST node every time an inline function is called
@@ -1155,7 +1180,19 @@ class Generator(ASTVisitor):
             for stmt in func.node.body:
                 self.visit(stmt)
             file.write_debug("## End of inline function")
-            result = self._get_inline_result(func.result_type)
+            result = self.ctx.inline_result
+            rt = func.result_type
+            if result is None:
+                # didn't specify result
+                if rt is None or rt.matches_cls(NoneDataType):
+                    result = NoneLiteral()
+                else:
+                    self.error_c(ErrorType.NEVER_RESULT)
+            else:
+                got = result.data_type
+                if (rt is not None) and (not rt.matches(got)):
+                    self.error_c(ErrorType.WRONG_RESULT_TYPE,
+                                 expect=str(rt), got=str(got))
         return result, file.commands
 
     def ccall_const_func(self, func: AcaciaCTFunction,
@@ -1193,3 +1230,31 @@ class Generator(ASTVisitor):
         return self.call_function(
             getitem, args, {}, location=self.node_location(node)
         )
+
+    # `new`
+
+    def visit_NewCall(self, node: NewCall):
+        if self.ctx.entity_new_data is None:
+            self.error_c(ErrorType.NEW_OUT_OF_SCOPE)
+        if node.primary is None:
+            primary = self.compiler.base_template
+        else:
+            primary: AcaciaExpr = self.visit(node.primary)
+            if not isinstance(primary, EntityTemplate):
+                self.error_c(ErrorType.INVALID_ETEMPLATE,
+                             got=primary.data_type)
+        args, keywords = self.visit(node.call_table)
+        try:
+            commands = primary.method_new(
+                self.compiler, *self.ctx.entity_new_data, args, keywords
+            )
+        except Error as err:
+            s = primary.method_new_source
+            err.add_frame(ErrFrame(
+                self.node_location(node),
+                f"Calling new on {primary.name}",
+                note = None if s is None else f"Callee defined at {s}"
+            ))
+            raise
+        self.current_file.extend(commands)
+        return NoneLiteral()

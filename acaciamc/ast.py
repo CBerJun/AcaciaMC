@@ -183,13 +183,21 @@ class While(Statement):  # while statement
         self.condition = condition
         self.body = body
 
-class FuncDef(Statement):
-    def __init__(
-        self, name: str, arg_table: ArgumentTable,
-        body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
-    ):  # function definition
+class FuncData(AST):
+    show_debug = False
+
+class FuncDef(Statement):  # function definition
+    def __init__(self, name: str, data: FuncData, lineno, col):
         super().__init__(lineno, col)
         self.name = name
+        self.data = data
+
+class NormalFuncData(FuncData):
+    def __init__(
+        self, arg_table: ArgumentTable,
+        body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
+    ):
+        super().__init__(lineno, col)
         self.arg_table = arg_table
         if returns is None:
             self.returns = None
@@ -199,24 +207,22 @@ class FuncDef(Statement):
             self.returns = returns.type
         self.body = body
 
-class InlineFuncDef(Statement):
+class InlineFuncData(FuncData):
     def __init__(
-        self, name: str, arg_table: ArgumentTable,
+        self, arg_table: ArgumentTable,
         body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
-    ):  # inline function definition
+    ):
         super().__init__(lineno, col)
-        self.name = name
         self.arg_table = arg_table
         self.returns = returns
         self.body = body
 
-class ConstFuncDef(Statement):
+class ConstFuncData(FuncData):
     def __init__(
-        self, name: str, arg_table: ArgumentTable,
+        self, arg_table: ArgumentTable,
         body: _List[Statement], returns: _Optional[FunctionPort], lineno, col
-    ):  # compile time function definition
+    ):
         super().__init__(lineno, col)
-        self.name = name
         self.arg_table = arg_table
         self.returns = returns
         self.body = body
@@ -235,24 +241,32 @@ class EntityField(Statement):  # entity field definition
         self.type = type_
 
 class EntityMethod(Statement):  # entity method definition
-    def __init__(self, content: _Union[FuncDef, InlineFuncDef, ConstFuncDef],
+    def __init__(self, content: FuncDef,
                  qualifier: MethodQualifier, lineno, col):
         super().__init__(lineno, col)
         self.content = content
         self.qualifier = qualifier
-        assert (not isinstance(content, ConstFuncDef)
+        assert (not isinstance(content.data, ConstFuncData)
                 or qualifier is MethodQualifier.static)
+
+class NewMethod(Statement):  # new method definition
+    def __init__(self, data: _Union[NormalFuncData, InlineFuncData],
+                 lineno, col):
+        super().__init__(lineno, col)
+        self.data = data
 
 class EntityTemplateDef(Statement):  # entity statement
     def __init__(
         self, name: str, parents: _List[Expression],
         body: _List[_Union[EntityMethod, EntityField, Pass]],
+        new_method: _Optional[NewMethod],
         lineno, col
     ):
         super().__init__(lineno, col)
         self.name = name
         self.parents = parents
         self.body = body
+        self.new_method = new_method
 
 class VarDef(Statement):  # x: y [= z] variable declaration
     def __init__(self, target: str, type_: TypeSpec,
@@ -349,6 +363,11 @@ class StructDef(Statement):  # struct definition
         self.bases = bases
         self.body = body
 
+class Result(Statement):  # result xxx
+    def __init__(self, value: Expression, lineno, col):
+        super().__init__(lineno, col)
+        self.value = value
+
 class Literal(Expression):  # a literal constant
     def __init__(self, literal, lineno, col):
         super().__init__(lineno, col)
@@ -429,10 +448,12 @@ class MapDef(Expression):  # a literal compile time map
         self.keys = keys
         self.values = values
 
-class Result(Statement):  # result xxx
-    def __init__(self, value: Expression, lineno, col):
+class NewCall(Expression):  # Template.new()
+    def __init__(self, primary: _Optional[Expression],
+                 call_table: CallTable, lineno, col):
         super().__init__(lineno, col)
-        self.value = value
+        self.primary = primary
+        self.call_table = call_table
 
 #############
 ### UTILS ###

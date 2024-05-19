@@ -149,10 +149,8 @@ world.fill(ORIGIN, Offset(x=5, z=5),
            world.Block("concrete", {"color": "red"}))
 
 entity Test:
-    static inline def __spawn__() -> const SpawnInfo:
-        result SpawnInfo(type="armor_stand", pos=ORIGIN)
-
-    def __init__():
+    new():
+        new(type="armor_stand", pos=ORIGIN)
         world.setblock(Pos(self), "diamond_block")
         world.effect_give(self, "invisibility", duration=1000)
 

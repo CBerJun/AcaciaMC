@@ -125,10 +125,13 @@ class ErrorType(enum.Enum):
         'definitions for entity method "{method}"'
     METHOD_ATTR_CONFLICT = 'Conflict with base template(s): the name ' \
         '"{name}" is used as both a method name and an attribute name'
+    MULTIPLE_NEW_METHODS = 'Found multiple "new" methods'
+    CONST_NEW_METHOD = '"new" method cannot be compile time function'
     SFIELD_MULTIPLE_DEFS = 'Multiple definitions for struct attribute "{attr}"'
     MISSING_ARG = 'Required argument "{arg}" is missing'
     RESULT_OUT_OF_SCOPE = 'Found "result" out of function'
     SELF_OUT_OF_SCOPE = 'Found "self" out of non-static entity method'
+    NEW_OUT_OF_SCOPE = 'Found "new" call out of "new" method'
     TOO_MANY_ARGS = 'Too many positional arguments'
     UNEXPECTED_KEYWORD_ARG = 'Unexpected keyword argument "{arg}"'
     UNCALLABLE = '"{expr_type}" is not callable'
@@ -139,14 +142,9 @@ class ErrorType(enum.Enum):
     INVALID_BIN_FUNC_ARG = 'Invalid argument "{arg}" for binary function: ' \
         '{message}'
     CANT_CREATE_INSTANCE = 'Can\'t create instance of "{type_}" type'
-    INITIALIZER_RESULT = '__init__ initializer for "{type_}" should not ' \
-        'produce result'
-    INITIALIZER_NOT_CALLABLE = '__init__ initializer for "{type_}" should ' \
-        'be callable, not "{got}"'
-    SPAWN_RESULT = '__spawn__ for "{type_}" should return "SpawnInfo", not ' \
-        '"{got}"'
-    SPAWN_NOT_CALLABLE = '__spawn__ for "{type_}" should be callable, not ' \
-        '"{got}"'
+    CANT_CREATE_ENTITY = '"{type_}" entity template does not support entity ' \
+        'creation'
+    ENTITY_NEW_RETURN_TYPE = '"new" method should return "None", not "{got}"'
     CONST_ARITHMETIC = 'Arithmetic error when analyzing constant: {message}'
     MRO = 'Invalid base templates (failed to create MRO)'
     OVERRIDE_RESULT_MISMATCH = 'Override method "{name}" should have same ' \
