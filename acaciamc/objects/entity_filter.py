@@ -2,7 +2,7 @@
 
 __all__ = ["EFilterType", "EFilterDataType", "EntityFilter"]
 
-from typing import List, Union, Optional, NamedTuple, TYPE_CHECKING
+from typing import List, Union, Optional, TYPE_CHECKING
 import re
 
 from acaciamc.error import *
@@ -82,10 +82,13 @@ class EFilterType(Type):
     def cdatatype_hook(self):
         return ctdt_efilter
 
-class _EFilterData(NamedTuple):
-    tag: Union[str, None]  # temporary tag name (None for last tuple)
-    subcmds: List["_ExecuteSubcmd"]
-    selector: MCSelector
+class _EFilterData:
+    def __init__(self, tag: Optional[str], subcmds: List["_ExecuteSubcmd"],
+                 selector: MCSelector):
+        """tag: temporary tag name (None for last tuple)"""
+        self.tag = tag
+        self.subcmds = subcmds
+        self.selector = selector
 
     def copy(self):
         return _EFilterData(
@@ -368,21 +371,23 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
         """
         res = []
         last_tag = among_tag
-        for tag, subcmds, selector in self.data[:-1]:
+        for data in self.data[:-1]:
+            selector = data.selector
             if last_tag is not None:
                 selector = selector.copy()
                 selector.tag(last_tag)
             res.append(cmds.Execute(
-                subcmds,
-                runs=cmds.Cmd("tag %s add %s" % (selector.to_str(), tag))
+                data.subcmds,
+                f"tag {selector.to_str()} add {data.tag}"
             ))
-            last_tag = tag
-        _, final_subcmds, final_selector = self.data[-1]
+            last_tag = data.tag
+        final = self.data[-1]
+        final_selector = final.selector
         if last_tag is not None:
             final_selector = final_selector.copy()
             final_selector.tag(last_tag)
         res.append(cmds.Execute(
-            final_subcmds, command.format(selected=final_selector.to_str())
+            final.subcmds, command.format(selected=final_selector.to_str())
         ))
         res.extend(self.cleanup)
         return res
