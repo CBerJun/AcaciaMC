@@ -101,7 +101,7 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
         ) -> "CALLRET_T":
         template = self.owner.extern_template
         SELF = self.owner.get_selector().to_str()
-        RESOLVE_CTOR = EGroupType(template, compiler)
+        RESOLVE_CTOR = EGroupType(template)
         @axe.chop
         def _call_me(compiler: "Compiler"):
             commands = RESOLVE_CTOR.initialize(instance, [], {}, compiler)
@@ -116,6 +116,6 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
 
 class ExternEGroup(EntityGroup):
     def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
-        super().__init__(ExternEGroupDataType(template), compiler)
+        super().__init__(ExternEGroupDataType(template, compiler), compiler)
         self.attribute_table.set("resolve", _ExternEGroupResolve(self))
         self.extern_template = template
