@@ -148,7 +148,7 @@ class Parser:
         list := paren_list_of{LBRACE, expr, RBRACE}
         map_item := expr COLON expr
         map := LBRACE ((map_item (COMMA map_item)* COMMA?) | COLON)
-          RBRACE
+            RBRACE
         """
         pos = self.current_pos
         self.eat(TokenType.lbrace)
@@ -200,8 +200,8 @@ class Parser:
 
     def expr_l0(self):
         """
-        level 0 expression := (LPAREN expr RPAREN) | literal
-          | identifier | str_literal | self | list | map | new_call
+        expr_l0 := (LPAREN expr RPAREN) | literal | identifier
+            | str_literal | self | list | map | new_call
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -228,11 +228,11 @@ class Parser:
 
     def expr_l1(self):
         """
-        level 1 expression := expr_l0 (
-          (POINT IDENTIFIER)
-          | call_table
-          | paren_list_of{LBRACKET, expr, RBRACKET}
-          | (POINT NEW call_table)
+        expr_l1 := expr_l0 (
+            (POINT IDENTIFIER)
+            | call_table
+            | paren_list_of{LBRACKET, expr, RBRACKET}
+            | (POINT NEW call_table)
         )*
         """
         node = self.expr_l0()
@@ -280,7 +280,7 @@ class Parser:
                 return node
 
     def expr_l2(self):
-        """level 2 expression := ((PLUS | MINUS) expr_l2) | expr_l1"""
+        """expr_l2 := ((PLUS | MINUS) expr_l2) | expr_l1"""
         pos = self.current_pos
         if self.current_token.type is TokenType.plus:
             self.eat()
@@ -292,7 +292,7 @@ class Parser:
             return self.expr_l1()
 
     def expr_l3(self):
-        """level 3 expression := expr_l2 ((STAR | SLASH | MOD) expr_l2)*"""
+        """expr_l3 := expr_l2 ((STAR | SLASH | MOD) expr_l2)*"""
         node = self.expr_l2()
         while True:
             token_type = self.current_token.type
@@ -311,7 +311,7 @@ class Parser:
             )
 
     def expr_l4(self):
-        """level 4 expression := expr_l3 ((ADD | MINUS) expr_l3)*"""
+        """expr_l4 := expr_l3 ((ADD | MINUS) expr_l3)*"""
         node = self.expr_l3()
         while True:
             token_type = self.current_token.type
@@ -327,9 +327,8 @@ class Parser:
 
     def expr_l5(self):
         """
-        level 5 expression := expr_l4 ((
-          EQUAL_TO | UNEQUAL_TO | GREATER | LESS | GREATER_EQUAL | LESS_EQUAL
-        ) expr_l4)*
+        expr_l5 := expr_l4 ((EQUAL_TO | UNEQUAL_TO | GREATER | LESS
+            | GREATER_EQUAL | LESS_EQUAL) expr_l4)*
         """
         pos = self.current_pos
         left = self.expr_l4()
@@ -351,7 +350,7 @@ class Parser:
         return left
 
     def expr_l6(self):
-        """level 6 expression := (NOT expr_l6) | expr_l5"""
+        """expr_l6 := (NOT expr_l6) | expr_l5"""
         pos = self.current_pos
         if self.current_token.type is TokenType.not_:
             self.eat()
@@ -360,7 +359,7 @@ class Parser:
             return self.expr_l5()
 
     def expr_l7(self):
-        """level 7 expression := expr_l6 (AND expr_l6)*"""
+        """expr_l7 := expr_l6 (AND expr_l6)*"""
         left = self.expr_l6()
         operands = []
         while self.current_token.type is TokenType.and_:
@@ -373,7 +372,7 @@ class Parser:
         return left
 
     def expr_l8(self):
-        """level 8 expression := expr_l7 (OR expr_l7)*"""
+        """expr_l8 := expr_l7 (OR expr_l7)*"""
         left = self.expr_l7()
         operands = []
         while self.current_token.type is TokenType.or_:
@@ -395,14 +394,14 @@ class Parser:
     def if_stmt(self):
         """
         if_stmt := IF expr COLON statement_block
-          (ELIF expr COLON statement_block)*
-          (ELSE COLON statement_block)?
+            (ELIF expr COLON statement_block)*
+            (ELSE COLON statement_block)?
         """
         pos = self.current_pos
         def _if_extra():
             """
             if_extra := (ELIF expr COLON statement_block if_extra?)
-              | (ELSE COLON statement_block)
+                | (ELSE COLON statement_block)
             return list of statements
             """
             if self.current_token.type is TokenType.else_:
@@ -446,7 +445,7 @@ class Parser:
     def interface_stmt(self):
         """
         interface_stmt := INTERFACE IDENTIFIER (POINT IDENTIFIER)*
-          COLON statement_block
+            COLON statement_block
         """
         pos = self.current_pos
         self.eat(TokenType.interface)
@@ -501,7 +500,7 @@ class Parser:
     def const_def_stmt(self):
         """
         funcdef_const := argtable_const (ARROW type_spec)?
-          COLON statement_block
+            COLON statement_block
         const_def_stmt := CONST def_head fundef_const
         """
         pos = self.current_pos
@@ -512,8 +511,9 @@ class Parser:
 
     def inline_def_stmt(self):
         """
-        funcdef_inline := argtable_inline (ARROW func_port_inline type_spec)?
-          COLON statement_block
+        funcdef_inline := argtable_inline
+            (ARROW func_port_inline type_spec)?
+            COLON statement_block
         inline_def_stmt := INLINE def_head funcdef_inline
 `        """
         pos = self.current_pos
@@ -525,7 +525,7 @@ class Parser:
     def def_stmt(self):
         """
         funcdef_normal := argtable_normal (ARROW type_spec)?
-          COLON statement_block
+            COLON statement_block
         def_stmt := def_head funcdef_normal
         """
         pos = self.current_pos
@@ -587,30 +587,33 @@ class Parser:
                 content = self.def_stmt()
             return EntityMethod(content, qualifier, **pos)
 
+    def _extends_clause(self) -> List[Expression]:
+        """extends_clause := (EXTENDS list_of{expr})?"""
+        bases = []
+        if self.current_token.type is TokenType.extends:
+            self.eat()
+            self.list_of(lambda: bases.append(self.expr()))
+        return bases
+
     def entity_stmt(self):
         """
-        entity_stmt := ENTITY IDENTIFIER (EXTENDS expr
-          (COMMA expr)*)? COLON block{entity_body}
+        entity_stmt := ENTITY IDENTIFIER extends_clause
+            COLON block{entity_body}
         entity_field_decl := IDENTIFIER COLON type_spec
         method_decl := (
-          (VIRTUAL | OVERRIDE | STATIC)? (def_stmt | inline_def_stmt)
-          | (STATIC const_def_stmt)
+            (VIRTUAL | OVERRIDE | STATIC)? (def_stmt | inline_def_stmt)
+            | (STATIC const_def_stmt)
         )
-        new_method_decl := (NEW funcdef_normal) | (INLINE NEW funcdef_inline)
+        new_method_decl := (NEW funcdef_normal)
+            | (INLINE NEW funcdef_inline)
         entity_body := (method_decl | new_method_decl)
-          | ((entity_field_decl | pass_stmt) NEW_LINE)
+            | ((entity_field_decl | pass_stmt) NEW_LINE)
         """
         pos = self.current_pos
         self.eat(TokenType.entity)
         name = self.current_token.value
         self.eat(TokenType.identifier)
-        parents = []
-        if self.current_token.type is TokenType.extends:
-            self.eat()  # eat EXTENDS
-            parents.append(self.expr())
-            while self.current_token.type is TokenType.comma:
-                self.eat()  # eat COMMA
-                parents.append(self.expr())
+        parents = self._extends_clause()
         self.eat(TokenType.colon)
         body = self._block(self._entity_body)
         new_methods = [v for v in body if isinstance(v, NewMethod)]
@@ -688,9 +691,9 @@ class Parser:
         """
         id_alias := IDENTIFIER alias
         from_import_stmt := FROM module_meta IMPORT (
-          STAR
-          | list_of{id_alias}
-          | paren_list_of{LPAREN, id_alias, RPAREN}
+            STAR
+            | list_of{id_alias}
+            | paren_list_of{LPAREN, id_alias, RPAREN}
         )
         """
         pos = self.current_pos
@@ -741,22 +744,16 @@ class Parser:
 
     def struct_stmt(self):
         """
-        struct_field_decl := IDENTIFIER (COLON type_spec)? EQUAL expr
+        struct_field_decl := IDENTIFIER COLON type_spec
         struct_body := ((struct_field_decl | pass_stmt) NEW_LINE)*
-        struct_stmt := STRUCT IDENTIFIER (EXTENDS expr (COMMA expr)*)?
-          COLON block{struct_body}
+        struct_stmt := STRUCT IDENTIFIER extends_clause
+            COLON block{struct_body}
         """
         pos = self.current_pos
         self.eat(TokenType.struct)
         name = self.current_token.value
         self.eat(TokenType.identifier)
-        bases = []
-        if self.current_token.type is TokenType.extends:
-            self.eat()  # eat EXTENDS
-            bases.append(self.expr())
-            while self.current_token.type is TokenType.comma:
-                self.eat()  # eat COMMA
-                bases.append(self.expr())
+        bases = self._extends_clause()
         self.eat(TokenType.colon)
         body = self._block(self._struct_body)
         return StructDef(name, bases, body, **pos)
@@ -777,8 +774,9 @@ class Parser:
     def _handle_const(self):
         """
         constant_def_body := list_of{constant_decl} |
-          paren_list_of{LPAREN, constant_decl, RPAREN}
-        const_statement := const_def_stmt | (CONST constant_def_body NEW_LINE)
+            paren_list_of{LPAREN, constant_decl, RPAREN}
+        const_statement := const_def_stmt
+            | (CONST constant_def_body NEW_LINE)
         """
         self.peek()
         if self.next_token.type is TokenType.def_:
@@ -815,19 +813,19 @@ class Parser:
     def statement(self):
         """
         expr_statement := (
-          var_def_stmt | auto_var_def_stmt | assign_stmt |
-          aug_assign_stmt | expr_stmt
+            var_def_stmt | auto_var_def_stmt | assign_stmt |
+            aug_assign_stmt | expr_stmt
         )
         simple_statement := (
-          pass_stmt | command_stmt | import_stmt | from_import_stmt |
-          result_stmt
+            pass_stmt | command_stmt | import_stmt | from_import_stmt |
+            result_stmt
         )
         embedded_statement := (
-          if_stmt | while_stmt | for_stmt | interface_stmt | def_stmt |
-          entity_stmt | struct_stmt | inline_def_stmt
+            if_stmt | while_stmt | for_stmt | interface_stmt |
+            def_stmt | entity_stmt | struct_stmt | inline_def_stmt
         )
         statement := ((simple_statement | expr_statement) NEW_LINE) |
-          embedded_statement | const_statement
+            embedded_statement | const_statement
         """
         # Statements that start with special token
         TOK2STMT_EMBEDDED = {
@@ -875,8 +873,8 @@ class Parser:
             self.eat()  # eat equal
             node = Assign(expr, self.expr(), **pos)
         elif self.current_token.type in AUG_ASSIGN:
-            # aug_assign_stmt := expr (PLUS_EQUAL |
-            #   MINUS_EQUAL | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
+            # aug_assign_stmt := expr (PLUS_EQUAL | MINUS_EQUAL
+            #     | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
             operator = AUG_ASSIGN[self.current_token.type]
             self.eat()  # eat operator
             node = AugmentedAssign(expr, operator, self.expr(), **pos)
@@ -964,8 +962,7 @@ class Parser:
 
     def type_spec(self):
         """type_spec := expr"""
-        pos = self.current_pos
-        return TypeSpec(self.expr(), **pos)
+        return TypeSpec(self.expr(), **self.current_pos)
 
     def call_table(self):
         """
