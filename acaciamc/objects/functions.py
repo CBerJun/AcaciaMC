@@ -68,6 +68,7 @@ from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
 import acaciamc.mccmdgen.cmds as cmds
 from .none import NoneLiteral
+from .entity import EntityReference
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -397,10 +398,16 @@ class _BoundMethod(ConstExprCombined, AcaciaCallable):
         if self.is_inline:
             assert isinstance(self.definition, InlineFunction), \
                    "Unexpected target function %r" % self.definition
-            self.definition.context.self_value = self.object
+            # `EntityReference` is needed so that `self` is not
+            # assignable.
+            self.definition.context.self_value = \
+                EntityReference.from_other(self.object)
         result, commands = self.definition.call(args, keywords, compiler)
         # `BinaryFunction`s cannot be method implementation
         # because we are not sure about their result data type
+        if self.is_inline:
+            # For gc...
+            self.definition.context.self_value = None
         return result, commands
 
 class BoundMethod(ConstExprCombined, AcaciaCallable):

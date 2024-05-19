@@ -788,6 +788,9 @@ class Generator(ASTVisitor):
             assert self_var is not None
             data = ast.data
             assert isinstance(data, NormalFuncData)
+            # The self var getters will make sure the returned value is
+            # not assignable, so no need to wrap it in `EntityReference`
+            # here.
             self._method_body(method, self_var, node.name, data.body)
         # Also 2nd pass the `new` method if needed
         if isinstance(method_new, AcaciaNewFunction):
@@ -798,8 +801,10 @@ class Generator(ASTVisitor):
             f.write(f"tag @e[tag={nd_tag}] remove {nd_tag}")
             with self.new_ctx():
                 self.ctx.entity_new_data = (IntVar(nd_slot), nd_tag)
+                self_var = TaggedEntity(nd_tag, template)
+                self_var.is_temporary = True
                 self._method_body(
-                    method_new.impl, TaggedEntity(nd_tag, template),
+                    method_new.impl, self_var,
                     node.name, node.new_method.data.body
                 )
         # Register

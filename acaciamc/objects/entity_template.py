@@ -95,6 +95,7 @@ class _MethodDispatcher:
                 nonlocal _sv
                 if _sv is None:
                     _sv = TaggedEntity.new_tag(template, self.compiler)
+                    _sv.is_temporary = True
                 return _sv
         self.impls[implementation] = ([template], get_self_var)
         for bound in self.bound:
@@ -152,6 +153,7 @@ class _SimpleMethod:
         assert not self.is_inline
         if self._self_var is None:
             self._self_var = TaggedEntity.new_tag(self.template, self.compiler)
+            self._self_var.is_temporary = True
         return self._self_var
 
     def bind_to(self, entity: "_EntityBase"):
@@ -418,7 +420,8 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
             def mnew(compiler, template_id: AcaciaExpr, tag: str,
                      args, keywords):
                 method_new.context.entity_new_data = (template_id, tag)
-                method_new.context.self_value = TaggedEntity(tag, self)
+                s = method_new.context.self_value = TaggedEntity(tag, self)
+                s.is_temporary = True
                 r, c = method_new.call(args, keywords, compiler)
                 if not r.data_type.matches_cls(NoneDataType):
                     raise Error(

@@ -74,6 +74,10 @@ class EntityReference(_EntityBase):
         self.selector = selector
         super().__init__(template, cast_to)
 
+    @classmethod
+    def from_other(cls, other: _EntityBase):
+        return cls(other.get_selector(), other.template)
+
     def _get_selector(self) -> MCSelector:
         return self.selector.copy()
 
