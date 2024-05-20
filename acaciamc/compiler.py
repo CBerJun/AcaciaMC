@@ -142,9 +142,6 @@ class Compiler:
         self.file_main = cmds.MCFunctionFile()  # load program
         self.file_tick = cmds.MCFunctionFile()  # runs every tick
         self.output_mgr.new_file(self.file_main, self.cfg.main_file)
-        self.output_mgr.new_file(
-            self.file_tick, self.output_mgr.tick_file_path
-        )
         self.current_generator: Optional[Generator] = None
         self._interface_paths: Dict[str, SourceLocation] = {}
         self._score_max = 0  # max id of score allocated
@@ -181,6 +178,11 @@ class Compiler:
         ## callback
         for cb in self._before_finish_cbs:
             cb(self)
+        ## add tick.mcfunction
+        if self.file_tick.has_content():
+            self.output_mgr.new_file(
+                self.file_tick, self.output_mgr.tick_file_path
+            )
         ## import caching system init
         mod_loaded_vars = [
             mod.loaded_var for mod in self._cached_modules
