@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from .entity import _EntityBase
     from .position import Position
 
+SUMMON_AT = "@a[c=1]"  # this always selects one player
+# Note that @p only selects players that are alive.
 SUMMON_Y = -75  # must be below -64 so it's not reachable
 
 class ETemplateDataType(DefaultDataType):
@@ -201,11 +203,11 @@ def default_entity_new(
             e_name = f" {cmds.mc_str(name)}"
         return resultlib.commands([
             cmds.Execute(
-                [cmds.ExecuteEnv("at", "@p")],
+                [cmds.ExecuteEnv("at", SUMMON_AT)],
                 f"summon {e_type} ~ {SUMMON_Y} ~{e_rot} {e_event}{e_name}"
             ),
             cmds.Execute(
-                [cmds.ExecuteEnv("at", "@p")],
+                [cmds.ExecuteEnv("at", SUMMON_AT)],
                 f"tag @e[x=~,y={SUMMON_Y},z=~,dx=0,dy=0,dz=0] add {tag}"
             ),
             cmds.Execute(e_pos[0], f"tp @e[tag={tag}] {e_pos[1]}"),
