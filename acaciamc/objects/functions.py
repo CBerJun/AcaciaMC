@@ -53,7 +53,7 @@ __all__ = [
 
 from typing import (
     TYPE_CHECKING, List, Dict, Union, Callable, Tuple, Optional, Generic,
-    TypeVar
+    TypeVar, Any
 )
 from abc import abstractmethod
 
@@ -548,24 +548,29 @@ class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
                     ))
 
 class ConstructorFunction(AcaciaCallable):
-    # `initialize` should initialize a var of `var_type` type.
-    # `var_type` defaults to call `datatype_hook` if it is implemented,
-    # otherwise subclasses have to implement `var_type`.
-
     def call(self, args: ARGS_T, keywords: KEYWORDS_T, compiler) -> CALLRET_T:
-        instance = self.get_var_type().new_var(compiler)
-        commands = self.initialize(instance, args, keywords, compiler)
+        dt, kwds = self.pre_initialize(args, keywords, compiler)
+        instance = dt.new_var(compiler)
+        commands = self.initialize(instance, compiler, **kwds)
         return instance, commands
 
     @abstractmethod
-    def initialize(self, instance, args: ARGS_T,
-                   keywords: KEYWORDS_T, compiler) -> CMDLIST_T:
+    def initialize(self, instance, compiler, **kwds) -> CMDLIST_T:
+        """Initialize the `instance` and return commands to execute."""
         pass
 
-    def get_var_type(self) -> Storable:
-        if not hasattr(self, "_ctor_var_type"):
-            self._ctor_var_type = self._var_type()
-        return self._ctor_var_type
-
-    def _var_type(self) -> Storable:
-        return self.datatype_hook()
+    def pre_initialize(self, args: ARGS_T, keywords: KEYWORDS_T, compiler) \
+            -> Tuple[Storable, Dict[str, Any]]:
+        """
+        Called before `initialize` to determine the type of instance and
+        which arguments to pass to `initialize`.
+        """
+        try:
+            dt = self.datatype_hook()
+            if not isinstance(dt, Storable):
+                raise InvalidOpError
+        except InvalidOpError:
+            raise NotImplementedError(
+                'pre_initialize or datatype_hook must be implemented'
+            )
+        return dt, {"args": args, "keywords": keywords}

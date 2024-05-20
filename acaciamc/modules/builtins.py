@@ -96,10 +96,10 @@ def acacia_build(compiler: "Compiler"):
         ('list', ListType),
         ('map', MapType),
         ('AbsPos', AbsPosType),
-        ('ExternEngroup', ExternEGroupGeneric),
         ('Any', AnyType),
     ):
         res[name] = cls()
+    res['ExternEngroup'] = ExternEGroupType(compiler)
     # builtin names
     res['Entity'] = compiler.base_template
     res['swap'] = BinaryFunction(swap)

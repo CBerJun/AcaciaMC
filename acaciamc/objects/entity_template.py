@@ -477,8 +477,8 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         for name, impl in template.static_methods.items():
             entity.attribute_table.set(name, impl)
 
-    def initialize(self, instance: "TaggedEntity", args, keywords,
-                   compiler: "Compiler"):
+    def initialize(self, instance: "TaggedEntity", compiler: "Compiler",
+                   args, keywords):
         """
         Calling an entity template summons a new entity, the arguments
         are passed to the constructor.

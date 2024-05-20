@@ -53,9 +53,8 @@ class StructTemplate(ConstExprCombined, ConstructorFunction):
         return any(base.is_subtemplate_of(template) for base in self.bases)
 
     def initialize(
-        self, instance: "Struct",
-        args: "ARGS_T", keywords: "KEYWORDS_T",
-        compiler
+        self, instance: "Struct", compiler,
+        args: "ARGS_T", keywords: "KEYWORDS_T"
     ):
         @axe.chop
         @axe.star

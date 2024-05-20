@@ -65,10 +65,9 @@ class EGroupType(ConstExprCombined, ConstructorFunction):
         self.template = template
 
     def initialize(
-            self, instance: "EntityGroup",
-            args: "ARGS_T", keywords: "KEYWORDS_T",
-            compiler: "Compiler"
-        ) -> CMDLIST_T:
+        self, instance: "EntityGroup", compiler: "Compiler",
+        args: "ARGS_T", keywords: "KEYWORDS_T"
+    ) -> CMDLIST_T:
         @axe.chop
         def _call_me(compiler: "Compiler"):
             return resultlib.commands(instance.clear())

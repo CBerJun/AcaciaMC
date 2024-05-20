@@ -261,19 +261,12 @@ class Generator(ASTVisitor):
             self.error_c(ErrorType.INVALID_ASSIGN_TARGET)
         value_type: Optional[DataType] = None
         value: Optional[AcaciaExpr] = None
-        ctor_cb = None
         # analyze rvalue
         if isinstance(value_node, Call):
             func, table = self._call_inspect(value_node)
-            if (
-                isinstance(func, ConstructorFunction)
-                and target.data_type is func.get_var_type()
-            ):
-                def ctor_cb():
-                    commands.extend(
-                        func.initialize(target, *table, self.compiler)
-                    )
-                value_type = func.get_var_type()
+            if isinstance(func, ConstructorFunction):
+                value_type, ctor_kwds = \
+                    func.pre_initialize(*table, self.compiler)
             else:
                 value = self._call_invoke(value_node, func, table)
         else:
@@ -288,12 +281,10 @@ class Generator(ASTVisitor):
                 expect=str(target.data_type), got=str(value_type)
             )
         # assign
-        commands = []
         if value is not None:
-            commands.extend(value.export(target, self.compiler))
+            commands = value.export(target, self.compiler)
         else:
-            assert ctor_cb is not None
-            ctor_cb()
+            commands = func.initialize(target, self.compiler, **ctor_kwds)
         # write commands
         self.current_file.extend(commands)
 
@@ -929,8 +920,7 @@ class Generator(ASTVisitor):
         if self.ctx.function_state == FUNC_NORMAL:
             if isinstance(node.value, Call):
                 func, table = self._call_inspect(node.value)
-                if (isinstance(func, ConstructorFunction)
-                        and rt is func.get_var_type()):
+                if isinstance(func, ConstructorFunction):
                     value = None
                 else:
                     value = self._call_invoke(node.value, func, table)
@@ -938,7 +928,9 @@ class Generator(ASTVisitor):
                 value = self.visit(node.value)
             rv = self.ctx.current_function.result_var
             if value is None:
-                commands = func.initialize(rv, *table, self.compiler)
+                dt, kwds = func.pre_initialize(*table, self.compiler)
+                _check(dt)
+                commands = func.initialize(rv, self.compiler, **kwds)
             else:
                 _check(value.data_type)
                 commands = value.export(rv, self.compiler)

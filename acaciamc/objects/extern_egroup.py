@@ -2,47 +2,41 @@
 `ExternEngroup` objects.
 
 When dealing with entities that exist already in the world, how can
-Acacia know which template to use? Well, `ExternEngroup` can be
-used to handle those entities. Also, by using this you may tell
-Acacia explicitly which template to use for an entity.
+Acacia know which template to use? Well, `ExternEngroup` allows you to
+tell Acacia explicitly which template to use for those entities.
     import world
     entity MyTemp:
         pass
     entity Diamond:
         pass
-    ex: ExternEngroup[MyTemp]
-    ex2: ExternEngroup[Diamond]
+    ex := ExternEngroup()
+    ex2 := ExternEngroup()
     ex.select(Enfilter().is_type("armor_stand").is_name("foo"))
     for e in ex:
-        # `e` here is not `MyTemp`, though it might later be marked
-        # as such.
+        # Here `e` is an entity with a special template that is not even
+        # a subtemplate of `Entity`.
         if world.is_block(Pos(e).offset(y=-1), "diamond_block"):
             ex2.add(e)
             ex.remove(e)
 In the example we select all armor stands with name "foo" and add
-them to `ex2` if they are on diamond block, or else to `ex`. `ex`
-is a potential group of `MyTemp` and `ex2` is a potential group of
-`Diamond`.
-    # Mark all current entities in `ex` as `MyTemp`, and return the
-    # normal `Engroup`.
-    my_group := ex.resolve()
-    diamond_group := ex2.resolve()
+them to `ex2` if they are on diamond block, or else to `ex`.
+    # Mark all current entities in `ex` as `MyTemp`, and get the
+    # resolved `Engroup[MyTemp]`.
+    my_group := ex.resolve(MyTemp)
+    diamond_group := ex2.resolve(Diamond)
 Now `my_group` is of type `Engroup[MyTemp]` and `diamond_group` is
 of type `Engroup[Diamond]`.
-You should make sure no entity is registered in 2 different
-templates, or the behavior is undefined. Registering the same entity
-on exact same template is allowed. This should be used to handle all
-external entities safely.
+Selecting entities that already have a template using an
+`ExternEngroup` is allowed, but just make sure no entity is registered
+in 2 different templates. Registering the same entity on exact same
+template is allowed, though.
 """
 
-__all__ = [
-    "ExternEGroupDataType", "ExternEGroupType", "ExternEGroupGeneric",
-    "ExternEGroup"
-]
+__all__ = ["ExternEGroupDataType", "ExternEGroupType", "ExternEGroup"]
 
 from typing import TYPE_CHECKING
 
-from acaciamc.tools import axe, resultlib, cmethod_of
+from acaciamc.tools import axe
 from acaciamc.mccmdgen import cmds
 from acaciamc.mccmdgen.expr import *
 from .entity_group import *
@@ -56,36 +50,26 @@ if TYPE_CHECKING:
     from .entity_template import EntityTemplate
 
 class ExternEGroupDataType(EGroupDataType):
-    def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
+    def __init__(self, compiler: "Compiler"):
         super().__init__(compiler.external_template)
-        self.__template = template
 
     def __str__(self) -> str:
-        return "ExternEngroup[%s]" % self.__template.name
+        return "ExternEngroup"
 
     @classmethod
     def name_no_generic(cls) -> str:
         return "ExternEngroup"
 
     def new_var(self, compiler):
-        return ExternEGroup(self.__template, compiler)
+        return ExternEGroup(compiler)
 
 class ExternEGroupType(EGroupType):
-    def __init__(self, template, compiler):
-        super().__init__(template)
+    def __init__(self, compiler: "Compiler"):
+        super().__init__(compiler.external_template)
         self.compiler = compiler
 
     def datatype_hook(self):
-        return ExternEGroupDataType(self.template, self.compiler)
-
-class ExternEGroupGeneric(EGroupGeneric):
-    def __init__(self):
-        super().__init__()
-        @cmethod_of(self, "__getitem__")
-        @axe.chop
-        @axe.arg("template", ETemplateDataType)
-        def _getitem(compiler, template: "EntityTemplate"):
-            return ExternEGroupType(template, compiler)
+        return ExternEGroupDataType(self.compiler)
 
 class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_function
@@ -95,31 +79,28 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
         self.owner = owner
         self.func_repr = "<resolve of %s>" % str(self.owner.data_type)
 
-    def initialize(
-            self, instance: "EntityGroup",
-            args: "ARGS_T", keywords: "KEYWORDS_T",
-            compiler: "Compiler"
-        ) -> "CALLRET_T":
-        template = self.owner.extern_template
+    def initialize(self, instance: "EntityGroup", compiler: "Compiler"):
         SELF = self.owner.get_selector().to_str()
-        RESOLVE_CTOR = EGroupType(template)
-        @axe.chop
-        def _call_me(compiler: "Compiler"):
-            commands = RESOLVE_CTOR.initialize(instance, [], {}, compiler)
-            commands.append(cmds.ScbSetConst(
-                cmds.ScbSlot(SELF, compiler.etemplate_id_scb),
-                template.runtime_id
-            ))
-            commands.append("tag %s add %s" % (SELF, instance.tag))
-            return resultlib.commands(commands)
-        _, c = BinaryFunction(_call_me).call(args, keywords, compiler)
-        return c
+        template = instance.template
+        commands = EGroupType(template).initialize(instance, compiler, [], {})
+        commands.append(cmds.ScbSetConst(
+            cmds.ScbSlot(SELF, compiler.etemplate_id_scb),
+            template.runtime_id
+        ))
+        commands.append("tag %s add %s" % (SELF, instance.tag))
+        return commands
 
-    def _var_type(self):
-        return EGroupDataType(self.owner.extern_template)
+    def pre_initialize(self, args: ARGS_T, keywords: KEYWORDS_T, compiler):
+        template_out = None
+        @axe.chop
+        @axe.arg("template", ETemplateDataType)
+        def _call_me(compiler, template: "EntityTemplate"):
+            nonlocal template_out
+            template_out = template
+        BinaryFunction(_call_me).call(args, keywords, compiler)
+        return EGroupDataType(template_out), {}
 
 class ExternEGroup(EntityGroup):
-    def __init__(self, template: "EntityTemplate", compiler: "Compiler"):
-        super().__init__(ExternEGroupDataType(template, compiler), compiler)
+    def __init__(self, compiler: "Compiler"):
+        super().__init__(ExternEGroupDataType(compiler), compiler)
         self.attribute_table.set("resolve", _ExternEGroupResolve(self))
-        self.extern_template = template
