@@ -1,0 +1,430 @@
+
+### AcaciaMC ENGLISH LANGUAGE FILE ###
+
+### ./ast.py ###
+
+## operator ##
+
+ast.operator.positive = unary +
+ast.operator.negative = unary -
+ast.operator.not = not
+ast.operator.multiply = *
+ast.operator.divide = /
+ast.operator.mod = %
+ast.operator.add = +
+ast.operator.minus = -
+ast.operator.equal_to = ==
+ast.operator.unequal_to = !=
+ast.operator.greater = >
+ast.operator.less = <
+ast.operator.greater_equal = >=
+ast.operator.less_equal = <=
+ast.operator.and = and
+ast.operator.or = or
+
+## methodqualifier ##
+
+ast.methodqualifier.none = (none)
+ast.methodqualifier.virtual = virtual
+ast.methodqualifier.override = override
+ast.methodqualifier.static = static
+
+## funcporttype ##
+
+ast.funcporttype.by_value = (none)
+ast.funcporttype.by_reference = &
+ast.funcporttype.const = const
+
+### ./cli.py ###
+
+## description ##
+
+cli.description = Compiler of Acacia, a programming language that runs in Minecraft Bedrock Edition by compiling code into mcfunction files.
+
+## fatal ##
+
+cli.fatal = Acacia: error: %s
+
+## buildargparser ##
+
+cli.builderargparser.file = The file to compile要编译的文件.
+cli.builderargparser.out = output directory
+cli.builderargparser.mcversion = Minecraft version (e.g. 1.19.50)
+cli.builderargparser.educationedition = enable features that require Minecraft's Education Edition toggle turned on
+cli.builderargparser.scoreboard = the scoreboard that Acacia uses to store data (default "acacia")
+cli.builderargparser.functionfolder = path relative to "functions" directory in a behavior pack where Acacia generates its output .mcfunction files (default "", i.e. generate directly at "functions" level)
+cli.builderargparser.mainfile = name of the mcfunction file that executes your program (default "main")
+cli.builderargparser.entitytag = entity tag prefix
+cli.builderargparser.debugcomments = add debugging comments to output files
+cli.builderargparser.nooptimize = disable optimization
+cli.builderargparser.overrideold = remove the old output contents (EVERYTHING IN DIRECTORY!)
+cli.builderargparser.initfile = if set, split initialization commands from main mcfunction file into given file (default "init")
+cli.builderargparser.internalfolder = name of the folder where Acacia stores its internal files
+cli.builderargparser.encoding = encoding of file (default "utf-8")
+cli.builderargparser.verbose = show full traceback message when encountering unexpected errors
+cli.builderargparser.maxinline = optimizer option: maximum size for a function that is called with /execute conditions to be inlined (default 20)
+
+## checkid ##
+
+cli.checkid.empty = can\'t be empty
+cli.checkid.decimal = can\'t start with a number
+cli.checkid.invalid = invalid character %r
+
+## assertid ##
+
+cli.assertid.fatal = option %s: %s
+
+## getconfig ##
+
+cli.getconfig.invalidfunctionfolder = invalid name %r in function folder path: %s
+cli.getconfig.invalidmcversion = invalid Minecraft version: %s
+cli.getconfig.maxinlinetoolow = max inline file size must >= 0: %s
+
+## run ##
+
+cli.run.filenotfound = file not found: %s
+cli.run.notafile = not a file: %s
+cli.run.outputnotfound = output directory not found: %s
+cli.run.aboveunexpectederror = the above unexpected error occurred when compiling
+cli.run.unexpectederror = unexpected error when compiling: %s
+
+### ./error.py ###
+
+## errortype ##
+
+error.errortype.invalidchar = Invalid character: "{char}"
+error.errortype.integerrequired = Expected base {base} integer
+error.errortype.intoverflow = Integer overflows
+error.errortype.unclosedlongcomment = Unclosed multi-line comment
+error.errortype.unclosedlongcommand = Unclosed multi-line command
+error.errortype.unclosedquote = Unclosed double quote
+error.errortype.unclosedfexpr = Unclosed formatted expression
+error.errortype.unclosedfont = Unclosed font specifier
+error.errortype.unclosedbracket = Unclosed {char!r}
+error.errortype.unmatchedbracket = Unmatched {char!r}
+error.errortype.unmatchedbracketpair = Closing bracket {close!r} does not match opening bracket {open!r}
+error.errortype.invalidunicodeescape = Invalid \{escape_char} escape
+error.errortype.invalidfont = Invalid font specifier: "{font}"
+error.errortype.charaftercontinuation = Unexpected character after line continuation
+error.errortype.eofaftercontinuation = End of file in multi-line statement
+error.errortype.invaliddedent = Dedent does not match any outer indentation level
+error.errortype.unexpectedtoken = Unexpected token {token}
+error.errortype.emptyblock = Expect an indented block
+error.errortype.dontknowargtype = Type of argument or its default value must be specified: "{arg}"
+error.errortype.duplicateargdef = Duplicate argument "{arg}" in function definition
+error.errortype.positionedargafterkeyword = Positional argument after keyword
+error.errortype.nondefaultargafterdefault = Non-default argument after default argument
+error.errortype.invalidfuncport = This type of function cant use qualifier "{port}"
+error.errortype.invalidvardefstmt = Invalid variable definition target
+error.errortype.nonstaticconstmethod = "Non-static method cant be compile time function"
+error.errortype.namenotdefined = Name "{name}" is not defined
+error.errortype.hasnoattribute = "{value_type}" objects have no attribute "{attr}"
+error.errortype.modulenoattribute = Module "{module}" does not have attribute "{attr}"
+error.errortype.invalidoperand = Invalid operand(s) for "{operator}": {operand}
+error.errortype.invalidboolopoperand = Invalid operand for boolean operator "{operator}": "{operand}"
+error.errortype.unsupportedvartype = Cant define variables of "{var_type}" type
+error.errortype.unsupportedargtype = Runtime argument "{arg}" passed by value cant be "{arg_type}" type
+error.errortype.unsupportedresulttype = Result type cant be "{result_type}" type
+error.errortype.unsupportedefieldtype = Entity field cant be "{field_type}" type
+error.errortype.unsupportedsfieldtype = Struct field cant be "{field_type}" type
+error.errortype.unsupportedefieldinstruct = Entity field cant be struct "{template}" type bacause it contains field of "{field_type}" type
+error.errortype.shadowedname = Shadowed name "{name}"
+error.errortype.wrongassigntype = Cant assign "{got}" to variable of "{expect}" type
+error.errortype.wrongreftype = Specified reference type is "{anno}" but got "{got}"
+error.errortype.wrongconsttype = Specified const type for "{name}" is "{anno}" but got "{got}"
+error.errortype.wrongargtype = Expect "{expect}" type for argument "{arg}", got "{got}"
+error.errortype.wrongresulttype = Expect "{expect}" type as result, got "{got}"
+error.errortype.wrongifcondition = "if" conditions must be "bool", not "{got}"
+error.errortype.wrongwhilecondition = "while" conditions must be "bool", not "{got}"
+error.errortype.cantref = Cannot reference unassignable expression
+error.errortype.cantrefarg = Value for reference argument "{arg}" is not assignable
+error.errortype.cantrefresult = Value for reference result is not assignable
+error.errortype.notconst = Value for "{name}" in const definition is not a constant
+error.errortype.notconstname = Identifier "{name}" of type "{type_}" from outer runtime scope is not a constant and thus cannot be used in compile          time functions
+error.errortype.notconstattr = Attribute "{attr}" of "{primary}" object is of type "{type_}" and is not a constant and thus cannot be used in compile          time functions
+error.errortype.argnotconst = Value for const argument "{arg}" is not a constant
+error.errortype.nonrefargdefaultnotconst = Default value for non-reference argument "{arg}" must be a constant
+error.errortype.argdefaultnotconst = Default value for argument "{arg}" in compile time function must be a constant
+error.errortype.resultnotconst = Result is expected to be a constant
+error.errortype.elementnotconst = Element in list or map must be a constant
+error.errortype.multipleresults = Multiple "result" statements in inline function that uses const or reference result
+error.errortype.nonrtresult = The result of this function call (of type "{got}") is only available at compile time and thus cannot be called at runtime
+error.errortype.nonrtname = The name "{name}" (of type "{type_}") is only available at compile time and thus cannot be used at runtime
+error.errortype.nonrtattr = The attribute "{attr}" of "{primary}" object is of type "{type_}" and is only available at compile time and thus cannot be          used at runtime
+error.errortype.endlesswhileloop = The "while" loop never ends because the conditon  always evaluates to True
+error.errortype.invalidtypespec = Expecting a type specifier, got "{got}"
+error.errortype.invalidetemplate = Expecting an entity template, got "{got}"
+error.errortype.invalidstemplate = Expecting a struct template, got "{got}"
+error.errortype.unmatchedargdefaulttype = Specified type "{arg_type}" for arg "{arg}" does not match type of default value "{default_type}"
+error.errortype.argmultiplevalues = Multiple values for argument "{arg}"
+error.errortype.duplicateefield = Duplicate entity field "{name}"
+error.errortype.efieldmultipledefs = Conflict with base template(s): multiple definitions for entity attribute "{attr}"
+error.errortype.emethodmultipledefs = Conflict in base templates: multiple incompatible definitions for entity method "{method}"
+error.errortype.multiplevirtualmethod = Conflict in base templates: multiple virtual definitions for entity method "{method}"
+error.errortype.methodattrconflict = Conflict with base template(s): the name "{name}" is used as both a method name and an attribute name
+error.errortype.multiplenewmethods = Found multiple "new" methods
+error.errortype.constnewmethod = "new" method cannot be compile time function
+error.errortype.sfieldmultipledefs = Multiple definitions for struct attribute "{attr}"
+error.errortype.missingarg = Required argument "{arg}" is missing
+error.errortype.resultoutofscope = Found "result" out of function
+error.errortype.selfoutofscope = Found "self" out of non-static entity method
+error.errortype.newoutofscope = Found "new" call out of "new" method
+error.errortype.toomanyargs = Too many positional arguments
+error.errortype.unexpectedkeywordarg = Unexpected keyword argument "{arg}"
+error.errortype.uncallable = "{expr_type}" is not callable
+error.errortype.notiterable = "{type_}" is not iterable
+error.errortype.nogetitem = "{type_}" is not subscriptable
+error.errortype.invalidassigntarget = Invalid assignment target
+error.errortype.invalidfexpr = Invalid formatted expression
+error.errortype.invalidbinfuncarg = Invalid argument "{arg}" for binary function: {message}
+error.errortype.cantcreateinstance = Cant create instance of "{type_}" type
+error.errortype.cantcreateentity = "{type_}" entity template does not support entity creation
+error.errortype.entitynewreturntype = "new" method should return "None", not "{got}"
+error.errortype.constarithmetic = Arithmetic error when analyzing constant: {message}
+error.errortype.mro = Invalid base templates (failed to create MRO)
+error.errortype.overrideresultmismatch = Override method "{name}" should have same result type "{expect}" as its parent, not "{got}"
+error.errortype.overrideresultunstorable = Virtual/override inline method "{name}" can not use "{type_}" as result type
+error.errortype.overridequalifier = Override method "{name}" should have qualifier "override", not "{got}"
+error.errortype.notoverriding = Method "{name}" is marked as "override" but did not actually override a virtual method
+error.errortype.instoverridestatic = Non-static method "{name}" has the same name with a static method in base template
+error.errortype.staticoverrideinst = Static method "{name}" has the same name with a non-static method in base template
+error.errortype.virtualoverridesimple = Virtual method "{name}" has the same name with a non-virtual method in base template
+error.errortype.uninitializedconst = Uninitialized variable in compile time function
+error.errortype.invalidconststmt = Invalid statement in compile time function
+error.errortype.posoffsetctorarg = At most one of the arguments "{axis}" and "{axis} _abs" can be float
+error.errortype.invalidposalign = Invalid position alignment "{align}"
+error.errortype.listindexoutofbounds = List with length {length} got out of bounds index {index}
+error.errortype.mapkeynotfound = Map key not found
+error.errortype.invalidmapkey = Invalid map key
+error.errortype.listmultimesnonliteral = List can only be multiplied by literal int
+error.errortype.invalidupcast = Cast objects template "{t1}" is not a subtemplate of target template "{t2}"
+error.errortype.neverresult = "The function should have set its result but didnt"
+error.errortype.reservedinterfacepath = Reserved interface path: {path}
+error.errortype.duplicateinterface = Multiple definitions of interface: {path}
+error.errortype.io = I/O Error: {message}
+error.errortype.modulenotfound = Module not found: "{module}"
+error.errortype.circularparse = File {file_!r} seems to call itself
+error.errortype.any = {message}
+
+## fullmsg ##
+
+error.fullmsg.compilererror = compiler error:
+
+## tracedcall ##
+
+error.tracedcall.note = Callee defined at %s
+error.tracedcall.calling = Calling %s
+
+### tools/__init__.py ###
+
+tools.init.transformimmutable = can't transform non-ImmutableMixin
+
+### tools/axe.py ###
+
+## preconverterror ##
+
+# show #
+
+tools.axe.preconverterror.show.penotconst = const argument {arg} received non-const value of type
+tools.axe.preconverterror.show.penotrt = argument {arg} is expecting a value that exists at runtime, got
+
+## argument ##
+
+# getdefault #
+
+tools.axe.argument.getdefault.nodefault = don't have default
+
+## convertercontainer ##
+
+# newconvert #
+
+tools.axe.convertercontainer.newconvert.error = %r is used as runtime converter but not all subconverters implement Converter
+
+# newcconvert #
+
+tools.axe.convertercontainer.newcconvert.error = %r is used as compile time converter but not all subconverters implement CTConverter
+
+## literaiint ##
+
+# getshowname #
+
+tools.axe.literaiint.showname = int (literal)
+
+## literaifloat ##
+
+# getshowname #
+
+tools.axe.literaifloat.showname = float (accepts int literal)
+
+## literaifbool ##
+
+# getshowname #
+
+tools.axe.literaifbool.showname = bool (literal)
+
+## nullable ##
+
+# getshowname #
+
+tools.axe.nullable.showname =  (or None)
+
+## any0f ##
+
+tools.axe.any0f.empty = at least 1 converter needs to be specified
+
+## iterator ##
+
+# getshowname #
+
+tools.axe.iterator.showname = (iterable)
+
+## ctiterator ##
+
+# getshowname #
+
+tools.axe.ctiterator.showname = (iterable)
+
+## literalintenum ##
+
+# getshowname #
+
+tools.axe.literalintenum.showname =  (one of %s)
+
+## literalStringEnum ##
+
+# getshowname #
+
+tools.axe.literalStringEnum.showname =  (one of %s)
+
+## listof ##
+
+# getshowname #
+
+tools.axe.list0f.showname = list of
+
+## ctlistof ##
+
+# getshowname #
+
+tools.axe.ctlist0f.showname = list of
+
+## mapof ##
+
+# getshowname #
+
+tools.axe.map0f.showname = map
+
+## ctmapof ##
+
+# getshowname #
+
+tools.axe.ctmap0f.showname = map
+
+## playerselector ##
+
+# getshowname #
+
+tools.axe.playerselector.showname =  (player type)
+
+## callable ##
+
+# getshowname #
+
+tools.axe.callable.showname =  (callable)
+
+## ctreference ##
+
+# getshowname #
+
+tools.axe.ctreference.showname =  (reference)
+
+## checkrepeat ##
+
+tools.axe.checkrepeat.error0 = repeated argument %r
+tools.axe.checkrepeat.error1 = repeated argument rename %r
+
+## callimpl ##
+
+tools.axe.callimpl.error = unknown argument %r
+
+## chopper ##
+
+tools.axe.chopper.error0 = only arguments can go before axe.slash
+tools.axe.chopper.error1 = only arguments or axe.slash can go before axe.star or axe.star_arg
+tools.axe.chopper.error2 = multiple axe.kwds
+tools.axe.chopper.error3 = argument after axe.kwds
+tools.axe.chopper.error4 = non-default argument follows default argument
+
+## call ##
+
+# emit #
+
+tools.axe.call.emit.message = Position-only argument "%s" passed as keyword
+
+## overloadchopped ##
+
+# new #
+
+tools.axe.overloadchopped.new.error0 = only arguments are allowed in overload definitions
+tools.axe.overloadchopped.new.error1 = overload arguments can't have default values
+
+# call #
+
+tools.axe.overloadchopped.call.message0 = Overload functions don't support keyword arguments
+tools.axe.overloadchopped.call.message1 = No overload matches given arguments: got %s, expected %s
+
+### tools/named_tuple.py ###
+
+## named_tuple ##
+
+tools.namedtuple.error = Field names cannot start with '__'
+
+# dtbody #
+
+tools.namedtuple.dtbody.newclass = NamedTupleDataType_
+
+# exprbody #
+
+tools.namedtuple.exprbody.newclass = NamedTuple_
+
+tools.namedtuple.typecls = NamedTupleType_
+
+### tools/resultlib.py ###
+
+## literal ##
+
+tools.resultlib.literal.unreachable = unexpected value
+
+### versinlib.py ###
+
+## versionranged ##
+
+# init #
+
+versionlib.versionranged.init.error = min and max versions cannot both be None
+
+## only ##
+
+# decorator #
+
+# decorated
+
+versionlib.only.decorator.decorated.message = The function is not available for Minecraft version %s; expecting %s
+
+## eduonly ##
+
+# decorated #
+
+versionlib.eduonly.decorated.message = Education Edition features must be enabled to use this function
+
+### objects/entityfilter.py ###
+
+## entityfilter ##
+
+# init #
+
+
+
+
+
+
