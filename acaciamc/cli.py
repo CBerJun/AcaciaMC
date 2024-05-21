@@ -9,15 +9,19 @@ import sys
 
 from acaciamc.error import Error as CompileError
 from acaciamc.compiler import Compiler, Config
+import acaciamc.localization
+from acaciamc.localization import get_text
 
-DESCRIPTION = (
-    'Compiler of Acacia, a programming language that runs in Minecraft '
-    'Bedrock Edition by compiling code into mcfunction files.'
-)
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
+
+DESCRIPTION = localize("cli.description")
 _NOTGIVEN = object()
 
 def fatal(message: str):
-    print("acacia: error: %s" % message, file=sys.stderr)
+    print(localize("cli.fatal") % message, file=sys.stderr)
     sys.exit(1)
 
 def build_argparser():
@@ -26,97 +30,91 @@ def build_argparser():
     )
     argparser.add_argument(
         'file',
-        help='the file to compile'
+        help=localize("cli.builderargparser.file")
     )
     argparser.add_argument(
         '-o', '--out', metavar='PATH',
-        help='output directory'
+        help=localize("cli.builderargparser.out")
     )
     argparser.add_argument(
         "-v", "--mc-version", metavar="VERSION",
-        help="Minecraft version (e.g. 1.19.50)"
+        help=localize("cli.builderargparser.mcversion")
     )
     argparser.add_argument(
         '-e', '--education-edition',
         action='store_true',
-        help="enable features that require Minecraft's Education Edition"
-             " toggle turned on"
+        help=localize("cli.builderargparser.educationedition")
     )
     argparser.add_argument(
         '-s', '--scoreboard', metavar='OBJECTIVE',
-        help='the scoreboard that Acacia uses to store data (default "acacia")'
+        help=localize("cli.builderargparser.scoreboard")
     )
     argparser.add_argument(
         '-f', '--function-folder', metavar='PATH',
-        help='path relative to "functions" directory in a behavior pack where'
-             ' Acacia generates its output .mcfunction files (default "", i.e.'
-             ' generate directly at "functions" level)'
+        help=localize("cli.builderargparser.functionfolder")
     )
     argparser.add_argument(
         '-m', '--main-file', metavar='NAME',
-        help='name of the mcfunction file that executes your program '
-             '(default "main")'
+        help=localize("cli.builderargparser.mainfile")
     )
     argparser.add_argument(
         '-t', '--entity-tag', metavar="TAG",
-        help='entity tag prefix'
+        help=localize("cli.builderargparser.entitytag")
     )
     argparser.add_argument(
         '-d', '--debug-comments',
         action='store_true',
-        help='add debugging comments to output files'
+        help=localize("cli.builderargparser.debugcomments")
     )
     argparser.add_argument(
         "-O", "--no-optimize",
         action='store_true',
-        help="disable optimization"
+        help=localize("cli.builderargparser.nooptimize")
     )
     argparser.add_argument(
         '-u', '--override-old',
         action='store_true',
-        help='remove the old output contents (EVERYTHING IN DIRECTORY!)'
+        help=localize("cli.builderargparser.overrideold")
     )
     argparser.add_argument(
         '-i', '--init-file', nargs='?', metavar='NAME', const=_NOTGIVEN,
-        help='if set, split initialization commands from main mcfunction '
-             'file into given file (default "init")'
+        help=localize("cli.builderargparser.initfile")
     )
     argparser.add_argument(
         '--internal-folder', metavar="NAME",
-        help='name of the folder where Acacia stores its internal files'
+        help=localize("cli.builderargparser.internalfolder")
     )
     argparser.add_argument(
         '--encoding', metavar="CODEC", default="utf-8",
-        help='encoding of file (default "utf-8")'
+        help=localize("cli.builderargparser.encoding")
     )
     argparser.add_argument(
         '--verbose',
         action='store_true',
-        help='show full traceback message when encountering unexpected errors'
+        help=localize("cli.builderargparser.verbose")
     )
     argparser.add_argument(
         '--max-inline-file-size', metavar="SIZE", type=int,
-        help='optimizer option: maximum size for a function that is called '
-             'with /execute conditions to be inlined (default 20)'
+        help=localize("cli.builderargparser.maxinline")
     )
     return argparser
 
 def check_id(name: str):
     """Raise ValueError if `name` is not a valid Acacia identifier."""
     if not name:
-        raise ValueError('can\'t be empty')
+        raise ValueError(localize("cli.checkid.empty"))
     if name[0].isdecimal():
-        raise ValueError('can\'t start with a number')
+        raise ValueError(localize("cli.checkid.decimal"))
     for s in name:
         if not (s.isalnum() or s == '_'):
-            raise ValueError('invalid character %r' % s)
+            raise ValueError(localize("cli.checkid.invalid") % s)
 
 def assert_id(name: str, option: str):
     """Make sure `name` is a valid Acacia identifier."""
     try:
         check_id(name)
     except ValueError as e:
-        fatal('option %s: %s' % (option, e.args[0]))
+        fatal(localize("cli.assertid.fatel") % (option, e.args[0]))
 
 def get_config(args) -> Config:
     """Create a `Config` object from `args`."""
@@ -135,7 +133,7 @@ def get_config(args) -> Config:
             try:
                 check_id(p)
             except ValueError as e:
-                fatal('invalid name %r in function folder path: %s'
+                fatal(localize("cli.getconfig.invalidfunctionfolder")
                       % (p, e.args[0]))
         kwds["root_folder"] = '/'.join(path)
     if args.main_file:
@@ -152,11 +150,11 @@ def get_config(args) -> Config:
             if any(v < 0 for v in t):
                 raise ValueError
         except ValueError:
-            fatal('invalid Minecraft version: %s' % args.mc_version)
+            fatal(localize("cli.getconfig.invalidmcversion") % args.mc_version)
         kwds["mc_version"] = t
     if args.max_inline_file_size is not None:
         if args.max_inline_file_size < 0:
-            fatal('max inline file size must >= 0: %s'
+            fatal(localize("cli.getconfig.maxinlinetoolow")
                   % args.max_inline_file_size)
         kwds["max_inline_file_size"] = args.max_inline_file_size
     if args.init_file:
