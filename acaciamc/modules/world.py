@@ -246,7 +246,13 @@ from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.tools import axe, resultlib, cmethod_of
 from acaciamc.tools.versionlib import edu_only
 import acaciamc.mccmdgen.cmds as cmds
+import acaciamc.localization
+from acaciamc.localization import get_text
 
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
@@ -494,7 +500,7 @@ def damage(compiler, target: "MCSelector", amount: int,
     if damager is not None:
         if cause is None:
             raise axe.ArgumentError(
-                "cause", "must be specified when damager presents"
+                "cause", localize("modules.world.damage.damagerpresent")
             )
         suffix = " %s entity %s" % (cause, damager)
     elif cause is not None:
@@ -683,11 +689,11 @@ def msg_say(compiler, sender: "_EntityBase", message: str):
 def spread(compiler, target: "MCSelector", center: Position,
            range_: float, interval: float):
     if range_ < 1.0:
-        raise axe.ArgumentError("range", "must be >= 1.0")
+        raise axe.ArgumentError("range", localize("modules.world.spread.biggerthan1"))
     if interval < 0.0:
-        raise axe.ArgumentError("interval", "must be >= 0.0")
+        raise axe.ArgumentError("interval", localize("modules.world.spread.nonnegative"))
     if interval + 1 > range_:
-        raise axe.ArgumentError("interval", "must be <= range - 1")
+        raise axe.ArgumentError("interval", localize("modules.world.spread.smallerthanrangeminus1"))
     cmd = cmds.Execute(
         center.context, "spreadplayers ~ ~ %s %s %s" % (
             interval, range_, target.to_str()
@@ -723,7 +729,7 @@ def summon(compiler: "Compiler", type_: str, pos: Position,
         )
     else:
         if rot is not None:
-            raise axe.ArgumentError("rot", "available only in MC 1.19.70+")
+            raise axe.ArgumentError("rot", localize("modules.world.summon.versiontoolow"))
         cmd = cmds.Execute(
             pos.context, runs="summon %s ~ ~ ~ %s%s" % (type_, event, suffix)
         )

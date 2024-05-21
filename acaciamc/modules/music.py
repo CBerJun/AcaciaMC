@@ -22,7 +22,13 @@ from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, cmethod_of, method_of
 import acaciamc.mccmdgen.cmds as cmds
+import acaciamc.localization
+from acaciamc.localization import get_text
 
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
@@ -239,14 +245,14 @@ class MusicType(Type):
             try:
                 midi = mido.MidiFile(path)
             except Exception as err:
-                raise Error(ErrorType.IO, message="MIDI parser: %s" % err)
+                raise Error(ErrorType.IO, message=localize("modules.music.doinit.midiparser") % err)
             if speed <= 0:
-                raise axe.ArgumentError("speed", "must be positive")
+                raise axe.ArgumentError("speed", localize("modules.music.doinit.mustpos"))
             if volume <= 0:
-                raise axe.ArgumentError("volume", "must be positive")
+                raise axe.ArgumentError("volume", localize("modules.music.doinit.mustpos"))
             if any([v < 0 for v in channel_volume.values()]):
                 raise axe.ArgumentError(
-                    "channel_volume", "values must be positive"
+                    "channel_volume", localize("modules.music.doinit.mustpos")
                 )
             looping_info = loop_interval if looping else -1
             if listener is None:
@@ -285,7 +291,7 @@ class Music(ConstExprCombined):
         # Check MIDI type
         if midi.type != 0 and midi.type != 1:
             raise Error(ErrorType.ANY,
-                        message="Unsupported MIDI type: %d" % midi.type)
+                        message=localize("modules.music.music.init.unsupported") % midi.type)
         # Speed settings
         self.bpm = 120
         self.mt_per_beat = midi.ticks_per_beat
@@ -466,5 +472,5 @@ def acacia_build(compiler: "Compiler"):
         import mido
     except ImportError:
         raise Error(ErrorType.ANY,
-                    message="Python module 'mido' is required")
+                    message=localize("modules.music.acaciabuild.norequire"))
     return {"Music": MusicType()}

@@ -41,7 +41,7 @@ class VersionRequirement(metaclass=ABCMeta):
 class VersionRanged(VersionRequirement):
     def __init__(self, min_: Optional[VERSION_T], max_: Optional[VERSION_T]):
         if not min_ and not max_:
-            raise ValueError(localize("versionlib.versionranged.init.error"))
+            raise ValueError(localize("tools.versionlib.versionranged.init.error"))
         self.min = min_
         self.max = max_
 
@@ -100,7 +100,7 @@ def only(version: VersionRequirement):
                 return func(compiler, args, kwds)
             raise AcaciaError(
                 ErrorType.ANY,
-                message=localize("versionlib.only.decorator.decorated.message")
+                message=localize("tools.versionlib.only.decorator.decorated.message")
                 % (format_version(compiler.cfg.mc_version), version.to_str())
             )
         return _decorated
@@ -115,6 +115,6 @@ def edu_only(func: Callable):
         if not compiler.cfg.education_edition:
             raise AcaciaError(
                 ErrorType.ANY,
-                message=localize("versionlib.edu_only.decorated.message"))
+                message=localize("tools.versionlib.edu_only.decorated.message"))
         return func(compiler, args, kwds)
     return _decorated

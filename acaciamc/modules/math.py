@@ -9,7 +9,13 @@ from acaciamc.objects.integer import (
 from acaciamc.ast import ModuleMeta
 from acaciamc.tools import axe
 from acaciamc.constants import INT_MIN, INT_MAX
+import acaciamc.localization
+from acaciamc.localization import get_text
 
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
@@ -54,7 +60,7 @@ def _pow(compiler: "Compiler", base, exp):
         # Fallback to `_math.pow`
         return internal("pow").call([base, exp], {}, compiler)
     if exp.value < 0:
-        raise axe.ArgumentError('exp', 'must be a non-negative integer')
+        raise axe.ArgumentError('exp', localize("modules.math.pow.negative"))
     if exp.value == 0:
         return IntLiteral(1)
     # Optimize when base is a literal
@@ -105,7 +111,7 @@ def _min(compiler, operands: List[AcaciaExpr]):
     Return the minimum value among `args`.
     """
     if not operands:
-        raise axe.ArgumentError('operands', 'at least 1 operand required')
+        raise axe.ArgumentError('operands', localize("modules.math.min.empty"))
     # Get literals
     upper = None
     rest = []
@@ -136,7 +142,7 @@ def _max(compiler, operands: List[AcaciaExpr]):
     Return the maximum value among `args`.
     """
     if not operands:
-        raise axe.ArgumentError('operands', 'at least 1 operand required')
+        raise axe.ArgumentError('operands', localize("modules.math.max.empty"))
     # Get literals
     lower = None
     rest = []
@@ -165,7 +171,7 @@ def _max(compiler, operands: List[AcaciaExpr]):
 def _mod(compiler, x, y):
     if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
         if y.value == 0:
-            raise axe.ArgumentError('y', 'modulo by 0')
+            raise axe.ArgumentError('y', localize("modules.math.mod.zero"))
         return IntLiteral(x.value % y.value)
     return internal("mod").call([x, y], {}, compiler)
 
@@ -175,7 +181,7 @@ def _mod(compiler, x, y):
 def _floordiv(compiler, x, y):
     if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
         if y.value == 0:
-            raise axe.ArgumentError('y', 'cannot divide by 0')
+            raise axe.ArgumentError('y', localize("modules.math.floordiv.zero"))
         return IntLiteral(x.value // y.value)
     return internal("floordiv").call([x, y], {}, compiler)
 

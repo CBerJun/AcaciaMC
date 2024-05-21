@@ -395,13 +395,13 @@ tools.namedtuple.typecls = NamedTupleType_
 
 tools.resultlib.literal.unreachable = unexpected value
 
-### versinlib.py ###
+### tools/versinlib.py ###
 
 ## versionranged ##
 
 # init #
 
-versionlib.versionranged.init.error = min and max versions cannot both be None
+tools.versionlib.versionranged.init.error = min and max versions cannot both be None
 
 ## only ##
 
@@ -409,14 +409,104 @@ versionlib.versionranged.init.error = min and max versions cannot both be None
 
 # decorated
 
-versionlib.only.decorator.decorated.message = The function is not available for Minecraft version %s; expecting %s
+tools.versionlib.only.decorator.decorated.message = The function is not available for Minecraft version %s; expecting %s
 
 ## eduonly ##
 
 # decorated #
 
-versionlib.eduonly.decorated.message = Education Edition features must be enabled to use this function
+tools.versionlib.eduonly.decorated.message = Education Edition features must be enabled to use this function
 
+### modules/builiins.py ###
+
+## swap ##
+
+modules.builtins.swap.assignable = must be a variable
+modules.builtins.swap.differenttype = must have the same type as the other variable(got "%s" and "%s")
+
+### modules/math.py ###
+
+##　pow ##
+
+modules.math.pow.negative = must be a non-negative integer
+
+## min ##
+
+modules.math.min.empty = at least 1 operand is required
+
+## max ##
+
+modules.math.max.empty = at least 1 operand is required
+
+## mod ##
+
+modules.math.mod.zero = modulo by 0
+
+## floordiv ##
+
+modules.math.floordiv.zero = cannot division by 0
+
+### modules/music.py ###
+
+## doinit ##
+
+modules.music.doinit.midiparser = MIDI parser: %s
+modules.music.doinit.mustpos = must be positive
+
+## music ##
+
+# init #
+
+modules.music.music.init.unsupported = Unsupported MIDI type: %d
+
+## acaciabuild ##
+
+modules.music.acaciabuild.norequire = Python module 'mido' is required
+
+### modules/print.py ###
+
+## fsrterror ##
+
+# addaxpr #
+
+modules.print.fsrterror.addaxpr.error = Type "%s" can not be formatted as a string
+
+# exprfromid #
+
+modules.print.fsrterror.exprfromid.outofrange = Format index out of range: %d
+modules.print.fsrterror.exprfromid.invalid = Invalid format expression: %s
+
+# parse #
+
+modules.print.fsrterror.parse.unclosedfstring = Unclosed "{" in fstring
+
+## with font ##
+
+modules.print.withfont.onlyhighversion = %r is only available in MC 1.19.80+
+modules.print.withfont.unclosedfont = Unclosed font scope
+
+### modules/world.py ###
+
+## damage ##
+
+modules.world.damage.damagerpresent = must be specified when damager presents
+
+## spread ##
+
+modules.world.spread.biggerthan1 = must be >= 1.0
+modules.world.spread.nonnegative = must be >= 0.0
+modules.world.spread.smallerthanrangeminus1 = must be <= range - 1
+
+## summon ##
+
+modules.world.summon.versiontoolow = available only in MC 1.19.70+
+
+
+
+
+
+
+### 施工中...
 ### objects/entityfilter.py ###
 
 ## entityfilter ##
