@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "acacia"
+version = "0.1.0"
+description = ""
+authors = ["MojaveHao <HTTcode2020@126.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/CBerJun/AcaciaMC/"
+repository = "https://github.com/CBerJun/AcaciaMC/"
+packages = [{ include = "acacia" }]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+acacia = 'python acacia.py'
