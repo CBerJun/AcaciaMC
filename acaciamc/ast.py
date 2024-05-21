@@ -4,33 +4,40 @@ from typing import (
     Iterable as _Iterable
 )
 import enum as _enum
+import acaciamc.localization
+from acaciamc.localization import get_text
 
 ####################
 ### AST CONTENTS ###
 ####################
 
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
+
 class Operator(_enum.Enum):
     # NOTE these values are shown in error messages.
     # unary
-    positive = "unary +"
-    negative = "unary -"
-    not_ = "not"
+    positive = localize("ast.operator.positive")
+    negative = localize("ast.operator.negative")
+    not_ = localize("ast.operator.not")
     # binary
-    multiply = "*"
-    divide = "/"
-    mod = "%"
-    add = "+"
-    minus = "-"
+    multiply = localize("ast.operator.multiply")
+    divide = localize("ast.operator.divide")
+    mod = localize("ast.operator.mod")
+    add = localize("ast.operator.add")
+    minus = localize("ast.operator.minus")
     # compare
-    equal_to = "=="
-    unequal_to = "!="
-    greater = ">"
-    less = "<"
-    greater_equal = ">="
-    less_equal = "<="
+    equal_to = localize("ast.operator.equal_to")
+    unequal_to = localize("ast.operator.unequal_to")
+    greater = localize("ast.operator.greater")
+    less = localize("ast.operator.less")
+    greater_equal = localize("ast.operator.greater_equal")
+    less_equal = localize("ast.operator.less_equal")
     # boolean
-    and_ = "and"
-    or_ = "or"
+    and_ = localize("ast.operator.and")
+    or_ = localize("ast.operator.or")
 
 COMPOP_INVERT = {
     # Used to invert ("not") a comparison
@@ -54,17 +61,17 @@ COMPOP_SWAP = {
 class MethodQualifier(_enum.Enum):
     """Entity method qualifiers."""
     # These values are shown in error messages
-    none = "(none)"
-    virtual = "virtual"
-    override = "override"
-    static = "static"
+    none = localize("ast.methodqualifier.none")
+    virtual = localize("ast.methodqualifier.virtual")
+    override = localize("ast.methodqualifier.override")
+    static = localize("ast.methodqualifier.static")
 
 class FuncPortType(_enum.Enum):
     """Function port types."""
     # These values are shown in error messages
-    by_value = "(none)"
-    by_reference = "&"
-    const = "const"
+    by_value = localize("ast.funcporttype.by_value")
+    by_reference = localize("ast.funcporttype.by_reference")
+    const = localize("ast.funcporttype.const")
 
 class ModuleMeta:
     """Specifies a module."""

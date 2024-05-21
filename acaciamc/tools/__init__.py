@@ -8,7 +8,13 @@ from typing import Callable as _Callable, Union as _Union
 # because of a Python bug (see https://bugs.python.org/issue23203)
 from acaciamc import objects
 from acaciamc.mccmdgen import ctexpr, expr
+import acaciamc.localization
+from acaciamc.localization import get_text
 
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
 def method_of(obj: "expr.AcaciaExpr", name: str):
     """Return a decorator that defines a method for `obj` with `name`
     whose implementation is decorated function.
@@ -49,7 +55,7 @@ def transform_immutable(self: ImmutableMixin):
     transforms an immutable expression to another one.
     """
     if not isinstance(self, ImmutableMixin):
-        raise TypeError("can't transform non-ImmutableMixin")
+        raise TypeError(localize("tools.init.transformimmutable"))
     def _decorator(func: _Callable):
         def _decorated(*args, **kwds):
             return func(self.copy(), *args, **kwds)

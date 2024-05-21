@@ -14,7 +14,13 @@ from typing import Callable, Tuple, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.error import Error as AcaciaError, ErrorType
+import acaciamc.localization
+from acaciamc.localization import get_text
 
+lang = acaciamc.localization.get_lang()
+
+def localize(text):
+    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
@@ -35,7 +41,7 @@ class VersionRequirement(metaclass=ABCMeta):
 class VersionRanged(VersionRequirement):
     def __init__(self, min_: Optional[VERSION_T], max_: Optional[VERSION_T]):
         if not min_ and not max_:
-            raise ValueError("min and max versions cannot both be None")
+            raise ValueError(localize("tools.versionlib.versionranged.init.error"))
         self.min = min_
         self.max = max_
 
@@ -94,8 +100,7 @@ def only(version: VersionRequirement):
                 return func(compiler, args, kwds)
             raise AcaciaError(
                 ErrorType.ANY,
-                message="The function is not available for Minecraft "
-                        "version %s; expecting %s"
+                message=localize("tools.versionlib.only.decorator.decorated.message")
                 % (format_version(compiler.cfg.mc_version), version.to_str())
             )
         return _decorated
@@ -110,8 +115,6 @@ def edu_only(func: Callable):
         if not compiler.cfg.education_edition:
             raise AcaciaError(
                 ErrorType.ANY,
-                message="Education Edition features must be enabled to"
-                " use this function"
-            )
+                message=localize("tools.versionlib.edu_only.decorated.message"))
         return func(compiler, args, kwds)
     return _decorated
