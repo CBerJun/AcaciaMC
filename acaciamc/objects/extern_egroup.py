@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 from acaciamc.tools import axe
 from acaciamc.mccmdgen import cmds
 from acaciamc.mccmdgen.expr import *
+from acaciamc.localization import localize
 from .entity_group import *
 from .entity_template import ETemplateDataType
 from .functions import (
@@ -77,7 +78,8 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
     def __init__(self, owner: "ExternEGroup"):
         super().__init__(FunctionDataType())
         self.owner = owner
-        self.func_repr = "<resolve of %s>" % str(self.owner.data_type)
+        self.func_repr = (localize("objects.externegroup.resolve")
+                          % self.owner.data_type)
 
     def initialize(self, instance: "EntityGroup", compiler: "Compiler"):
         SELF = self.owner.get_selector().to_str()

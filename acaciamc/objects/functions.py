@@ -66,6 +66,7 @@ from acaciamc.mccmdgen.ctexpr import (
 )
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
+from acaciamc.localization import localize
 import acaciamc.mccmdgen.cmds as cmds
 from .none import NoneLiteral
 from .entity import EntityReference
@@ -271,7 +272,7 @@ class BinaryFunction(ConstExprCombined, AcaciaCallable):
         """
         super().__init__(FunctionDataType())
         self.implementation = implementation
-        self.func_repr = "<binary function>"
+        self.func_repr = localize("objects.function.binary")
 
     def call(self, args: ARGS_T, keywords: KEYWORDS_T, compiler) -> CALLRET_T:
         return _handle_impl_res(self.implementation(compiler, args, keywords))
@@ -337,7 +338,7 @@ class BinaryCTOnlyFunction(CTCallable):
     ):
         super().__init__(*args, **kwds)
         self.impl = impl
-        self.func_repr = "<binary function>"
+        self.func_repr = localize("objects.function.binary")
 
     def ccall(self, args: List[CTExpr], keywords: Dict[str, CTExpr],
               compiler: "Compiler") -> CTExpr:
@@ -363,7 +364,7 @@ class BinaryCTFunction(BinaryCTOnlyFunction, ConstExprCombined,
         ]
     ):
         super().__init__(impl, FunctionDataType())
-        self.func_repr = "<binary function>"
+        self.func_repr = localize("objects.function.binary")
 
     def call(self, args: ARGS_T, keywords: KEYWORDS_T, compiler) -> CALLRET_T:
         res = self.impl(compiler, args, keywords)
@@ -482,7 +483,8 @@ class BoundVirtualMethod(ConstExprCombined, AcaciaCallable):
                      bm: _BoundMethod) -> CMDLIST_T:
             result, commands = bm.call_withframe(
                 args, keywords, compiler,
-                location="<dispatcher of virtual method %s>" % self.name
+                location=
+                    localize("objects.function.bvm.dispatcher") % self.name
             )
             commands.extend(result.export(self.result_var, compiler))
             return commands

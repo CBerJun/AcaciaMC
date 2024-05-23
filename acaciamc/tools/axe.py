@@ -33,13 +33,7 @@ from acaciamc.mccmdgen import ctexpr as acaciact, expr as acacia
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.error import Error as AcaciaError, ErrorType
-import acaciamc.localization
-from acaciamc.localization import get_text
-
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
+from acaciamc.localization import localize
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -76,12 +70,10 @@ class _PreconvertError(Exception):
 
     def show(self, arg: str) -> str:
         o = _exprrepr(self.origin)
-        penotconst = localize("tools.axe.preconverterror.show.penotconst").split("{arg}")
-        penotrt = localize("tools.axe.preconverterror.show.penotrt").split("{arg}")
         if self.code == _PE_NOT_CONST:
-            return penotconst[0] + arg + penotconst[1] + str(o)  # 这里需要检查
+            return localize("axe.preconverterror.notconst") % (arg, o)
         if self.code == _PE_NOT_RT:
-            return penotrt[0] + arg + penotrt[1] + str(o)
+            return localize("axe.preconverterror.notrt") % (arg, o)
         raise ValueError(f'unknown error code {self.code}')
 
 ### Building Stage
@@ -116,7 +108,7 @@ class _Argument:
     def get_default(self):
         if self.has_default():
             return self._default
-        raise ValueError(localize("tools.axe.argument.getdefault.nodefault"))
+        raise ValueError("don't have default value")
 
 class _ArgumentList:
     def __init__(self, name: str, rename: _RENAME_T, converter: _CONVERTER_T):
@@ -378,11 +370,17 @@ class ConverterContainer(Converter, CTConverter):
         orig_cconvert = subcls.cconvert
         def new_convert(self: ConverterContainer, origin: acacia.AcaciaExpr):
             if not all(isinstance(c, Converter) for c in self.__converters):
-                raise ChopError(localize("tools.axe.convertercontainer.newconvert.error"))
+                raise ChopError(
+                    f'{self!r} is used as runtime converter but not all '
+                    'subconverters implement Converter'
+                )
             return orig_convert(self, origin)
         def new_cconvert(self: ConverterContainer, origin: acaciact.CTObj):
             if not all(isinstance(c, CTConverter) for c in self.__converters):
-                raise ChopError(localize("tools.axe.convertercontainer.newcconvert.error"))
+                raise ChopError(
+                    f'{self!r} is used as compile time converter '
+                    'but not all subconverters implement CTConverter'
+                )
             return orig_cconvert(self, origin)
         subcls.convert = new_convert
         subcls.cconvert = new_cconvert
@@ -413,7 +411,7 @@ class LiteralInt(UTyped):
         super().__init__(objects.IntDataType, objects.integer.ctdt_int)
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.literalint.showname")
+        return localize("axe.converter.std.literalint")
 
     def uconvert(self, origin) -> int:
         origin = super().uconvert(origin)
@@ -432,7 +430,7 @@ class LiteralFloat(UMultityped):
         )
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.literalfloat.showname")
+        return localize("axe.converter.std.literalfloat")
 
     def uconvert(self, origin) -> float:
         origin = super().uconvert(origin)
@@ -462,7 +460,7 @@ class LiteralBool(UTyped):
         super().__init__(objects.BoolDataType, objects.boolean.ctdt_bool)
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.literalbool.showname")
+        return localize("axe.converter.std.literalbool")
 
     def uconvert(self, origin) -> bool:
         origin = super().uconvert(origin)
@@ -479,7 +477,8 @@ class Nullable(ConverterContainer):
         self.converter = converter
 
     def get_show_name(self) -> str:
-        return _convname(self.converter) + localize("tools.axe.nullable.showname")
+        return (localize("axe.converter.std.nullable")
+                % _convname(self.converter))
 
     def convert(self, origin: acacia.AcaciaExpr):
         if origin.data_type.matches_cls(objects.NoneDataType):
@@ -496,7 +495,7 @@ class AnyOf(ConverterContainer):
     def __init__(self, *converters: _CONVERTER_T):
         super().__init__(*converters)
         if not converters:
-            raise ChopError(localize("tools.axe.anyof.empty"))
+            raise ChopError("at least 1 converter needs to be specified")
         self.converters: List[_CONVERTER_T] = []
         for converter in converters:
             if isinstance(converter, AnyOf):
@@ -532,7 +531,7 @@ class AnyOf(ConverterContainer):
 class Iterator(Converter):
     """Accepts an Acacia iterable and converts it to Python list."""
     def get_show_name(self) -> str:
-        return localize("tools.axe.iterator.showname")
+        return localize("axe.converter.std.iterator")
 
     def convert(self, origin: acacia.AcaciaExpr) -> "acacia.ITERLIST_T":
         try:
@@ -544,7 +543,7 @@ class Iterator(Converter):
 
 class CTIterator(CTConverter):
     def crepr(self) -> str:
-        return localize("tools.axe.ctiterator.showname")
+        return localize("axe.converter.std.ctiterator")
 
     def cconvert(self, origin: acaciact.CTExpr) -> List[acaciact.CTExpr]:
         try:
@@ -573,8 +572,10 @@ class LiteralIntEnum(LiteralInt):
         self.accepts = accepts
 
     def get_show_name(self) -> str:
-        return (super().get_show_name()
-                + localize("tools.axe.literalintenum.showname") % ", ".join(map(str, self.accepts)))
+        return (
+            localize("axe.converter.std.literalintenum")
+            % (super().get_show_name(), ", ".join(map(str, self.accepts)))
+        )
 
     def uconvert(self, origin) -> int:
         origin_int = super().uconvert(origin)
@@ -591,8 +592,10 @@ class LiteralStringEnum(LiteralString):
         self.accepts = accepts
 
     def get_show_name(self) -> str:
-        return (super().get_show_name()
-                + localize("tools.axe.literalstringenum.showname") % ", ".join(map(repr, self.accepts)))
+        return (
+            localize("axe.converter.std.literalstringenum")
+            % (super().get_show_name(), ", ".join(map(repr, self.accepts)))
+        )
 
     def uconvert(self, origin) -> str:
         origin_str = super().uconvert(origin)
@@ -609,7 +612,8 @@ class ListOf(Typed):
         self.converter = converter
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.listof.showname") + self.converter.get_show_name()
+        return (localize("axe.converter.std.listof")
+                % self.converter.get_show_name())
 
     def convert(self, origin: acacia.AcaciaExpr) -> list:
         origin = super().convert(origin)
@@ -622,7 +626,8 @@ class CTListOf(CTTyped):
         self.converter = converter
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.ctlistof.showname") + self.converter.crepr()
+        return (localize("axe.converter.std.ctlistof")
+                % self.converter.crepr())
 
     def cconvert(self, origin: acaciact.CTExpr) -> list:
         origin = abs(super().cconvert(origin))
@@ -639,8 +644,9 @@ class MapOf(Typed):
         self.value = value
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.mapof.showname") + " (%s: %s)" % (self.key.get_show_name(),
-                                 self.value.get_show_name())
+        k = self.key.get_show_name()
+        v = self.value.get_show_name()
+        return localize("axe.converter.std.mapof") % f"({k}: {v})"
 
     def convert(self, origin: acacia.AcaciaExpr) -> dict:
         origin = super().convert(origin)
@@ -657,7 +663,9 @@ class CTMapOf(CTTyped):
         self.value = value
 
     def get_show_name(self) -> str:
-        return localize("tools.axe.ctmapof.showname") + "map (%s: %s)" % (self.key.crepr(), self.value.crepr())
+        k = self.key.crepr()
+        v = self.value.crepr()
+        return localize("axe.converter.std.ctmapof") % f"({k}: {v})"
 
     def cconvert(self, origin: acacia.AcaciaExpr) -> dict:
         origin = abs(super().cconvert(origin))
@@ -672,7 +680,8 @@ class PlayerSelector(Selector):
     to `MCSelector`.
     """
     def get_show_name(self) -> str:
-        return super().get_show_name() + localize("tools.axe.playerselector.showname")
+        return (localize("axe.converter.std.playerselector")
+                % super().get_show_name())
 
     def convert(self, origin: acacia.AcaciaExpr) -> "MCSelector":
         selector = super().convert(origin)
@@ -707,7 +716,7 @@ class RangedLiteralInt(LiteralInt):
 class Callable(Converter):
     """Accepts a callable Acacia expression."""
     def get_show_name(self) -> str:
-        return localize("tools.axe.callable.showname")
+        return localize("axe.converter.std.callable")
 
     def convert(self, origin: acacia.AcaciaExpr) -> acacia.AcaciaCallable:
         if not isinstance(origin, acacia.AcaciaCallable):
@@ -729,7 +738,7 @@ class PosXZ(LiteralFloat):
 
 class CTReference(CTConverter):
     def crepr(self) -> str:
-        return localize("tools.axe.ctreference.showname")
+        return localize("axe.converter.std.ctreference")
 
     def cconvert(self, origin: acaciact.CTExpr):
         if not isinstance(origin, acaciact.CTObjPtr):
@@ -742,14 +751,14 @@ def _check_repeat(names: List[str], renames: List[_RENAME_T]):
     got = set()
     for name in names:
         if name in got:
-            raise ChopError(localize("tools.axe.checkrepeat.error0") % name)
+            raise ChopError(f"repeated argument {name!r}")
         got.add(name)
     got = set()
     for name in renames:
         if not isinstance(name, str):
             continue
         if name in got:
-            raise ChopError(localize("tools.axe.checkrepeat.error1") % name)
+            raise ChopError(f"repeated argument rename {name!r}")
         got.add(name)
 
 def _call_impl(implementation, all_args: List[str], *args, **kwds):
@@ -758,7 +767,7 @@ def _call_impl(implementation, all_args: List[str], *args, **kwds):
     except ArgumentError as err:
         if err.arg not in all_args:
             # Make sure `err.arg` is a valid argument name
-            raise ChopError(localize("tools.axe.callimpl.error") % err.arg)
+            raise ChopError(f"unknown argument {err.arg!r}")
         else:
             raise AcaciaError(ErrorType.INVALID_BIN_FUNC_ARG,
                               arg=err.arg, message=err.message)
@@ -799,28 +808,31 @@ class _Chopper:
         for type_, definition in building:
             if type_ == _BP_SLASH:
                 if got_slash or got_star or got_kwds:
-                    raise ChopError(localize("tools.axe.chopper.error0"))
+                    raise ChopError("only arguments can go before axe.slash")
                 got_slash = True
             elif type_ == _BP_STAR or type_ == _BP_STAR_ARG:
                 if got_star or got_kwds:
-                    raise ChopError(localize("tools.axe.chopper.error1"))
+                    raise ChopError("only arguments or axe.slash can go before"
+                                    " axe.star or axe.star_arg")
                 if type_ == _BP_STAR_ARG:
                     self.args = definition
                 got_star = True
             elif type_ == _BP_KWDS:
                 if got_kwds:
-                    raise ChopError(localize("tools.axe.chopper.error2"))
+                    raise ChopError("multiple axe.kwds")
                 self.kwds = definition
                 got_kwds = True
             else:
                 assert type_ == _BP_ARG and isinstance(definition, _Argument)
                 if got_kwds:
-                    raise ChopError(localize("tools.axe.chopper.error3"))
+                    raise ChopError("argument after axe.kwds")
                 if definition.has_default():
                     got_default = True
                 else:
                     if got_default:
-                        raise ChopError(localize("tools.axe.chopper.error4"))
+                        raise ChopError(
+                            "non-default argument follows default argument"
+                        )
                 if got_star:
                     self.kw_only.append(definition)
                 else:
@@ -898,8 +910,7 @@ class _Chopper:
             if arg_name in self.pos_only_names:
                 raise AcaciaError(
                     ErrorType.ANY,
-                    message=localize("tools.axe.call.emit.message") % arg_name
-                            % arg_name
+                    message=localize("axe.chopper.posaskwd") % arg_name
                 )
             if arg_name not in self.kw_name2def:
                 if self.kwds is None:
@@ -1025,10 +1036,11 @@ class OverloadChopped(type):
         for impl in impls:
             building = impl.building
             if any(type_ != _BP_ARG for type_, _ in building):
-                raise ChopError(localize("tools.axe.overloadchopped.new.error0"))
+                raise ChopError("only normal arguments are allowed in"
+                                " overload definitions")
             arg_defs: List[_Argument] = [arg_def for _, arg_def in building]
             if any(arg_def.has_default() for arg_def in arg_defs):
-                raise ChopError(localize("tools.axe.overloadchopped.new.error1"))
+                raise ChopError("overload arguments can't have default values")
             cls.__overloads.append((impl, arg_defs))
             _check_repeat([arg_def.name for arg_def in arg_defs],
                           [arg_def.rename for arg_def in arg_defs])
@@ -1044,8 +1056,9 @@ class OverloadChopped(type):
     def __call__(self, compiler: "Compiler", args: List[_EXPR_T],
                  kwds: Dict[str, _EXPR_T]):
         if kwds:
-            raise AcaciaError(ErrorType.ANY,
-                              message=localize("tools.axe.overloadchopped.call.message0"))
+            raise AcaciaError(
+                ErrorType.ANY, message=localize("axe.overload.kwd")
+            )
         L = len(args)
         for implementation, arg_defs in self.__overloads:
             if len(arg_defs) != L:
@@ -1073,7 +1086,7 @@ class OverloadChopped(type):
         else:
             raise AcaciaError(
                 ErrorType.ANY,
-                message=localize("tools.axe.overloadchopped.call.message1") % (
+                message=localize("axe.overload.nomatch") % (
                     "(%s)" % ", ".join(_exprrepr(arg) for arg in args),
                     " / ".join(
                         "%s%s" % (

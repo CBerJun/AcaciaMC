@@ -8,13 +8,7 @@ from typing import NamedTuple, Union, TYPE_CHECKING
 # because of a Python bug (see https://bugs.python.org/issue23203)
 from acaciamc import objects
 from acaciamc.mccmdgen.utils import unreachable
-import acaciamc.localization
-from acaciamc.localization import get_text
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.expr import AcaciaExpr, CMDLIST_T
 
@@ -37,4 +31,4 @@ def literal(value: Union[bool, int, str, float, None]) -> "AcaciaExpr":
         return objects.Float(value)
     elif value is None:
         return objects.NoneLiteral()
-    unreachable(f"unexpected value {value!r}") #并不知道此处如何本地化  tools.resultlib.literal.unreachable
+    unreachable(f"unexpected value {value!r}")

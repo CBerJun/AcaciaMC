@@ -9,13 +9,8 @@ from acaciamc.objects.integer import (
 from acaciamc.ast import ModuleMeta
 from acaciamc.tools import axe
 from acaciamc.constants import INT_MIN, INT_MAX
-import acaciamc.localization
-from acaciamc.localization import get_text
+from acaciamc.localization import localize
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
@@ -181,7 +176,9 @@ def _mod(compiler, x, y):
 def _floordiv(compiler, x, y):
     if isinstance(x, IntLiteral) and isinstance(y, IntLiteral):
         if y.value == 0:
-            raise axe.ArgumentError('y', localize("modules.math.floordiv.zero"))
+            raise axe.ArgumentError(
+                'y', localize("modules.math.floordiv.zero")
+            )
         return IntLiteral(x.value // y.value)
     return internal("floordiv").call([x, y], {}, compiler)
 

@@ -16,6 +16,7 @@ from acaciamc.mccmdgen.datatype import *
 from acaciamc.mccmdgen.ctexecuter import CTExecuter
 from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr
 from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
+from acaciamc.localization import localize
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
@@ -309,7 +310,8 @@ class Generator(ASTVisitor):
                 self.current_file.extend(commands)
                 return
         # Error
-        self._op_error_s(f"{node.operator.value}=", target, value)
+        self._op_error_s(localize(f"{node.operator.value}.augmented"),
+                         target, value)
 
     def visit_ReferenceDef(self, node: ReferenceDef):
         value: AcaciaExpr = self.visit(node.value)
@@ -943,7 +945,7 @@ class Generator(ASTVisitor):
                 dt = value.data_type
                 if not isinstance(dt, Storable):
                     self.error_c(ErrorType.UNSUPPORTED_RESULT_TYPE,
-                                result_type=str(dt))
+                                 result_type=str(dt))
                 if self.ctx.inline_result is None:
                     self.ctx.inline_result = dt.new_var(self.compiler)
                     self.ctx.inline_result.is_temporary = True
@@ -1041,7 +1043,7 @@ class Generator(ASTVisitor):
         )
 
     def _op_error(self, operator: Operator, *operands: AcaciaExpr):
-        self._op_error_s(operator.value, *operands)
+        self._op_error_s(operator.localized, *operands)
 
     def visit_UnaryOp(self, node: UnaryOp):
         operand = self.visit(node.operand)
@@ -1080,9 +1082,8 @@ class Generator(ASTVisitor):
                 except InvalidOpError:
                     self.error_c(
                         ErrorType.INVALID_OPERAND,
-                        operator=operator.value,
-                        operand='"%s", "%s"'
-                                % (left.data_type, right.data_type)
+                        operator=operator.localized,
+                        operand=f'"{left.data_type}", "{right.data_type}"'
                     )
             compares.append(res)
         return new_and_group(compares, self.compiler)
@@ -1096,7 +1097,7 @@ class Generator(ASTVisitor):
                 self.error_node(
                     node.operands[i],
                     ErrorType.INVALID_BOOLOP_OPERAND,
-                    operator=operator.value,
+                    operator=operator.localized,
                     operand=str(operand.data_type)
                 )
         # Go
@@ -1163,7 +1164,7 @@ class Generator(ASTVisitor):
                     dt = value.data_type
                     if not isinstance(dt, Storable):
                         self.error_c(ErrorType.UNSUPPORTED_ARG_TYPE,
-                                        arg=arg, arg_type=str(dt))
+                                     arg=arg, arg_type=str(dt))
                     tmp = dt.new_var(self.compiler)
                     self.register_symbol(arg, tmp)
                     self.current_file.extend(value.export(tmp, self.compiler))
@@ -1249,8 +1250,9 @@ class Generator(ASTVisitor):
             s = primary.method_new_source
             err.add_frame(ErrFrame(
                 self.node_location(node),
-                f"Calling new on {primary.name}",
-                note = None if s is None else f"Callee defined at {s}"
+                localize("generator.visit.newcall.tracemsg") % primary.name,
+                note = None if s is None else
+                    localize("generator.visit.newcall.tracenote") % s
             ))
             raise
         self.current_file.extend(commands)

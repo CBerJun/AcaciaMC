@@ -21,14 +21,9 @@ from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib, cmethod_of, method_of
+from acaciamc.localization import localize
 import acaciamc.mccmdgen.cmds as cmds
-import acaciamc.localization
-from acaciamc.localization import get_text
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
@@ -244,12 +239,20 @@ class MusicType(Type):
                  channel_volume: Dict[int, float], instrument: Dict[int, str]):
             try:
                 midi = mido.MidiFile(path)
-            except Exception as err:
-                raise Error(ErrorType.IO, message=localize("modules.music.doinit.midiparser") % err)
+            except OSError as err:
+                raise Error(
+                    ErrorType.IO,
+                    message=localize("modules.music.doinit.midiparser")
+                        % err.strerror
+                )
             if speed <= 0:
-                raise axe.ArgumentError("speed", localize("modules.music.doinit.mustpos"))
+                raise axe.ArgumentError(
+                    "speed", localize("modules.music.doinit.mustpos")
+                )
             if volume <= 0:
-                raise axe.ArgumentError("volume", localize("modules.music.doinit.mustpos"))
+                raise axe.ArgumentError(
+                    "volume", localize("modules.music.doinit.mustpos")
+                )
             if any([v < 0 for v in channel_volume.values()]):
                 raise axe.ArgumentError(
                     "channel_volume", localize("modules.music.doinit.mustpos")
@@ -290,8 +293,11 @@ class Music(ConstExprCombined):
         self.tracks = [t.copy() for t in midi.tracks]
         # Check MIDI type
         if midi.type != 0 and midi.type != 1:
-            raise Error(ErrorType.ANY,
-                        message=localize("modules.music.music.init.unsupported") % midi.type)
+            raise Error(
+                ErrorType.ANY,
+                message=localize("modules.music.music.init.unsupported")
+                    % midi.type
+            )
         # Speed settings
         self.bpm = 120
         self.mt_per_beat = midi.ticks_per_beat
@@ -471,6 +477,8 @@ def acacia_build(compiler: "Compiler"):
     try:
         import mido
     except ImportError:
-        raise Error(ErrorType.ANY,
-                    message=localize("modules.music.acaciabuild.norequire"))
+        raise Error(
+            ErrorType.ANY,
+            message=localize("modules.music.acaciabuild.norequire")
+        )
     return {"Music": MusicType()}

@@ -14,13 +14,8 @@ from typing import Callable, Tuple, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.error import Error as AcaciaError, ErrorType
-import acaciamc.localization
-from acaciamc.localization import get_text
+from acaciamc.localization import localize
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
@@ -41,7 +36,7 @@ class VersionRequirement(metaclass=ABCMeta):
 class VersionRanged(VersionRequirement):
     def __init__(self, min_: Optional[VERSION_T], max_: Optional[VERSION_T]):
         if not min_ and not max_:
-            raise ValueError(localize("tools.versionlib.versionranged.init.error"))
+            raise ValueError("min and max versions cannot both be None")
         self.min = min_
         self.max = max_
 
@@ -100,7 +95,7 @@ def only(version: VersionRequirement):
                 return func(compiler, args, kwds)
             raise AcaciaError(
                 ErrorType.ANY,
-                message=localize("tools.versionlib.only.decorator.decorated.message")
+                message=localize("tools.versionlib.only.error")
                 % (format_version(compiler.cfg.mc_version), version.to_str())
             )
         return _decorated
@@ -115,6 +110,7 @@ def edu_only(func: Callable):
         if not compiler.cfg.education_edition:
             raise AcaciaError(
                 ErrorType.ANY,
-                message=localize("tools.versionlib.edu_only.decorated.message"))
+                message=localize("tools.versionlib.eduonly.error")
+            )
         return func(compiler, args, kwds)
     return _decorated

@@ -9,15 +9,8 @@ import sys
 
 from acaciamc.error import Error as CompileError
 from acaciamc.compiler import Compiler, Config
-import acaciamc.localization
-from acaciamc.localization import get_text
+from acaciamc.localization import localize
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
-
-DESCRIPTION = localize("cli.description")
 _NOTGIVEN = object()
 
 def fatal(message: str):
@@ -26,76 +19,76 @@ def fatal(message: str):
 
 def build_argparser():
     argparser = argparse.ArgumentParser(
-        prog='acacia', description=DESCRIPTION,
+        prog='acacia', description=localize("cli.description"),
     )
     argparser.add_argument(
         'file',
-        help=localize("cli.builderargparser.file")
+        help=localize("cli.argshelp.file")
     )
     argparser.add_argument(
         '-o', '--out', metavar='PATH',
-        help=localize("cli.builderargparser.out")
+        help=localize("cli.argshelp.out")
     )
     argparser.add_argument(
         "-v", "--mc-version", metavar="VERSION",
-        help=localize("cli.builderargparser.mcversion")
+        help=localize("cli.argshelp.mcversion")
     )
     argparser.add_argument(
         '-e', '--education-edition',
         action='store_true',
-        help=localize("cli.builderargparser.educationedition")
+        help=localize("cli.argshelp.educationedition")
     )
     argparser.add_argument(
         '-s', '--scoreboard', metavar='OBJECTIVE',
-        help=localize("cli.builderargparser.scoreboard")
+        help=localize("cli.argshelp.scoreboard")
     )
     argparser.add_argument(
         '-f', '--function-folder', metavar='PATH',
-        help=localize("cli.builderargparser.functionfolder")
+        help=localize("cli.argshelp.functionfolder")
     )
     argparser.add_argument(
         '-m', '--main-file', metavar='NAME',
-        help=localize("cli.builderargparser.mainfile")
+        help=localize("cli.argshelp.mainfile")
     )
     argparser.add_argument(
         '-t', '--entity-tag', metavar="TAG",
-        help=localize("cli.builderargparser.entitytag")
+        help=localize("cli.argshelp.entitytag")
     )
     argparser.add_argument(
         '-d', '--debug-comments',
         action='store_true',
-        help=localize("cli.builderargparser.debugcomments")
+        help=localize("cli.argshelp.debugcomments")
     )
     argparser.add_argument(
         "-O", "--no-optimize",
         action='store_true',
-        help=localize("cli.builderargparser.nooptimize")
+        help=localize("cli.argshelp.nooptimize")
     )
     argparser.add_argument(
         '-u', '--override-old',
         action='store_true',
-        help=localize("cli.builderargparser.overrideold")
+        help=localize("cli.argshelp.overrideold")
     )
     argparser.add_argument(
         '-i', '--init-file', nargs='?', metavar='NAME', const=_NOTGIVEN,
-        help=localize("cli.builderargparser.initfile")
+        help=localize("cli.argshelp.initfile")
     )
     argparser.add_argument(
         '--internal-folder', metavar="NAME",
-        help=localize("cli.builderargparser.internalfolder")
+        help=localize("cli.argshelp.internalfolder")
     )
     argparser.add_argument(
         '--encoding', metavar="CODEC", default="utf-8",
-        help=localize("cli.builderargparser.encoding")
+        help=localize("cli.argshelp.encoding")
     )
     argparser.add_argument(
         '--verbose',
         action='store_true',
-        help=localize("cli.builderargparser.verbose")
+        help=localize("cli.argshelp.verbose")
     )
     argparser.add_argument(
         '--max-inline-file-size', metavar="SIZE", type=int,
-        help=localize("cli.builderargparser.maxinline")
+        help=localize("cli.argshelp.maxinline")
     )
     return argparser
 
@@ -114,7 +107,7 @@ def assert_id(name: str, option: str):
     try:
         check_id(name)
     except ValueError as e:
-        fatal(localize("cli.assertid.fatel") % (option, e.args[0]))
+        fatal(localize("cli.assertid.fatal") % (option, e.args[0]))
 
 def get_config(args) -> Config:
     """Create a `Config` object from `args`."""
@@ -191,7 +184,7 @@ def run(args):
     if not os.path.exists(out_path):
         out_up = os.path.dirname(out_path)
         if not os.path.exists(out_up):
-            fatal('output directory not found: %s' % out_up)
+            fatal(localize("cli.run.outputnotfound") % out_up)
         os.mkdir(out_path)
 
     try:
@@ -204,10 +197,10 @@ def run(args):
         if args.verbose:
             traceback.print_exc()
             print()
-            fatal("the above unexpected error occurred when compiling")
+            fatal(localize("cli.run.aboveunexpectederror"))
         else:
             fatal(
-                'unexpected error when compiling: %s'
+                localize("cli.run.unexpectederror")
                 % traceback.format_exception_only(err)[-1].strip()
             )
 

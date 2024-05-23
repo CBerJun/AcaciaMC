@@ -1,7 +1,7 @@
 
 ### AcaciaMC ENGLISH LANGUAGE FILE ###
 
-### ./ast.py ###
+### ast.py ###
 
 ## operator ##
 
@@ -22,6 +22,14 @@ ast.operator.less_equal = <=
 ast.operator.and = and
 ast.operator.or = or
 
+## (augmented operators) ##
+
+ast.operator.multiply.augmented = *=
+ast.operator.divide.augmented = /=
+ast.operator.mod.augmented = %=
+ast.operator.add.augmented = +=
+ast.operator.minus.augmented = -=
+
 ## methodqualifier ##
 
 ast.methodqualifier.none = (none)
@@ -35,7 +43,7 @@ ast.funcporttype.by_value = (none)
 ast.funcporttype.by_reference = &
 ast.funcporttype.const = const
 
-### ./cli.py ###
+### cli.py ###
 
 ## description ##
 
@@ -47,27 +55,27 @@ cli.fatal = Acacia: error: %s
 
 ## buildargparser ##
 
-cli.builderargparser.file = The file to compile要编译的文件.
-cli.builderargparser.out = output directory
-cli.builderargparser.mcversion = Minecraft version (e.g. 1.19.50)
-cli.builderargparser.educationedition = enable features that require Minecraft's Education Edition toggle turned on
-cli.builderargparser.scoreboard = the scoreboard that Acacia uses to store data (default "acacia")
-cli.builderargparser.functionfolder = path relative to "functions" directory in a behavior pack where Acacia generates its output .mcfunction files (default "", i.e. generate directly at "functions" level)
-cli.builderargparser.mainfile = name of the mcfunction file that executes your program (default "main")
-cli.builderargparser.entitytag = entity tag prefix
-cli.builderargparser.debugcomments = add debugging comments to output files
-cli.builderargparser.nooptimize = disable optimization
-cli.builderargparser.overrideold = remove the old output contents (EVERYTHING IN DIRECTORY!)
-cli.builderargparser.initfile = if set, split initialization commands from main mcfunction file into given file (default "init")
-cli.builderargparser.internalfolder = name of the folder where Acacia stores its internal files
-cli.builderargparser.encoding = encoding of file (default "utf-8")
-cli.builderargparser.verbose = show full traceback message when encountering unexpected errors
-cli.builderargparser.maxinline = optimizer option: maximum size for a function that is called with /execute conditions to be inlined (default 20)
+cli.argshelp.file = The file to compile
+cli.argshelp.out = output directory
+cli.argshelp.mcversion = Minecraft version (e.g. 1.19.50)
+cli.argshelp.educationedition = enable features that require Minecraft's Education Edition toggle turned on
+cli.argshelp.scoreboard = the scoreboard that Acacia uses to store data (default "acacia")
+cli.argshelp.functionfolder = path relative to "functions" directory in a behavior pack where Acacia generates its output .mcfunction files (default "", i.e. generate directly at "functions" level)
+cli.argshelp.mainfile = name of the mcfunction file that executes your program (default "main")
+cli.argshelp.entitytag = entity tag prefix
+cli.argshelp.debugcomments = add debugging comments to output files
+cli.argshelp.nooptimize = disable optimization
+cli.argshelp.overrideold = remove the old output contents (EVERYTHING IN DIRECTORY!)
+cli.argshelp.initfile = if set, split initialization commands from main mcfunction file into given file (default "init")
+cli.argshelp.internalfolder = name of the folder where Acacia stores its internal files
+cli.argshelp.encoding = encoding of file (default "utf-8")
+cli.argshelp.verbose = show full traceback message when encountering unexpected errors
+cli.argshelp.maxinline = optimizer option: maximum size for a function that is called with /execute conditions to be inlined (default 20)
 
 ## checkid ##
 
-cli.checkid.empty = can\'t be empty
-cli.checkid.decimal = can\'t start with a number
+cli.checkid.empty = can't be empty
+cli.checkid.decimal = can't start with a number
 cli.checkid.invalid = invalid character %r
 
 ## assertid ##
@@ -88,7 +96,7 @@ cli.run.outputnotfound = output directory not found: %s
 cli.run.aboveunexpectederror = the above unexpected error occurred when compiling
 cli.run.unexpectederror = unexpected error when compiling: %s
 
-### ./error.py ###
+### error.py ###
 
 ## errortype ##
 
@@ -215,207 +223,91 @@ error.fullmsg.compilererror = compiler error:
 error.tracedcall.note = Callee defined at %s
 error.tracedcall.calling = Calling %s
 
-### tools/__init__.py ###
-
-tools.init.transformimmutable = can't transform non-ImmutableMixin
-
 ### tools/axe.py ###
 
 ## preconverterror ##
 
-# show #
+axe.preconverterror.notconst = const argument %s received non-const value of type %s
+axe.preconverterror.notrt = argument %s is expecting a value that exists at runtime, got %s
 
-tools.axe.preconverterror.show.penotconst = const argument {arg} received non-const value of type
-tools.axe.preconverterror.show.penotrt = argument {arg} is expecting a value that exists at runtime, got
+## literalint ##
 
-## argument ##
+axe.converter.std.literalint = int (literal)
 
-# getdefault #
+## literalfloat ##
 
-tools.axe.argument.getdefault.nodefault = don't have default
+axe.converter.std.literalfloat = float (accepts int literal)
 
-## convertercontainer ##
+## literalfbool ##
 
-# newconvert #
-
-tools.axe.convertercontainer.newconvert.error = %r is used as runtime converter but not all subconverters implement Converter
-
-# newcconvert #
-
-tools.axe.convertercontainer.newcconvert.error = %r is used as compile time converter but not all subconverters implement CTConverter
-
-## literaiint ##
-
-# getshowname #
-
-tools.axe.literaiint.showname = int (literal)
-
-## literaifloat ##
-
-# getshowname #
-
-tools.axe.literaifloat.showname = float (accepts int literal)
-
-## literaifbool ##
-
-# getshowname #
-
-tools.axe.literaifbool.showname = bool (literal)
+axe.converter.std.literalbool = bool (literal)
 
 ## nullable ##
 
-# getshowname #
-
-tools.axe.nullable.showname =  (or None)
-
-## any0f ##
-
-tools.axe.any0f.empty = at least 1 converter needs to be specified
+axe.converter.std.nullable = %s (or None)
 
 ## iterator ##
 
-# getshowname #
-
-tools.axe.iterator.showname = (iterable)
+axe.converter.std.iterator = (iterable)
 
 ## ctiterator ##
 
-# getshowname #
-
-tools.axe.ctiterator.showname = (iterable)
+axe.converter.std.ctiterator = (iterable)
 
 ## literalintenum ##
 
-# getshowname #
+axe.converter.std.literalintenum = %s (one of %s)
 
-tools.axe.literalintenum.showname =  (one of %s)
+## literalstringenum ##
 
-## literalStringEnum ##
-
-# getshowname #
-
-tools.axe.literalStringEnum.showname =  (one of %s)
+axe.converter.std.literalstringenum = %s (one of %s)
 
 ## listof ##
 
-# getshowname #
-
-tools.axe.list0f.showname = list of
+axe.converter.std.listof = list of %s
 
 ## ctlistof ##
 
-# getshowname #
-
-tools.axe.ctlist0f.showname = list of
+axe.converter.std.ctlistof = list of %s
 
 ## mapof ##
 
-# getshowname #
-
-tools.axe.map0f.showname = map
+axe.converter.std.mapof = map (%s)
 
 ## ctmapof ##
 
-# getshowname #
-
-tools.axe.ctmap0f.showname = map
+axe.converter.std.ctmapof = map (%s)
 
 ## playerselector ##
 
-# getshowname #
-
-tools.axe.playerselector.showname =  (player type)
+axe.converter.std.playerselector = %s (player type)
 
 ## callable ##
 
-# getshowname #
-
-tools.axe.callable.showname =  (callable)
+axe.converter.std.callable = (callable)
 
 ## ctreference ##
 
-# getshowname #
-
-tools.axe.ctreference.showname =  (reference)
-
-## checkrepeat ##
-
-tools.axe.checkrepeat.error0 = repeated argument %r
-tools.axe.checkrepeat.error1 = repeated argument rename %r
-
-## callimpl ##
-
-tools.axe.callimpl.error = unknown argument %r
+axe.converter.std.ctreference = (reference)
 
 ## chopper ##
 
-tools.axe.chopper.error0 = only arguments can go before axe.slash
-tools.axe.chopper.error1 = only arguments or axe.slash can go before axe.star or axe.star_arg
-tools.axe.chopper.error2 = multiple axe.kwds
-tools.axe.chopper.error3 = argument after axe.kwds
-tools.axe.chopper.error4 = non-default argument follows default argument
+axe.chopper.posaskwd = Position-only argument "%s" passed as keyword
 
-## call ##
+## overload ##
 
-# emit #
-
-tools.axe.call.emit.message = Position-only argument "%s" passed as keyword
-
-## overloadchopped ##
-
-# new #
-
-tools.axe.overloadchopped.new.error0 = only arguments are allowed in overload definitions
-tools.axe.overloadchopped.new.error1 = overload arguments can't have default values
-
-# call #
-
-tools.axe.overloadchopped.call.message0 = Overload functions don't support keyword arguments
-tools.axe.overloadchopped.call.message1 = No overload matches given arguments: got %s, expected %s
-
-### tools/named_tuple.py ###
-
-## named_tuple ##
-
-tools.namedtuple.error = Field names cannot start with '__'
-
-# dtbody #
-
-tools.namedtuple.dtbody.newclass = NamedTupleDataType_
-
-# exprbody #
-
-tools.namedtuple.exprbody.newclass = NamedTuple_
-
-tools.namedtuple.typecls = NamedTupleType_
-
-### tools/resultlib.py ###
-
-## literal ##
-
-tools.resultlib.literal.unreachable = unexpected value
+axe.overload.kwd = Overload functions don't support keyword arguments
+axe.overload.nomatch = No overload matches given arguments: got %s, expected %s
 
 ### tools/versinlib.py ###
 
-## versionranged ##
-
-# init #
-
-tools.versionlib.versionranged.init.error = min and max versions cannot both be None
-
 ## only ##
 
-# decorator #
-
-# decorated
-
-tools.versionlib.only.decorator.decorated.message = The function is not available for Minecraft version %s; expecting %s
+tools.versionlib.only.error = The function is not available for Minecraft version %s; expecting %s
 
 ## eduonly ##
 
-# decorated #
-
-tools.versionlib.eduonly.decorated.message = Education Edition features must be enabled to use this function
+tools.versionlib.eduonly.error = Education Edition features must be enabled to use this function
 
 ### modules/builiins.py ###
 
@@ -465,25 +357,24 @@ modules.music.acaciabuild.norequire = Python module 'mido' is required
 
 ### modules/print.py ###
 
-## fsrterror ##
+## formatted string ##
 
-# addaxpr #
+# addexpr #
 
-modules.print.fsrterror.addaxpr.error = Type "%s" can not be formatted as a string
+modules.print.fstr.addexpr.error = Type "%s" can not be formatted as a string
 
 # exprfromid #
 
-modules.print.fsrterror.exprfromid.outofrange = Format index out of range: %d
-modules.print.fsrterror.exprfromid.invalid = Invalid format expression: %s
+modules.print.fstr.exprfromid.outofrange = Format index out of range: %d
+modules.print.fstr.exprfromid.invalid = Invalid format expression: %s
 
 # parse #
 
-modules.print.fsrterror.parse.unclosedfstring = Unclosed "{" in fstring
+modules.print.fstr.parse.unclosedbrace = Unclosed "{" in fstring
 
 ## with font ##
 
 modules.print.withfont.onlyhighversion = %r is only available in MC 1.19.80+
-modules.print.withfont.unclosedfont = Unclosed font scope
 
 ### modules/world.py ###
 
@@ -495,26 +386,52 @@ modules.world.damage.damagerpresent = must be specified when damager presents
 
 modules.world.spread.biggerthan1 = must be >= 1.0
 modules.world.spread.nonnegative = must be >= 0.0
-modules.world.spread.smallerthanrangeminus1 = must be <= range - 1
+modules.world.spread.intervaltoobig = must be <= range - 1
 
 ## summon ##
 
 modules.world.summon.versiontoolow = available only in MC 1.19.70+
 
+### objects/entity_filter.py ###
 
+## IntRange ##
 
+axe.converter.entityfilter.intrange = integer range
 
+## EntityFilter ##
 
+# random #
 
-### 施工中...
-### objects/entityfilter.py ###
+objects.entityfilter.random.notype = type can't be omitted when it can't be inferred from previous filters
+objects.entityfilter.random.typeconflict = type mismatch with previous given type (%s != %s)
 
-## entityfilter ##
+# has_item #
 
-# init #
+objects.entityfilter.hasitem.slot = should be None when slot_type is None
 
+### objects/extern_egroup.py
 
+## _ExternEGroupResolve ##
 
+objects.externegroup.resolve = <resolve of %s>
 
+### objects/functions.py ###
 
+## BinaryFunction (and others) ##
 
+objects.function.binary = <binary function>
+
+## BoundVirtualMethod ###
+
+objects.function.bvm.dispatcher = <dispatcher of virtual method %s>
+
+## (common use) ##
+
+objects.function.unknown = <unknown>
+
+### generator.py ###
+
+## visit_NewCall ##
+
+generator.visit.newcall.tracemsg = Calling new on %s
+generator.visit.newcall.tracenote = Callee defined at %s

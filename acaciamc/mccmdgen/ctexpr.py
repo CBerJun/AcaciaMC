@@ -8,6 +8,7 @@ from abc import ABCMeta, abstractmethod
 from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.error import traced_call
+from acaciamc.localization import localize
 
 if TYPE_CHECKING:
     from acaciamc.ast import Operator
@@ -104,7 +105,7 @@ class CTCallable(CTObj, metaclass=ABCMeta):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self.source: Optional["SourceLocation"] = None
-        self.func_repr = "<unknown>"
+        self.func_repr = localize("objects.function.unknown")
 
     @abstractmethod
     def ccall(self, args: List["CTObj"], kwds: Dict[str, "CTObj"],

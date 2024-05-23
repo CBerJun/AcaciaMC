@@ -472,7 +472,7 @@ class Parser:
         else:
             res = FuncPortType.by_value
         if res not in allowed_ports:
-            self.error(ErrorType.INVALID_FUNC_PORT, **pos, port=res.value)
+            self.error(ErrorType.INVALID_FUNC_PORT, **pos, port=res.localized)
         return res
 
     def _def_head(self) -> str:

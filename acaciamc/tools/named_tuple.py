@@ -11,13 +11,7 @@ from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.utils import apply_decorators
 from acaciamc.tools import axe, cmethod_of
 from acaciamc.objects.types import Type
-import acaciamc.localization
-from acaciamc.localization import get_text
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 class WithOrigin(axe.ConverterContainer):
     def __init__(self, converter: axe._CONVERTER_T):
         super().__init__(converter)
@@ -47,14 +41,14 @@ def named_tuple(
 ) -> _NamedTupleInfo:
     field_names = [name for name, _ in fields]
     if any(s.startswith("__") for s in field_names):
-        raise ValueError(localize("tools.namedtuple.error"))
+        raise ValueError("Field names cannot start with '__'")
     def dt_body(ns):
         ns["name"] = name
-    dt = new_class(localize("tools.namedtuple.dtbody.newclasss"), str(name), (DefaultDataType,),
+    dt = new_class(f"NamedTupleDataType_{name}", (DefaultDataType,),
                    exec_body=dt_body)
     ctdt = CTDataType(name)
     def expr_body(ns):
-        def __init__(self: AcaciaExpr, data: Dict[str, Tuple[Any, Any]]):  #此处需要检查
+        def __init__(self: AcaciaExpr, data: Dict[str, Tuple[Any, Any]]):
             super(expr, self).__init__(dt())
             self.fields = SimpleNamespace()
             for fname, (raw, converted) in data.items():
@@ -62,7 +56,7 @@ def named_tuple(
                 self.attribute_table.set(fname, raw)
         ns["__init__"] = __init__
         ns["cdata_type"] = ctdt
-    expr = new_class(localize("tools.namedtuple.exprbody.newclasss"), str(name), (ConstExprCombined,),
+    expr = new_class(f"NamedTuple_{name}", (ConstExprCombined,),
                      exec_body=expr_body)
     ctor_args1 = [
         axe.arg(fname, WithOrigin(conv))
@@ -112,6 +106,6 @@ def named_tuple(
         ns["do_init"] = do_init
         ns["datatype_hook"] = datatype_hook
         ns["cdatatype_hook"] = cdatatype_hook
-    typecls = new_class(localize("tools.namedtuple.typedcls"), str(name), (Type,), #此处需要检查
+    typecls = new_class(f"NamedTupleType_{name}", (Type,),
                         exec_body=type_body)
     return _NamedTupleInfo(name, dt, expr, typecls, ctdt)

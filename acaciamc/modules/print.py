@@ -11,14 +11,9 @@ from acaciamc.mccmdgen.utils import unreachable
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 from acaciamc.constants import COLORS, COLORS_NEW
+from acaciamc.localization import localize
 import acaciamc.mccmdgen.cmds as cmds
-import acaciamc.localization
-from acaciamc.localization import get_text
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
@@ -103,7 +98,10 @@ class _FStrParser:
             self.json.extend(expr.json)
             self.dependencies.extend(expr.dependencies)
         else:
-            raise _FStrError(localize("modules.print.fsrterror.addaxpr.error")% expr.data_type)
+            raise _FStrError(
+                localize("modules.print.fstr.addexpr.error")
+                % expr.data_type
+            )
 
     def expr_from_id(self, name: str) -> AcaciaExpr:
         """Get the expr from an format
@@ -114,11 +112,16 @@ class _FStrParser:
             try:
                 expr = self.args[index]
             except IndexError:
-                raise _FStrError(localize("modules.print.fsrterror.exprfromid.outofrange") % index)
+                raise _FStrError(
+                    localize("modules.print.fstr.exprfromid.outofrange")
+                    % index
+                )
         elif name in self.keywords:
             expr = self.keywords[name]
         else:
-            raise _FStrError(localize('modules.print.fsrterror.exprfromid.invalid') % name)
+            raise _FStrError(
+                localize('modules.print.fstr.exprfromid.invalid') % name
+            )
         return expr
 
     def parse(self):
@@ -144,7 +147,9 @@ class _FStrParser:
                 expr_char = self.next_char()
                 while expr_char != '}':
                     if expr_char is None:
-                        raise _FStrError(localize("modules.print.fsrterror.parse.unclosedfstring"))
+                        raise _FStrError(
+                            localize("modules.print.fstr.parse.unclosedbrace")
+                        )
                     expr_str.append(expr_char)
                     expr_char = self.next_char()
                 # expr is integer or an identifier
@@ -303,7 +308,7 @@ def _with_font(compiler: "Compiler", text: FString, color: str,
                 if start_levels == 0 and i != json_len - 1:
                     start_i = i + 1
     if start_levels:
-        raise ValueError(localize("modules.print.withfont.unclosedfont"))
+        raise ValueError("Unclosed font scopes")
     if start_i != -1:
         scopes.append((start_i, json_len))
     scopes.reverse()

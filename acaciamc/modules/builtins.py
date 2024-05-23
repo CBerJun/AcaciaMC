@@ -5,19 +5,14 @@ from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DataType
 from acaciamc.tools import axe, resultlib
 from acaciamc.error import Error, ErrorType
+from acaciamc.localization import localize
 from acaciamc.mccmdgen.ctexpr import CTDataType
 import acaciamc.mccmdgen.cmds as cmds
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.objects.entity import _EntityBase
-import acaciamc.localization
-from acaciamc.localization import get_text
 
-lang = acaciamc.localization.get_lang()
-
-def localize(text):
-    return get_text(text, lang)
 class AnyDataType(DataType):
     def __str__(self) -> str:
         return 'Any'
@@ -52,12 +47,18 @@ def swap(compiler: "Compiler", x: AcaciaExpr, y: AcaciaExpr):
     Swap values of two variables.
     """
     if not x.is_assignable():
-        raise axe.ArgumentError("x", localize("modules.builtins.swap.assignable"))
+        raise axe.ArgumentError(
+            "x", localize("modules.builtins.swap.assignable")
+        )
     if not y.is_assignable():
-        raise axe.ArgumentError("y", localize("modules.builtins.swap.assignable"))
+        raise axe.ArgumentError(
+            "y", localize("modules.builtins.swap.assignable")
+        )
     if not (x.data_type.is_type_of(y) and y.data_type.is_type_of(x)):
         raise axe.ArgumentError(
-            "x", localize("modules.builtins.swap.differenttype") % (x.data_type, y.data_type)
+            "x",
+            localize("modules.builtins.swap.differenttype")
+            % (x.data_type, y.data_type)
         )
     return resultlib.commands(swap_exprs(x, y, compiler))
 

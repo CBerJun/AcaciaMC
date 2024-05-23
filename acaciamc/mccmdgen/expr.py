@@ -17,6 +17,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.ctexpr import CTObj
 from acaciamc.mccmdgen.utils import InvalidOpError
+from acaciamc.localization import localize
 
 if TYPE_CHECKING:
     from acaciamc.ast import Operator
@@ -201,7 +202,7 @@ class AcaciaCallable(AcaciaExpr, metaclass=ABCMeta):
     def __init__(self, *args, **kwds):
         super().__init__(*args, **kwds)
         self.source: Optional[SourceLocation] = None
-        self.func_repr = "<unknown>"
+        self.func_repr = localize("objects.function.unknown")
 
     def call_withframe(
             self, args: ARGS_T, keywords: KEYWORDS_T, compiler: "Compiler",

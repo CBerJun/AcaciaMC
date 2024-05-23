@@ -349,7 +349,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
             if method in m_virtual:
                 if qualifier is not MethodQualifier.override:
                     raise Error(ErrorType.OVERRIDE_QUALIFIER,
-                                got=qualifier.value, name=method)
+                                got=qualifier.localized, name=method)
                 _check_override(implementation, method)
                 disp = parent.method_dispatchers[method]
                 self.method_dispatchers[method] = disp

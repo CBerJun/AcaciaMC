@@ -14,6 +14,7 @@ from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.expr import *
+from acaciamc.localization import localize
 import acaciamc.mccmdgen.cmds as cmds
 from .types import Type
 from .position import PosDataType
@@ -34,7 +35,7 @@ class IntRange(axe.AnyOf):
         super().__init__(axe.LiteralInt(), axe.LiteralString())
 
     def get_show_name(self) -> str:
-        return "integer range"
+        return localize("axe.converter.entityfilter.intrange")
 
     @staticmethod
     def check_int(value: str) -> bool:
@@ -126,15 +127,16 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             if self.entity_type is None:
                 if type_ is None:
                     raise axe.ArgumentError(
-                        "type", "type can't be omitted when it can't "
-                        "be inferred from previous filters"
+                        "type",
+                        localize("objects.entityfilter.random.notype")
                     )
                 self.entity_type = type_
             else:
                 if type_ is not None and self.entity_type != type_:
                     raise axe.ArgumentError(
-                        "type", "type mismatch with previous given type"
-                        "(%s != %s)" % (type_, self.entity_type)
+                        "type",
+                        localize("objects.entityfilter.random.typeconflict")
+                            % (type_, self.entity_type)
                     )
             if not selector.has_arg("type"):
                 selector.type(type_)
@@ -283,8 +285,9 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
                       quantity: str, data: Optional[int],
                       slot_type: Optional[str], slot_num: Optional[int]):
             if slot_type is None and slot_num is not None:
-                raise axe.ArgumentError("slot_num", "should be None when "
-                                        "slot_type is None")
+                raise axe.ArgumentError(
+                    "slot_num", localize("objects.entityfilter.hasitem.slot")
+                )
             selector = self.last_selector(compiler)
             selector.has_item(item, quantity, data, slot_type, slot_num)
             return self
