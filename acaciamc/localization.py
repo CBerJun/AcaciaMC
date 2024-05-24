@@ -8,15 +8,16 @@ __all__ = ["DEFAULT_LANG", "get_lang", "localize", "LocalizedEnum"]
 
 from typing import Dict
 from enum import Enum
+from pkgutil import get_data
 import json
 
 lang_cache: Dict[str, Dict[str, str]] = {}
 
 def load_default_lang():
     """加载默认语言"""
-    with open("config.json", "r", encoding="utf-8") as f:
-        config = json.load(f)
-        return config["lang"]
+    d = get_data(__name__, "lang/config.json")
+    j = json.loads(d)
+    return j["lang"]
 
 DEFAULT_LANG = load_default_lang()
 
@@ -25,16 +26,16 @@ def get_lang(lang: str = DEFAULT_LANG) -> Dict[str, str]:
     if lang in lang_cache:
         return lang_cache[lang]
     lang_cache[lang] = lang_file_dict = {}  # 语言映射列表
-    with open(f"acaciamc/lang/{lang}.lang", "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("#"):  # 注释行
-                continue
-            if not line:  # 空行
-                continue
-            key, text = line.split(" = ", maxsplit=1)  # 按等号分割语言映射
-            lang_file_dict[key] = text
-        return lang_file_dict
+    raw = get_data(__name__, f"lang/{lang}.lang")
+    for line in raw.decode("utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("#"):  # 注释行
+            continue
+        if not line:  # 空行
+            continue
+        key, text = line.split(" = ", maxsplit=1)  # 按等号分割语言映射
+        lang_file_dict[key] = text
+    return lang_file_dict
 
 def localize(key: str, lang: str = DEFAULT_LANG) -> str:
     """
