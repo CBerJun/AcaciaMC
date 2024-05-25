@@ -51,11 +51,11 @@ cli.description = Compiler of Acacia, a programming language that runs in Minecr
 
 ## fatal ##
 
-cli.fatal = Acacia: error: %s
+cli.fatal = acacia: error: %s
 
 ## buildargparser ##
 
-cli.argshelp.file = The file to compile
+cli.argshelp.file = the file to compile
 cli.argshelp.out = output directory
 cli.argshelp.mcversion = Minecraft version (e.g. 1.19.50)
 cli.argshelp.educationedition = enable features that require Minecraft's Education Edition toggle turned on
@@ -314,7 +314,7 @@ tools.versionlib.eduonly.error = Education Edition features must be enabled to u
 ## swap ##
 
 modules.builtins.swap.assignable = must be a variable
-modules.builtins.swap.differenttype = must have the same type as the other variable(got "%s" and "%s")
+modules.builtins.swap.differenttype = must have the same type as the other variable (got "%s" and "%s")
 
 ### modules/math.py ###
 
