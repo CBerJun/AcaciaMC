@@ -12,6 +12,11 @@ __pycache__
 venv
 env
 
+# Building
+*.egg-info/
+dist/
+build/
+
 # Specific files
 /TODO.txt
 /test/temp.aca
