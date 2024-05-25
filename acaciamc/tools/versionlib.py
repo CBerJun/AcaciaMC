@@ -93,11 +93,12 @@ def only(version: VersionRequirement):
         def _decorated(compiler: "Compiler", args, kwds):
             if version.validate(compiler.cfg.mc_version):
                 return func(compiler, args, kwds)
-            raise AcaciaError(
-                ErrorType.ANY,
-                message=localize("tools.versionlib.only.error")
-                % (format_version(compiler.cfg.mc_version), version.to_str())
+            msg = (
+                localize("tools.versionlib.only.error")
+                .format(got=format_version(compiler.cfg.mc_version),
+                        expected=version.to_str())
             )
+            raise AcaciaError(ErrorType.ANY, message=msg)
         return _decorated
     return _decorator
 

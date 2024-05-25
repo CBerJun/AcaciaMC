@@ -69,12 +69,13 @@ class _PreconvertError(Exception):
         self.origin = origin
 
     def show(self, arg: str) -> str:
-        o = _exprrepr(self.origin)
         if self.code == _PE_NOT_CONST:
-            return localize("axe.preconverterror.notconst") % (arg, o)
-        if self.code == _PE_NOT_RT:
-            return localize("axe.preconverterror.notrt") % (arg, o)
-        raise ValueError(f'unknown error code {self.code}')
+            s = localize("axe.preconverterror.notconst")
+        elif self.code == _PE_NOT_RT:
+            s = localize("axe.preconverterror.notrt")
+        else:
+            raise ValueError(f'unknown error code {self.code}')
+        return s.format(arg=arg, type=_exprrepr(self.origin))
 
 ### Building Stage
 
@@ -574,7 +575,8 @@ class LiteralIntEnum(LiteralInt):
     def get_show_name(self) -> str:
         return (
             localize("axe.converter.std.literalintenum")
-            % (super().get_show_name(), ", ".join(map(str, self.accepts)))
+            .format(origin=super().get_show_name(),
+                    list=", ".join(map(str, self.accepts)))
         )
 
     def uconvert(self, origin) -> int:
@@ -594,7 +596,8 @@ class LiteralStringEnum(LiteralString):
     def get_show_name(self) -> str:
         return (
             localize("axe.converter.std.literalstringenum")
-            % (super().get_show_name(), ", ".join(map(repr, self.accepts)))
+            .format(origin=super().get_show_name(),
+                    list=", ".join(map(repr, self.accepts)))
         )
 
     def uconvert(self, origin) -> str:
@@ -1086,9 +1089,9 @@ class OverloadChopped(type):
         else:
             raise AcaciaError(
                 ErrorType.ANY,
-                message=localize("axe.overload.nomatch") % (
-                    "(%s)" % ", ".join(_exprrepr(arg) for arg in args),
-                    " / ".join(
+                message=localize("axe.overload.nomatch").format(
+                    got="(%s)" % ", ".join(_exprrepr(arg) for arg in args),
+                    expected=" / ".join(
                         "%s%s" % (
                             _create_signature(arg_defs),
                             self._format_version(impl.version)

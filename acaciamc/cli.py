@@ -107,7 +107,8 @@ def assert_id(name: str, option: str):
     try:
         check_id(name)
     except ValueError as e:
-        fatal(localize("cli.assertid.fatal") % (option, e.args[0]))
+        fatal(localize("cli.assertid.fatal")
+              .format(option=option, msg=e.args[0]))
 
 def get_config(args) -> Config:
     """Create a `Config` object from `args`."""
@@ -127,7 +128,7 @@ def get_config(args) -> Config:
                 check_id(p)
             except ValueError as e:
                 fatal(localize("cli.getconfig.invalidfunctionfolder")
-                      % (p, e.args[0]))
+                      .format(msg=e.args[0], name=p))
         kwds["root_folder"] = '/'.join(path)
     if args.main_file:
         assert_id(args.main_file, '--main-file')

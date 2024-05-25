@@ -80,11 +80,11 @@ cli.checkid.invalid = invalid character %r
 
 ## assertid ##
 
-cli.assertid.fatal = option %s: %s
+cli.assertid.fatal = option {option}: {msg}
 
 ## getconfig ##
 
-cli.getconfig.invalidfunctionfolder = invalid name %r in function folder path: %s
+cli.getconfig.invalidfunctionfolder = invalid name {name} in function folder path: {msg}
 cli.getconfig.invalidmcversion = invalid Minecraft version: %s
 cli.getconfig.maxinlinetoolow = max inline file size must >= 0: %s
 
@@ -227,8 +227,8 @@ error.tracedcall.calling = Calling %s
 
 ## preconverterror ##
 
-axe.preconverterror.notconst = const argument %s received non-const value of type %s
-axe.preconverterror.notrt = argument %s is expecting a value that exists at runtime, got %s
+axe.preconverterror.notconst = const argument {arg} received non-const value of type {type}
+axe.preconverterror.notrt = argument {arg} is expecting a value that exists at runtime, got {type}
 
 ## literalint ##
 
@@ -256,11 +256,11 @@ axe.converter.std.ctiterator = (iterable)
 
 ## literalintenum ##
 
-axe.converter.std.literalintenum = %s (one of %s)
+axe.converter.std.literalintenum = {origin} (one of {list})
 
 ## literalstringenum ##
 
-axe.converter.std.literalstringenum = %s (one of %s)
+axe.converter.std.literalstringenum = {origin} (one of {list})
 
 ## listof ##
 
@@ -297,13 +297,13 @@ axe.chopper.posaskwd = Position-only argument "%s" passed as keyword
 ## overload ##
 
 axe.overload.kwd = Overload functions don't support keyword arguments
-axe.overload.nomatch = No overload matches given arguments: got %s, expected %s
+axe.overload.nomatch = No overload matches given arguments: got {got}, expected {expected}
 
 ### tools/versinlib.py ###
 
 ## only ##
 
-tools.versionlib.only.error = The function is not available for Minecraft version %s; expecting %s
+tools.versionlib.only.error = The function is not available for Minecraft version {got}; expecting {expected}
 
 ## eduonly ##
 
