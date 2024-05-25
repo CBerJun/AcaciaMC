@@ -6,6 +6,12 @@
 *.acaout
 __pycache__
 
+# Virtual environments
+.venv
+.env
+venv
+env
+
 # Specific files
 /TODO.txt
 /test/temp.aca
