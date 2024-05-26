@@ -3,12 +3,12 @@
 __all__  = ['TokenType', 'Token', 'Tokenizer']
 
 from typing import (
-    Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, TYPE_CHECKING
+    Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, Any, TYPE_CHECKING
 )
 import enum
 
 from acaciamc.error import *
-from acaciamc.constants import COLORS, COLORS_NEW
+from acaciamc.constants import COLORS, COLORS_NEW, FUNCTION_PATH_CHARS
 
 if TYPE_CHECKING:
     from acaciamc.tools.versionlib import VERSION_T
@@ -25,8 +25,9 @@ class TokenType(enum.Enum):
     """
     Token types.
     Value convension:
-    1. If value is one character (len==1), then a single character
-    token is registered. (e.g. '=')
+    1. If length of value is 1 or 2 and the first character is not an
+    identifier character ([a-zA-Z0-9_]) or anything special (like '#'),
+    then a token is registered automatically. (e.g. '=' or '->')
     2. If value is defined between `true` and `false`, then it is
     registered as a keyword.
     """
@@ -47,7 +48,7 @@ class TokenType(enum.Enum):
     command_begin = 'COMMAND_BEGIN'
     string_begin = 'STRING_BEGIN'
     text_body = 'TEXT_BODY'  # value: str
-    dollar_lbrace = '${'
+    dollar_lbrace = 'DOLLAR_LBRACE'
     command_end = 'COMMAND_END'
     string_end = 'STRING_END'
     # operator
@@ -81,6 +82,7 @@ class TokenType(enum.Enum):
     ## literal
     integer = 'INTEGER'  # value: int
     float_ = 'FLOAT'  # value: float
+    interface_path = 'INTERFACE_PATH'  # value: str
     ## id
     identifier = 'IDENTIFIER'  # value: str
     # keywords
@@ -135,14 +137,11 @@ BRACKETS = {
 }
 RB2LB = {v: k for k, v in BRACKETS.items()}
 
-class Token:
-    def __init__(self, token_type: TokenType,
-                 lineno: int, col: int, value=None):
-        # lineno & col position where token starts
-        self.lineno = lineno
-        self.col = col
-        self.type = token_type
-        self.value = value
+class Token(NamedTuple):
+    type: TokenType
+    lineno: int
+    col: int
+    value: Any = None
 
     def __str__(self) -> str:
         v = self.type.value
@@ -202,10 +201,7 @@ class _FormattedStrManager:
 
     def finish(self):
         self._dump_texts()
-        self._tokens.append(Token(
-            self.end_tok, self.owner.current_lineno,
-            self.owner.current_col
-        ))
+        self._tokens.append(self.owner.gen_token(self.end_tok))
 
 class _CommandManager(_FormattedStrManager):
     def __init__(self, owner: 'Tokenizer') -> None:
@@ -243,6 +239,7 @@ class Tokenizer:
         self.continued_command = False
         self.continued_comment = False
         self.continued_comment_pos: Union[None, Tuple[int, int]] = None
+        self.last_is_interface = False
 
     def error(self, err_type: ErrorType, lineno=None, col=None, **kwargs):
         if lineno is None:
@@ -288,22 +285,6 @@ class Tokenizer:
         self.position = 0
         res: List[Token] = []
         self.forward()
-        def _gen_token(*args, **kwargs):
-            """Generate a token on current pos."""
-            return Token(
-                lineno=self.current_lineno, col=self.current_col,
-                *args, **kwargs
-            )
-        def _gen_and_forward(token_type: TokenType, forward_times=1):
-            """Generate a token of the specified type
-            NOTE by generating token first, we make sure the position is
-            correctly at the start of token (`self.forward` changes
-            `self.lineno` and `self.col`).
-            """
-            token = _gen_token(token_type)
-            for _ in range(forward_times):
-                self.forward()
-            return token
         # read indent
         if not (self.continued_command
                 or self.continued_comment
@@ -350,12 +331,28 @@ class Tokenizer:
                     self.skip_comment()
                     break
             # start
-            ok = True
+            ## path after `interface` keyword
+            if self.last_is_interface:
+                if self.current_char == '"':
+                    # Quoted path
+                    self.enter_string()
+                    self.forward()
+                else:
+                    # Unquoted path
+                    res.append(self.handle_interface_path())
+                self.last_is_interface = False
+                continue
             ## special tokens
+            ok = True
             if self.current_char.isdecimal():
                 res.append(self.handle_number())
             elif self.current_char.isalpha() or self.current_char == '_':
-                res.append(self.handle_name())
+                id_token = self.handle_name()
+                res.append(id_token)
+                # Special case: `interface` keyword, since after it goes
+                # a path.
+                if id_token.type is TokenType.interface:
+                    self.last_is_interface = True
             elif self.current_char == '/' and not (self.has_content or res):
                 # Only read when "/" is first token of this logical line.
                 self.inside_command = _CommandManager(self)
@@ -364,22 +361,18 @@ class Tokenizer:
                     self.continued_command = True
                     self.forward()  # skip "*"
             elif self.current_char == '"':
-                self.string_stack.append(_StrLiteralManager(self))
                 self.forward()  # skip '"'
-                self.in_string_fexpr = False
+                self.enter_string()
             else:  ## 2-char token
                 ok = False
             if ok:
                 continue
             peek = self.peek()
-            for pattern in (
-                '==', '>=', '<=', '!=', '->',
-                '+=', '-=', '*=', '/=', '%=', ':='
-            ):
-                if self.current_char == pattern[0] and peek == pattern[1]:
-                    res.append(_gen_and_forward(TokenType(pattern), 2))
-                    break
-            else:  ## 1-char token
+            twochars = self.current_char + peek
+            try:
+                token_type = TokenType(twochars)
+            except ValueError:
+                ## try 1-char token then
                 try:
                     token_type = TokenType(self.current_char)
                 except ValueError:
@@ -407,7 +400,12 @@ class Tokenizer:
                                 self.in_command_fexpr = False
                             elif got_f.str_fexpr:
                                 self.in_string_fexpr = False
-                    res.append(_gen_and_forward(token_type, 1))
+                    res.append(self.gen_token(token_type))
+                    self.forward()
+            else:
+                res.append(self.gen_token(token_type))
+                self.forward()
+                self.forward()
         # Now self.current_char is either '\n', '\\' or None (EOF)
         if (
             # ${} in single line command can't use implicit line continuation.
@@ -425,7 +423,7 @@ class Tokenizer:
                 self.continued_comment or self.continued_command
                 or self.is_in_bracket()
             ):
-                res.append(_gen_token(TokenType.new_line))
+                res.append(self.handle_logical_newline())
             self.last_line_continued = False
         elif self.current_char is None:
             if self.continued_comment:
@@ -442,7 +440,7 @@ class Tokenizer:
                 self.error(ErrorType.UNCLOSED_BRACKET,
                            *br.pos, char=br.type.value)
             if self.has_content:
-                res.append(_gen_token(TokenType.new_line))
+                res.append(self.handle_logical_newline())
             eof = True
         elif self.current_char == '\\':
             self.forward()  # skip "\\"
@@ -462,8 +460,15 @@ class Tokenizer:
             self.current_lineno += 1
             self.current_col = 0
             res.extend(self.handle_indent(0))  # dump DEDENTs
-            res.append(_gen_token(TokenType.end_marker))
+            res.append(self.gen_token(TokenType.end_marker))
         return res
+
+    def gen_token(self, *args, **kwargs):
+        """Generate a token at current pos."""
+        return Token(
+            lineno=self.current_lineno, col=self.current_col,
+            *args, **kwargs
+        )
 
     def skip_spaces(self):
         """Skip white spaces."""
@@ -474,6 +479,11 @@ class Tokenizer:
         """Skip a single-line # comment."""
         while self.current_char is not None and self.current_char != '\n':
             self.forward()
+
+    def enter_string(self):
+        """Enter a string literal."""
+        self.string_stack.append(_StrLiteralManager(self))
+        self.in_string_fexpr = False
 
     def handle_long_comment(self):
         # we want to leave current_char on next char after "#",
@@ -487,6 +497,12 @@ class Tokenizer:
             self.forward()
         self.forward()  # skip char "#"
         self.continued_comment = False
+
+    def handle_logical_newline(self):
+        """Generate a logical NEWLINE token and do checks."""
+        if self.last_is_interface:
+            self.error(ErrorType.INTERFACE_PATH_EXPECTED)
+        return self.gen_token(TokenType.new_line)
 
     def handle_indent(self, spaces: int) -> List[Token]:
         """Generate INDENT and DEDENT."""
@@ -681,10 +697,7 @@ class Tokenizer:
             self.forward()  # skip "$"
         elif self.current_char == '$' and peek == '{':
             # formatted expression
-            mgr.add_token(Token(
-                TokenType.dollar_lbrace, lineno=self.current_lineno,
-                col=self.current_col
-            ))
+            mgr.add_token(self.gen_token(TokenType.dollar_lbrace))
             self.forward()  # skip "$"
             self.bracket_stack.append(_BracketFrame(
                 TokenType.lbrace,
@@ -730,3 +743,20 @@ class Tokenizer:
             mgr.finish()
             self.inside_command = None
         return mgr.get_tokens()
+
+    def handle_interface_path(self) -> Token:
+        """Help read an interface path."""
+        ln, col = self.current_lineno, self.current_col
+        # Read as long as current char is in FUNCTION_PATH_CHARS. Note
+        # that Acacia removes support for parenthesis characters.
+        chars = []
+        while (
+            self.current_char in FUNCTION_PATH_CHARS
+            and self.current_char not in ('(', ')')
+        ):
+            chars.append(self.current_char)
+            self.forward()
+        if not chars:
+            self.error(ErrorType.INTERFACE_PATH_EXPECTED)
+        path = ''.join(chars)
+        return Token(TokenType.interface_path, lineno=ln, col=col, value=path)

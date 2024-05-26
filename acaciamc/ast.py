@@ -230,7 +230,8 @@ class ConstFuncData(FuncData):
         assert returns is None or returns.port is not FuncPortType.const
 
 class InterfaceDef(Statement):  # define an interface
-    def __init__(self, path: _List[str], body: _List[Statement], lineno, col):
+    def __init__(self, path: _Union[str, "StrLiteral"],
+                 body: _List[Statement], lineno, col):
         super().__init__(lineno, col)
         self.path = path
         self.body = body

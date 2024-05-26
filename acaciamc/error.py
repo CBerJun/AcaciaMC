@@ -45,6 +45,7 @@ class ErrorType(LocalizedEnum):
     CHAR_AFTER_CONTINUATION = "error.errortype.charaftercontinuation"
     EOF_AFTER_CONTINUATION = "error.errortype.eofaftercontinuation"
     INVALID_DEDENT = "error.errortype.invaliddedent"
+    INTERFACE_PATH_EXPECTED = "error.errortype.interfacepathexpected"
     # Parser
     UNEXPECTED_TOKEN = "error.errortype.unexpectedtoken"
     EMPTY_BLOCK = "error.errortype.emptyblock"
@@ -141,6 +142,11 @@ class ErrorType(LocalizedEnum):
     NEVER_RESULT = "error.errortype.neverresult"
     RESERVED_INTERFACE_PATH = "error.errortype.reservedinterfacepath"
     DUPLICATE_INTERFACE = "error.errortype.duplicateinterface"
+    INTERFACE_PATH_EMPTY = "error.errortype.interfacepathempty"
+    INTERFACE_PATH_SLASH_START = "error.errortype.interfacepathslashstart"
+    INTERFACE_PATH_SLASH_END = "error.errortype.interfacepathslashend"
+    INTERFACE_PATH_DOUBLE_SLASH = "error.errortype.interfacepathdoubleslash"
+    INTERFACE_PATH_INVALID_CHAR = "error.errortype.interfacepathinvalidchar"
     # Compiler
     IO = "error.errortype.io"
     MODULE_NOT_FOUND = "error.errortype.modulenotfound"

@@ -1,9 +1,23 @@
 """Constants for Acacia."""
 
+__all__ = [
+    "INT_MIN", "INT_MAX", "DEFAULT_ANCHOR", "XYZ",
+    "TERMINATOR_CHARS", "FUNCTION_PATH_CHARS",
+    "COLORS", "COLORS_NEW"
+]
+
+from string import ascii_letters, digits
+
 INT_MIN = -2 ** 31
 INT_MAX = 2 ** 31 - 1
 DEFAULT_ANCHOR = "feet"
 XYZ = ("x", "y", "z")
+
+# These characters are not allowed in strings in commands, unless they
+# are quoted.
+TERMINATOR_CHARS = frozenset(" ,@~^/$&\"'!#%+*=[{]}\\|<>`\n")
+# These are the only characters allowed in function paths.
+FUNCTION_PATH_CHARS = frozenset(ascii_letters + digits + ".(-)_/")
 
 COLORS = {
     "black": "0",

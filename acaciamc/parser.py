@@ -431,17 +431,16 @@ class Parser:
 
     def interface_stmt(self):
         """
-        interface_stmt := INTERFACE IDENTIFIER (POINT IDENTIFIER)*
+        interface_stmt := INTERFACE (INTERFACE_PATH | str_literal)
             COLON statement_block
         """
         pos = self.current_pos
         self.eat(TokenType.interface)
-        path = [self.current_token.value]
-        self.eat(TokenType.identifier)
-        while self.current_token.type is TokenType.point:
+        if self.current_token.type is TokenType.interface_path:
+            path = self.current_token.value
             self.eat()
-            path.append(self.current_token.value)
-            self.eat(TokenType.identifier)
+        else:
+            path = self.str_literal()
         self.eat(TokenType.colon)
         stmts = self.statement_block()
         return InterfaceDef(path, stmts, **pos)

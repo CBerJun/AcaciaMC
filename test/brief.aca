@@ -406,8 +406,8 @@ interface a:
 # a.mcfunction)
 
 # The following is generated at b/c.mcfunction
-interface b.c:
-    /say b.c called
+interface b/c:
+    /say b/c called
 
 #* Compatible with the original command system *#
 ## Accessing scoreboards

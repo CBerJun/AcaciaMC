@@ -5,12 +5,12 @@ from enum import Enum
 from typing import List, NamedTuple, Optional, Union, Iterable, Callable, Dict
 import json
 
-_TERMINATOR_CHARS = frozenset(" ,@~^/$&\"'!#%+*=[{]}\\|<>`\n")
+from acaciamc.constants import TERMINATOR_CHARS
 
 def mc_str(s: str) -> str:
     if not s:
         return '""'
-    if any(char in _TERMINATOR_CHARS for char in s):
+    if any(char in TERMINATOR_CHARS for char in s):
         return '"%s"' % "".join(
             "\\\\" if char == "\\" else
             "\\\"" if char == '"' else
@@ -70,7 +70,7 @@ class Cmd(Command):
         # Read command name
         if cmd and not suppress_special_cmd:
             for i, char in enumerate(cmd):
-                if char in _TERMINATOR_CHARS:
+                if char in TERMINATOR_CHARS:
                     break
             name = cmd[:i]
             if name in ("scoreboard", "schedule", "execute", "function",

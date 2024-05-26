@@ -9,6 +9,7 @@ from acaciamc.ast import *
 from acaciamc.error import *
 from acaciamc.objects import *
 from acaciamc.objects.none import ctdt_none
+from acaciamc.constants import FUNCTION_PATH_CHARS
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
 from acaciamc.mccmdgen.mcselector import MCSelector
@@ -459,7 +460,24 @@ class Generator(ASTVisitor):
             self.write_debug('No commands generated')
 
     def visit_InterfaceDef(self, node: InterfaceDef):
-        path = '/'.join(node.path)
+        if isinstance(node.path, str):
+            path = node.path
+        else:
+            s: String = self.visit(node.path)
+            path = s.value
+        # Make sure the path is valid
+        if not path:
+            self.error_c(ErrorType.INTERFACE_PATH_EMPTY)
+        if path.startswith('/'):
+            self.error_c(ErrorType.INTERFACE_PATH_SLASH_START)
+        if path.endswith('/'):
+            self.error_c(ErrorType.INTERFACE_PATH_SLASH_END)
+        if '//' in path:
+            self.error_c(ErrorType.INTERFACE_PATH_DOUBLE_SLASH)
+        for c in path:
+            if c not in FUNCTION_PATH_CHARS:
+                self.error_c(ErrorType.INTERFACE_PATH_INVALID_CHAR, char=c)
+        # Make sure the path is unique and not reserved
         if self.compiler.is_reserved_path(path):
             self.error_c(ErrorType.RESERVED_INTERFACE_PATH, path=path)
         location = self.compiler.lookup_interface(path)
