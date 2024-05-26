@@ -369,6 +369,13 @@ class Result(Statement):  # result xxx
         super().__init__(lineno, col)
         self.value = value
 
+class NewCall(Statement):  # Template.new() or new()
+    def __init__(self, primary: _Optional[Expression],
+                 call_table: CallTable, lineno, col):
+        super().__init__(lineno, col)
+        self.primary = primary
+        self.call_table = call_table
+
 class Literal(Expression):  # a literal constant
     def __init__(self, literal, lineno, col):
         super().__init__(lineno, col)
@@ -448,13 +455,6 @@ class MapDef(Expression):  # a literal compile time map
         super().__init__(lineno, col)
         self.keys = keys
         self.values = values
-
-class NewCall(Expression):  # Template.new()
-    def __init__(self, primary: _Optional[Expression],
-                 call_table: CallTable, lineno, col):
-        super().__init__(lineno, col)
-        self.primary = primary
-        self.call_table = call_table
 
 #############
 ### UTILS ###

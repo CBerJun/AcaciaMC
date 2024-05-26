@@ -192,16 +192,10 @@ class Parser:
             self.eat(TokenType.rbrace)
             return ListDef(items, **pos)
 
-    def new_call(self):
-        """new_call := NEW call_table"""
-        pos = self.current_pos
-        self.eat(TokenType.new)
-        return NewCall(None, self.call_table(), **pos)
-
     def expr_l0(self):
         """
         expr_l0 := (LPAREN expr RPAREN) | literal | identifier
-            | str_literal | self | list | map | new_call
+            | str_literal | self | list | map
         """
         if self.current_token.type in (
             TokenType.integer, TokenType.float_, TokenType.true,
@@ -221,8 +215,6 @@ class Parser:
             return self.self()
         elif self.current_token.type is TokenType.lbrace:
             return self.list_or_map()
-        elif self.current_token.type is TokenType.new:
-            return self.new_call()
         else:
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
 
@@ -232,12 +224,10 @@ class Parser:
             (POINT IDENTIFIER)
             | call_table
             | paren_list_of{LBRACKET, expr, RBRACKET}
-            | (POINT NEW call_table)
         )*
         """
         node = self.expr_l0()
         def _attribute(node: Expression):
-            # make `node` an Attribute
             self.eat(TokenType.point)
             attr = self.current_token.value
             self.eat(TokenType.identifier)
@@ -259,25 +249,22 @@ class Parser:
                 node, subscripts, lineno=node.lineno, col=node.col
             )
 
-        def _new_call(node: Expression):
-            self.eat(TokenType.point)
-            self.eat(TokenType.new)
-            return NewCall(node, self.call_table(), node.lineno, node.col)
-
         # start
         while True:
             if self.current_token.type is TokenType.point:
                 self.peek()
                 if self.next_token.type is TokenType.new:
-                    node = _new_call(node)
-                else:
-                    node = _attribute(node)
+                    # If we find `new` then stop parsing the expression
+                    # `statement` is responsible for parsing that
+                    break
+                node = _attribute(node)
             elif self.current_token.type is TokenType.lparen:
                 node = _call(node)
             elif self.current_token.type is TokenType.lbracket:
                 node = _subscript(node)
             else:
-                return node
+                break
+        return node
 
     def expr_l2(self):
         """expr_l2 := ((PLUS | MINUS) expr_l2) | expr_l1"""
@@ -810,15 +797,21 @@ class Parser:
         self.eat(TokenType.result)
         return Result(self.expr(), **pos)
 
+    def simple_new_stmt(self):
+        """simple_new_stmt := NEW call_table"""
+        pos = self.current_pos
+        self.eat(TokenType.new)
+        return NewCall(None, self.call_table(), **pos)
+
     def statement(self):
         """
         expr_statement := (
             var_def_stmt | auto_var_def_stmt | assign_stmt |
-            aug_assign_stmt | expr_stmt
+            aug_assign_stmt | expr_stmt | expr_new_stmt
         )
         simple_statement := (
             pass_stmt | command_stmt | import_stmt | from_import_stmt |
-            result_stmt
+            result_stmt | simple_new_stmt
         )
         embedded_statement := (
             if_stmt | while_stmt | for_stmt | interface_stmt |
@@ -845,6 +838,7 @@ class Parser:
             TokenType.from_: self.from_import_stmt,
             TokenType.ampersand: self.reference_def_stmt,
             TokenType.result: self.result_stmt,
+            TokenType.new: self.simple_new_stmt
         }
         if self.current_token.type is TokenType.const:
             return self._handle_const()
@@ -857,7 +851,7 @@ class Parser:
         if stmt_method:
             return stmt_method()
 
-        # Other statements that starts with an expression
+        # Other statements that start with an expression
         pos = self.current_pos
         expr = self.expr()
         AUG_ASSIGN = {
@@ -896,9 +890,18 @@ class Parser:
             if not isinstance(expr, Identifier):
                 self.error(ErrorType.INVALID_VARDEF_STMT, **pos)
             node = AutoVarDef(expr.name, self.expr(), **pos)
-        else:  # just an expr
+        else:  # just an expr, or a new statement
             # expr_stmt := expr
-            node = ExprStatement(expr, **pos)
+            # expr_new_stmt := expr POINT NEW call_table
+            node = None
+            if self.current_token.type is TokenType.point:
+                self.peek()
+                if self.next_token.type is TokenType.new:
+                    self.eat()
+                    self.eat()
+                    node = NewCall(expr, self.call_table(), **pos)
+            if node is None:
+                node = ExprStatement(expr, **pos)
         self.eat(TokenType.new_line)
         return node
 

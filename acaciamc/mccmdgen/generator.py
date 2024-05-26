@@ -969,6 +969,32 @@ class Generator(ASTVisitor):
             assert self.ctx.function_state == FUNC_NONE
             self.error_c(ErrorType.RESULT_OUT_OF_SCOPE)
 
+    def visit_NewCall(self, node: NewCall):
+        if self.ctx.entity_new_data is None:
+            self.error_c(ErrorType.NEW_OUT_OF_SCOPE)
+        if node.primary is None:
+            primary = self.compiler.base_template
+        else:
+            primary: AcaciaExpr = self.visit(node.primary)
+            if not isinstance(primary, EntityTemplate):
+                self.error_c(ErrorType.INVALID_ETEMPLATE,
+                             got=primary.data_type)
+        args, keywords = self.visit(node.call_table)
+        try:
+            commands = primary.method_new(
+                self.compiler, *self.ctx.entity_new_data, args, keywords
+            )
+        except Error as err:
+            s = primary.method_new_source
+            err.add_frame(ErrFrame(
+                self.node_location(node),
+                localize("generator.visit.newcall.tracemsg") % primary.name,
+                note = None if s is None else
+                    localize("generator.visit.newcall.tracenote") % s
+            ))
+            raise
+        self.current_file.extend(commands)
+
     # --- EXPRESSION VISITORS ---
     # literal
 
@@ -1228,32 +1254,3 @@ class Generator(ASTVisitor):
         return self.call_function(
             getitem, args, {}, location=self.node_location(node)
         )
-
-    # `new`
-
-    def visit_NewCall(self, node: NewCall):
-        if self.ctx.entity_new_data is None:
-            self.error_c(ErrorType.NEW_OUT_OF_SCOPE)
-        if node.primary is None:
-            primary = self.compiler.base_template
-        else:
-            primary: AcaciaExpr = self.visit(node.primary)
-            if not isinstance(primary, EntityTemplate):
-                self.error_c(ErrorType.INVALID_ETEMPLATE,
-                             got=primary.data_type)
-        args, keywords = self.visit(node.call_table)
-        try:
-            commands = primary.method_new(
-                self.compiler, *self.ctx.entity_new_data, args, keywords
-            )
-        except Error as err:
-            s = primary.method_new_source
-            err.add_frame(ErrFrame(
-                self.node_location(node),
-                localize("generator.visit.newcall.tracemsg") % primary.name,
-                note = None if s is None else
-                    localize("generator.visit.newcall.tracenote") % s
-            ))
-            raise
-        self.current_file.extend(commands)
-        return NoneLiteral()
