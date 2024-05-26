@@ -145,6 +145,8 @@ def get_config(args) -> Config:
                 raise ValueError
         except ValueError:
             fatal(localize("cli.getconfig.invalidmcversion") % args.mc_version)
+        if t < (1, 19, 50):
+            fatal(localize("cli.getconfig.mcversiontooold") % args.mc_version)
         kwds["mc_version"] = t
     if args.max_inline_file_size is not None:
         if args.max_inline_file_size < 0:
