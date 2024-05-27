@@ -363,48 +363,52 @@ class Tokenizer:
             elif self.current_char == '"':
                 self.forward()  # skip '"'
                 self.enter_string()
-            else:  ## 2-char token
+            else:
                 ok = False
             if ok:
                 continue
+            ## try two-char token
             peek = self.peek()
-            twochars = self.current_char + peek
-            try:
-                token_type = TokenType(twochars)
-            except ValueError:
-                ## try 1-char token then
+            if peek is not None:
+                twochars = self.current_char + peek
                 try:
-                    token_type = TokenType(self.current_char)
+                    token_type = TokenType(twochars)
                 except ValueError:
-                    ## does not match any tokens
-                    self.error(ErrorType.INVALID_CHAR,
-                               char=self.current_char)
+                    pass
                 else:
-                    if token_type in BRACKETS:
-                        self.bracket_stack.append(_BracketFrame(
-                            token_type,
-                            (self.current_lineno, self.current_col)
-                        ))
-                    elif token_type in RB2LB:
-                        if not self.bracket_stack:
-                            self.error(ErrorType.UNMATCHED_BRACKET,
-                                       char=self.current_char)
-                        expect = RB2LB[token_type]
-                        got_f = self.bracket_stack.pop()
-                        got = got_f.type
-                        if got is not expect:
-                            self.error(ErrorType.UNMATCHED_BRACKET_PAIR,
-                                       open=got.value, close=token_type.value)
-                        if got is TokenType.lbrace:
-                            if got_f.cmd_fexpr:
-                                self.in_command_fexpr = False
-                            elif got_f.str_fexpr:
-                                self.in_string_fexpr = False
+                    # It is indeed a two-char token!
                     res.append(self.gen_token(token_type))
                     self.forward()
+                    self.forward()
+                    continue
+            ## try one-char token
+            try:
+                token_type = TokenType(self.current_char)
+            except ValueError:
+                # We've run out of possibilities.
+                self.error(ErrorType.INVALID_CHAR, char=self.current_char)
             else:
+                if token_type in BRACKETS:
+                    self.bracket_stack.append(_BracketFrame(
+                        token_type,
+                        (self.current_lineno, self.current_col)
+                    ))
+                elif token_type in RB2LB:
+                    if not self.bracket_stack:
+                        self.error(ErrorType.UNMATCHED_BRACKET,
+                                   char=self.current_char)
+                    expect = RB2LB[token_type]
+                    got_f = self.bracket_stack.pop()
+                    got = got_f.type
+                    if got is not expect:
+                        self.error(ErrorType.UNMATCHED_BRACKET_PAIR,
+                                   open=got.value, close=token_type.value)
+                    if got is TokenType.lbrace:
+                        if got_f.cmd_fexpr:
+                            self.in_command_fexpr = False
+                        elif got_f.str_fexpr:
+                            self.in_string_fexpr = False
                 res.append(self.gen_token(token_type))
-                self.forward()
                 self.forward()
         # Now self.current_char is either '\n', '\\' or None (EOF)
         if (
