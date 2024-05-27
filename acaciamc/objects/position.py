@@ -16,7 +16,6 @@ from .types import Type
 from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
 from .functions import BinaryFunction
 from .rotation import RotDataType
-from .string import String
 
 if TYPE_CHECKING:
     from .rotation import Rotation
@@ -30,20 +29,12 @@ ctdt_position = CTDataType("Pos")
 
 class PosType(Type):
     def do_init(self):
-        self.attribute_table.set("OVERWORLD", String("overworld"))
-        self.attribute_table.set("NETHER", String("nether"))
-        self.attribute_table.set("THE_END", String("the_end"))
-        self.attribute_table.set("FEET", String("feet"))
-        self.attribute_table.set("EYES", String("eyes"))
-        self.attribute_table.set("X", String("x"))
-        self.attribute_table.set("Y", String("y"))
-        self.attribute_table.set("Z", String("z"))
         @cmethod_of(self, "__new__")
         class _new(metaclass=axe.OverloadChopped):
             """
-            Pos(entity, [str]):
-                position of entity. `str` is anchor (`Pos.EYES` or
-                `Pos.FEET`).
+            Pos(entity, literal["feet", "eyes"] = "feet"):
+                position of entity.
+                Second argument is the anchor.
             Pos(int-literal, int-literal, int-literal):
                 absolute position.
                 If integer is provided for x and z, they are increased
@@ -133,11 +124,11 @@ class Position(ConstExprCombined, ImmutableMixin):
         @axe.arg("axis", axe.LiteralString(), default="xyz")
         @transform_immutable(self)
         def _align(self: Position, compiler, axis: str):
-            """.align(axis: str = "xyz"): round position on given axis
-            using floor method. The axis must be a combination of "x", "y",
-            and "z". For example,
-            `Pos(10.5, 9.8, 10.5).align(Pos.X + Pos.Z)` gives
-            `Pos(10, 9.8, 10)`.
+            """
+            .align(axis: str = "xyz"): round position on given axis down
+            to the nearest integer. The axis must be a combination of
+            "x", "y" and "z". For example,
+            `Pos(10.5, 9.8, 10.5).align("xz")` gives `Pos(10, 9.8, 10)`.
             """
             axis_set = set(axis)
             if len(axis) != len(axis_set) or not axis_set.issubset(XYZ):
