@@ -89,6 +89,10 @@ cli.getconfig.invalidmcversion = invalid Minecraft version: %s
 cli.getconfig.mcversiontooold = Minecraft version is too low: %s, at least 1.19.50 expected
 cli.getconfig.maxinlinetoolow = max inline file size must >= 0: %s
 
+## try_rmtree ##
+
+cli.tryrmtree.failure = failed to remove {path}: {message}
+
 ## run ##
 
 cli.run.filenotfound = file not found: %s

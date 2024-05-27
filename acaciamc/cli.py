@@ -163,6 +163,18 @@ def get_config(args) -> Config:
         kwds["internal_folder"] = args.internal_folder
     return Config(**kwds)
 
+def try_rmtree(path: str):
+    """
+    Delete `path` if this path exists.
+    Report any error as `fatal`.
+    """
+    if os.path.exists(path):
+        try:
+            shutil.rmtree(path)
+        except OSError as e:
+            fatal(localize("cli.tryrmtree.failure")
+                  .format(path=path, message=e.strerror))
+
 def run(args):
     if not os.path.exists(args.file):
         fatal('file not found: %s' % args.file)
@@ -173,16 +185,9 @@ def run(args):
         out_path = os.path.realpath(args.out)
     else:  # default out path: ./<name of source>.acaout
         out_path, _ = os.path.splitext(args.file)
-        out_path = os.path.realpath(out_path)
-        out_path += '.acaout'
+        out_path = os.path.realpath(out_path) + '.acaout'
 
     cfg = get_config(args)
-
-    if args.override_old:
-        # remove old output directory
-        rm_path = os.path.join(out_path, cfg.root_folder)
-        if os.path.exists(rm_path):
-            shutil.rmtree(rm_path)
 
     if not os.path.exists(out_path):
         out_up = os.path.dirname(out_path)
@@ -192,6 +197,10 @@ def run(args):
 
     try:
         compiler = Compiler(args.file, cfg)
+        if args.override_old:
+            # Remove old output directory if -u is set and compilation
+            # succeeded.
+            try_rmtree(os.path.join(out_path, cfg.root_folder))
         compiler.output(out_path)
     except CompileError as err:
         fatal(err.full_msg())
@@ -199,7 +208,7 @@ def run(args):
         import traceback
         if args.verbose:
             traceback.print_exc()
-            print()
+            print(file=sys.stderr)
             fatal(localize("cli.run.aboveunexpectederror"))
         else:
             fatal(
