@@ -179,28 +179,17 @@ def default_entity_new(
     compiler, template_id: AcaciaExpr, tag: str, args, keywords
 ):
     @axe.chop
-    @axe.arg("type", axe.Nullable(axe.LiteralString()),
-            rename="type_", default=None)
-    @axe.arg("pos", axe.Nullable(axe.Typed(PosDataType)), default=None)
+    @axe.arg("type", axe.LiteralString(), rename="e_type")
+    @axe.arg("pos", PosDataType, rename="e_pos")
     @axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
     @axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
     def new_entity(
-        compiler: "Compiler", type_: Optional[str], pos: Optional["Position"],
+        compiler: "Compiler", e_type: str, e_pos: "Position",
         name: Optional[str], event: Optional[str]
     ):
-        e_type = compiler.cfg.entity_type
-        e_pos = ([], compiler.cfg.entity_pos)
-        e_event = "*"
-        e_name = ""
+        e_event = "*" if event is None else event
+        e_name = "" if name is None else f" {cmds.mc_str(name)}"
         e_rot = " 0 0" if compiler.cfg.mc_version >= (1, 19, 70) else ""
-        if type_ is not None:
-            e_type = type_
-        if pos is not None:
-            e_pos = (pos.context, "~ ~ ~")
-        if event is not None:
-            e_event = event
-        if name is not None:
-            e_name = f" {cmds.mc_str(name)}"
         return resultlib.commands([
             cmds.Execute(
                 [cmds.ExecuteEnv("at", SUMMON_AT)],
@@ -210,7 +199,7 @@ def default_entity_new(
                 [cmds.ExecuteEnv("at", SUMMON_AT)],
                 f"tag @e[x=~,y={SUMMON_Y},z=~,dx=0,dy=0,dz=0] add {tag}"
             ),
-            cmds.Execute(e_pos[0], f"tp @e[tag={tag}] {e_pos[1]}"),
+            cmds.Execute(e_pos.context, f"tp @e[tag={tag}] ~ ~ ~"),
             *template_id.export(
                 IntVar(cmds.ScbSlot(
                     f"@e[tag={tag}]", compiler.etemplate_id_scb

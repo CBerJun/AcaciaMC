@@ -62,9 +62,7 @@ f()
 
 #* Importing a module written in Python *#
 import .test_mod
-entity X:
-    pass
-ent := X()
+ent := Engroup[Entity]()
 test_mod.foo(x, g=ent, z="\u0030", k=10, m="ss", l=1)
 test_mod.bar(1)
 test_mod.extbar()

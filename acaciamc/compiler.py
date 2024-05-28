@@ -83,10 +83,6 @@ class Config(NamedTuple):
     main_file: str = 'main'
     # Prefix of scoreboard that Acacia uses to hold data
     scoreboard: str = 'acacia'
-    # Default type of entity spawned
-    entity_type: str = 'armor_stand'
-    # Default position to spawn entity
-    entity_pos: str = '~ ~ ~'
     # Prefix of entity tags
     entity_tag: str = 'acacia'
     # Minecraft version
