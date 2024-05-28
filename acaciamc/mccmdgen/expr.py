@@ -133,6 +133,17 @@ class AcaciaExpr:
         """
         raise InvalidOpError
 
+    def implicitcast(self, type_: "DataType", compiler: "Compiler") \
+            -> "AcaciaExpr":
+        """
+        Perform implicit type conversion to `type_`. The retuned
+        expression need to be of `type_` type.
+        NOTE This conversion happens only when this expression is used
+        as an argument in a call to a function that is written in
+        Acacia.
+        """
+        raise InvalidOpError
+
     def add(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
         raise InvalidOpError
     def sub(self, other: "AcaciaExpr", compiler: "Compiler") -> "AcaciaExpr":
@@ -245,13 +256,13 @@ class ConstExprCombined(ConstExpr, CTObj):
             'unarypos', 'unaryneg', 'unarynot'
         ):
             rtfunc = getattr(cls, meth)
-            defrt = getattr(AcaciaExpr, meth)
-            if rtfunc is not defrt:
+            defaultrt = getattr(AcaciaExpr, meth)
+            if rtfunc is not defaultrt:
                 continue  # already defined
             cmeth = f"c{meth}"
             ctfunc = getattr(cls, cmeth)
-            defct = getattr(CTObj, cmeth)
-            if ctfunc is not defct:
+            defaultct = getattr(CTObj, cmeth)
+            if ctfunc is not defaultct:
                 setattr(cls, meth, ct2rt(ctfunc))
 
     def __init__(self, *args, **kwds):

@@ -45,6 +45,9 @@ class CTObj:
     def to_rt(self) -> "ConstExpr":
         raise InvalidOpError
 
+    def cimplicitcast(self, type_: "CTDataType") -> "CTExpr":
+        raise InvalidOpError
+
     def cadd(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
     def csub(self, other: "CTObj") -> "CTExpr":

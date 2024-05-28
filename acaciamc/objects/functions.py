@@ -84,7 +84,13 @@ DT = TypeVar("DT")
 IT = TypeVar("IT")
 
 class ArgumentHandler(Generic[IT, T, DT]):
-    """A tool to match function arguments against a given definition."""
+    """
+    A tool to match function arguments against a given definition.
+    `IT`: input argument type
+    `T`: the main argument type, used in output and type checking
+    `DT`: the type of the data type, used in type checking
+    `T` and `DT` should only accept non-None values.
+    """
     def __init__(self, args: List[str], arg_types: Dict[str, Optional[DT]],
                  arg_defaults: Dict[str, Optional[T]]):
         """`args`, `arg_types` and `arg_defaults` decide the expected
@@ -101,15 +107,28 @@ class ArgumentHandler(Generic[IT, T, DT]):
         self.ARG_LEN = len(self.args)
 
     def preconvert(self, arg: str, value: IT) -> T:
-        # Can be omitted if `IT` is same as `T`.
+        """
+        Convert input arguments of `IT` type to `T` type.
+        Can be omitted only if `IT` is same as `T`.
+        """
         return value
 
-    def type_check(self, arg: str, value: T, type_: DT) -> None:
+    def type_check(self, arg: str, value: T, type_: DT) -> Optional[T]:
+        """
+        Must be implemented by subclasses to check if the `value` is of
+        `type_` type. If this returns successfully with `None`, then the
+        value is accepted. If this returns successfully with a value of
+        `T` type, then that value is used instead as the argument value.
+        If the type check fails, this should not return.
+        """
         raise NotImplementedError
 
-    def __type_check(self, arg: str, value: T, type_: Optional[DT]) -> None:
-        if type_ is not None:
-            self.type_check(arg, value, type_)
+    def __type_check(self, arg: str, value: T, type_: Optional[DT]) -> T:
+        if type_ is None:
+            return value
+        else:
+            r = self.type_check(arg, value, type_)
+            return value if r is None else r
 
     def match(self, args: List[IT], keywords: Dict[str, IT]) -> Dict[str, T]:
         """Match the expected pattern with given call arguments.
@@ -122,8 +141,7 @@ class ArgumentHandler(Generic[IT, T, DT]):
         for i, value in enumerate(args):
             arg = self.args[i]
             value = self.preconvert(arg, value)
-            self.__type_check(arg, value, self.arg_types[arg])
-            res[arg] = value
+            res[arg] = self.__type_check(arg, value, self.arg_types[arg])
         # keyword
         for arg, value in keywords.items():
             if arg not in self.args:
@@ -131,8 +149,7 @@ class ArgumentHandler(Generic[IT, T, DT]):
             if res[arg] is not None:
                 raise Error(ErrorType.ARG_MULTIPLE_VALUES, arg=arg)
             value = self.preconvert(arg, value)
-            self.__type_check(arg, value, self.arg_types[arg])
-            res[arg] = value
+            res[arg] = self.__type_check(arg, value, self.arg_types[arg])
         # if any args are missing use default if exists, else error
         for arg, value in res.copy().items():
             if value is None:
@@ -143,12 +160,27 @@ class ArgumentHandler(Generic[IT, T, DT]):
         return res
 
 class AcaciaArgHandler(ArgumentHandler[AcaciaExpr, AcaciaExpr, "DataType"]):
+    def __init__(
+        self, args: List[str],
+        arg_types: Dict[str, Optional["DataType"]],
+        arg_defaults: Dict[str, Optional[AcaciaExpr]],
+        compiler: "Compiler"
+    ):
+        super().__init__(args, arg_types, arg_defaults)
+        self.compiler = compiler
+
     def type_check(self, arg: str, value: AcaciaExpr, tp: "DataType"):
         if not tp.matches(value.data_type):
-            raise Error(
-                ErrorType.WRONG_ARG_TYPE, arg=arg,
-                expect=str(tp), got=str(value.data_type)
-            )
+            # Try implicit type conversion
+            try:
+                v = value.implicitcast(tp, self.compiler)
+            except InvalidOpError:
+                raise Error(
+                    ErrorType.WRONG_ARG_TYPE, arg=arg,
+                    expect=str(tp), got=str(value.data_type)
+                )
+            else:
+                return v
 
 class FunctionDataType(DefaultDataType):
     name = 'function'
@@ -166,7 +198,9 @@ class AcaciaFunction(ConstExprCombined, AcaciaCallable):
         super().__init__(FunctionDataType())
         self.name = name
         self.result_type = returns
-        self.arg_handler = AcaciaArgHandler(args, arg_types, arg_defaults)
+        self.arg_handler = AcaciaArgHandler(
+            args, arg_types, arg_defaults, compiler
+        )
         # Create a `VarValue` for every args according to their types
         # and store them as dict at `self.arg_vars`.
         self.arg_vars: Dict[str, VarValue] = {
@@ -215,7 +249,9 @@ class InlineFunction(ConstExprCombined, AcaciaCallable):
         self.name = name
         self.result_type = returns
         self.result_port = result_port
-        self.arg_handler = AcaciaArgHandler(args, arg_types, arg_defaults)
+        self.arg_handler = AcaciaArgHandler(
+            args, arg_types, arg_defaults, owner.compiler
+        )
         self.arg_ports = arg_ports
         # For error hint
         if source is not None:
@@ -290,8 +326,14 @@ class CTArgHandler(ArgumentHandler[
     def type_check(self, arg: str, value: CTExpr, dt: "CTDataType"):
         v = abs(value)
         if not dt.is_typeof(v):
-            raise Error(ErrorType.WRONG_ARG_TYPE, arg=arg,
-                        expect=dt.name, got=v.cdata_type.name)
+            # Try implicit type conversion
+            try:
+                new_value = value.cimplicitcast(dt)
+            except InvalidOpError:
+                raise Error(ErrorType.WRONG_ARG_TYPE, arg=arg,
+                            expect=dt.name, got=v.cdata_type.name)
+            else:
+                return new_value
 
 class AcaciaCTFunction(ConstExprCombined, AcaciaCallable, CTCallable):
     cdata_type = ctdt_function
