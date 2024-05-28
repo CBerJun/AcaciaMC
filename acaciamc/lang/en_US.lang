@@ -245,10 +245,6 @@ axe.preconverterror.notrt = argument {arg} is expecting a value that exists at r
 
 axe.converter.std.literalint = int (literal)
 
-## literalfloat ##
-
-axe.converter.std.literalfloat = float (accepts int literal)
-
 ## literalfbool ##
 
 axe.converter.std.literalbool = bool (literal)

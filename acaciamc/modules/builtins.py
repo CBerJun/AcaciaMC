@@ -103,6 +103,7 @@ def acacia_build(compiler: "Compiler"):
         ('map', MapType),
         ('AbsPos', AbsPosType),
         ('Any', AnyType),
+        ('float', FloatType),
     ):
         res[name] = cls()
     res['ExternEngroup'] = ExternEGroupType(compiler)

@@ -214,6 +214,12 @@ class IntLiteral(ConstExprCombined):
             return COMPOP2PYOP[op](self.value, other.value)
         raise InvalidOpError
 
+    def implicitcast(self, type_, compiler):
+        from .float_ import FloatDataType, Float
+        if type_.matches_cls(FloatDataType):
+            return Float(float(self.value))
+        raise InvalidOpError
+
     ## UNARY OPERATORS
 
     def cunarypos(self):

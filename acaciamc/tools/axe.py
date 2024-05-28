@@ -431,7 +431,7 @@ class LiteralFloat(UMultityped):
         )
 
     def get_show_name(self) -> str:
-        return localize("axe.converter.std.literalfloat")
+        return objects.float_.ctdt_float.name
 
     def uconvert(self, origin) -> float:
         origin = super().uconvert(origin)
