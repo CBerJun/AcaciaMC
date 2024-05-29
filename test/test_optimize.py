@@ -52,7 +52,7 @@ f1.write(cmds.Execute(
     cmds.InvokeFunction(f4)
 ))
 f1.write(cmds.RawtextOutput(
-    "tellraw @a", [{"score": {"name": v2.target, "objective": v2.objective}}]
+    "tellraw @a", cmds.Rawtext([cmds.RawtextScore(v2)])
 ))
 f1.write(cmds.ScbRandom(v2, 10, 20))
 

@@ -458,29 +458,94 @@ def execute(subcmds: List[_ExecuteSubcmd], runs: Union[Command, str]):
             return Comment(runs)
     return Execute(subcmds, runs)
 
+class RawtextComponent(metaclass=ABCMeta):
+    """
+    An abstract class that represents a JSON rawtext component.
+    This class is meant to be immutable, i.e. the result of `resolve`
+    should always be the same for a given instance.
+    """
+
+    @abstractmethod
+    def resolve(self) -> dict:
+        pass
+
+class RawtextText(RawtextComponent):
+    def __init__(self, text: str):
+        self.text = text
+
+    def resolve(self) -> dict:
+        return {"text": self.text}
+
+class RawtextTranslate(RawtextComponent):
+    def __init__(self, value: str,
+                 args: Union[None, "Rawtext", List[str]] = None):
+        self.value = value
+        self.args = args
+
+    def resolve(self) -> dict:
+        res = {"translate": self.value}
+        if isinstance(self.args, Rawtext):
+            res["with"] = self.args.resolve()
+        elif isinstance(self.args, list):
+            res["with"] = self.args
+        return res
+
+class RawtextScore(RawtextComponent):
+    def __init__(self, slot: ScbSlot):
+        self.slot = slot
+
+    def resolve(self) -> dict:
+        return {"score": {"name": self.slot.target,
+                          "objective": self.slot.objective}}
+
+class RawtextSelector(RawtextComponent):
+    def __init__(self, selector: str):
+        self.selector = selector
+
+    def resolve(self) -> dict:
+        return {"selector": self.selector}
+
+class Rawtext(List[RawtextComponent]):
+    """An list subclass that represents a JSON rawtext."""
+
+    def resolve(self) -> dict:
+        """Convert to JSON. Caller owns the result."""
+        # Optimize: Merge adjacent text components.
+        res = []
+        texts = []
+        def _dump():
+            if texts:
+                s = "".join(texts)
+                if s:
+                    res.append(RawtextText(s).resolve())
+                texts.clear()
+        for c in self:
+            if isinstance(c, RawtextText):
+                texts.append(c.text)
+            else:
+                _dump()
+                res.append(c.resolve())
+        _dump()
+        return {"rawtext": res}
+
 class RawtextOutput(Command):
-    def __init__(self, prefix: str, components: List[dict]):
+    def __init__(self, prefix: str, rawtext: Rawtext):
         self.prefix = prefix
+        self.rawtext = rawtext
+        # Check what score slots are used in the rawtext.
         self.score_slots: List[ScbSlot] = []
-        self.components = []
-        last_text: List[str] = []
-        for component in components:
-            if "text" in component:
-                last_text.append(component["text"])
-                continue
-            if last_text:
-                self.components.append({"text": "".join(last_text)})
-                last_text.clear()
-            self.components.append(component)
-            if "score" in component:
-                d = component["score"]
-                self.score_slots.append(ScbSlot(d["name"], d["objective"]))
-        if last_text:
-            self.components.append({"text": "".join(last_text)})
+        def _visit(rawtext: Rawtext):
+            for c in rawtext:
+                if isinstance(c, RawtextScore):
+                    self.score_slots.append(c.slot)
+                elif (isinstance(c, RawtextTranslate)
+                        and isinstance(c.args, Rawtext)):
+                    _visit(c.args)
+        _visit(self.rawtext)
 
     def resolve(self) -> str:
         return "%s %s" % (
-            self.prefix, json.dumps({"rawtext": self.components})
+            self.prefix, json.dumps(self.rawtext.resolve())
         )
 
     def scb_did_read(self, slot: ScbSlot) -> bool:

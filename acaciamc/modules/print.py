@@ -1,7 +1,6 @@
 """print - String formatting and printing module."""
 
 from typing import List, Optional, Tuple, TYPE_CHECKING
-from copy import deepcopy
 
 from acaciamc.objects import *
 from acaciamc.mccmdgen.expr import *
@@ -28,7 +27,7 @@ class ArgFString(axe.Multityped):
     def convert(self, origin: AcaciaExpr) -> "FString":
         origin = super().convert(origin)
         if isinstance(origin, String):
-            fstr = FString([], [{"text": origin.value}])
+            fstr = FString([], [cmds.RawtextText(origin.value)])
         else:
             assert isinstance(origin, FString)
             fstr = origin
@@ -48,8 +47,7 @@ class _FStrParser:
         self.keywords = keywords
         self.compiler = compiler
         self.dependencies = []
-        self.json = []  # the result
-        self.text_cache: List[str] = []
+        self.rawtext = cmds.Rawtext()
 
     def next_char(self) -> Optional[str]:
         """Move to next char."""
@@ -59,23 +57,14 @@ class _FStrParser:
         self.ptr += 1
         return c
 
-    def _dump_text(self):
-        if self.text_cache:
-            self.json.append({"text": "".join(self.text_cache)})
-            self.text_cache.clear()
-
     def add_text(self, text: str):
-        self.text_cache.append(text)
+        self.rawtext.append(cmds.RawtextText(text))
 
     def add_score(self, slot: cmds.ScbSlot):
-        self._dump_text()
-        self.json.append({
-            "score": {"objective": slot.objective, "name": slot.target}
-        })
+        self.rawtext.append(cmds.RawtextScore(slot))
 
     def add_expr(self, expr: AcaciaExpr):
         """Format an expression to string."""
-        self._dump_text()
         if expr.data_type.matches_cls(IntDataType):
             if isinstance(expr, IntLiteral):
                 # optimize for literals
@@ -95,7 +84,7 @@ class _FStrParser:
         elif isinstance(expr, String):
             self.add_text(expr.value)
         elif isinstance(expr, FString):
-            self.json.extend(expr.json)
+            self.rawtext.extend(expr.rawtext)
             self.dependencies.extend(expr.dependencies)
         else:
             raise _FStrError(
@@ -163,8 +152,7 @@ class _FStrParser:
                 continue
             # 3. Handle the `expr` we got
             self.add_expr(expr)
-        self._dump_text()
-        return self.dependencies, self.json
+        return self.dependencies, self.rawtext
 
 class FStringDataType(DefaultDataType):
     name = 'fstring'
@@ -175,24 +163,26 @@ class FString(ConstExprCombined):
     """A formatted string in JSON format."""
     cdata_type = ctdt_fstring
 
-    def __init__(self, dependencies: List[str], json: List[dict]):
-        # dependencies: commands to run before json rawtext is used
-        # json: JSON rawtext without {"rawtext": ...}
+    def __init__(self, dependencies: List[str],
+                 components: List[cmds.RawtextComponent]):
+        """
+        dependencies: commands to run before json rawtext is used
+        components: rawtext components
+        """
         super().__init__(FStringDataType())
         self.dependencies = dependencies
-        self.json = json
+        self.rawtext = cmds.Rawtext(components)
 
     def copy(self):
-        return FString(self.dependencies.copy(), deepcopy(self.json))
+        return FString(self.dependencies.copy(), self.rawtext.copy())
 
     def cadd(self, other):
-        # connect strings
+        """Concatenate formatted strings."""
         res = self.copy()
         if isinstance(other, String):
-            res.json.append({"text": other.value})
+            res.rawtext.append(cmds.RawtextText(other.value))
         elif isinstance(other, FString):
-            # connect json
-            res.json.extend(other.json)
+            res.rawtext.extend(other.rawtext)
         else:
             unreachable()
         return res
@@ -223,11 +213,11 @@ def _format(compiler, pattern: str, args, kwds):
      format("Val1: %0; Val2: %{value}; Name: %{1}", val1, x, value=val2)
     """
     try:
-        dependencies, json = _FStrParser(pattern, args, kwds, compiler).parse()
+        dependencies, rawtext = \
+            _FStrParser(pattern, args, kwds, compiler).parse()
     except _FStrError as err:
         raise Error(ErrorType.ANY, message=str(err))
-    # scan pattern
-    return FString(dependencies, json)
+    return FString(dependencies, rawtext)
 
 @axe.chop
 @axe.arg("key", axe.LiteralString())
@@ -236,12 +226,13 @@ def _translate(compiler, key: str):
     Return an fstring that uses the given localization key.
     Example: format("Give me %0!", translate("item.diamond.name"))
     """
-    return FString([], [{"translate": key}])
+    return FString([], [cmds.RawtextTranslate(key)])
 
-class _FontComponent(dict):
+class _FontComponent(cmds.RawtextText):
+    """A utility component used by `with_font`."""
+
     def __init__(self, text: str, label: str):
-        super().__init__()
-        self["text"] = text
+        super().__init__(text)
         self.label = label
 
 COLOR_DEFAULT = "default"
@@ -295,8 +286,8 @@ def _with_font(compiler: "Compiler", text: FString, color: str,
     scopes: List[Tuple[int, int]] = []  # [start, end)
     start_i = 0
     start_levels = 0
-    json_len = len(res.json)
-    for i, component in enumerate(res.json):
+    length = len(res.rawtext)
+    for i, component in enumerate(res.rawtext):
         if isinstance(component, _FontComponent):
             if component.label == "start":
                 start_levels += 1
@@ -305,17 +296,17 @@ def _with_font(compiler: "Compiler", text: FString, color: str,
                     start_i = -1
             if component.label == "end":
                 start_levels -= 1
-                if start_levels == 0 and i != json_len - 1:
+                if start_levels == 0 and i != length - 1:
                     start_i = i + 1
     if start_levels:
         raise ValueError("Unclosed font scopes")
     if start_i != -1:
-        scopes.append((start_i, json_len))
+        scopes.append((start_i, length))
     scopes.reverse()
     fmt_code = "".join(fmts)
     for start_i, end_i in scopes:
-        res.json.insert(end_i, _FontComponent("\xA7r", "end"))
-        res.json.insert(start_i, _FontComponent(fmt_code, "start"))
+        res.rawtext.insert(end_i, _FontComponent("\xA7r", "end"))
+        res.rawtext.insert(start_i, _FontComponent(fmt_code, "start"))
     return res
 
 ## For printing
@@ -333,7 +324,7 @@ def _tell(compiler, text: FString, target: Optional["MCSelector"]):
     else:
         target_str = target.to_str()
     commands.extend(text.dependencies)
-    commands.append(cmds.RawtextOutput("tellraw %s" % target_str, text.json))
+    commands.append(cmds.RawtextOutput(f"tellraw {target_str}", text.rawtext))
     return resultlib.commands(commands)
 
 # Title modes
@@ -381,7 +372,7 @@ def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
     ## titleraw
     commands.extend(text.dependencies)
     commands.append(
-        cmds.RawtextOutput('titleraw %s %s' % (target_str, mode), text.json)
+        cmds.RawtextOutput(f'titleraw {target_str} {mode}', text.rawtext)
     )
     ## reset config
     if conf != _DEF_TITLE_CONFIG:
