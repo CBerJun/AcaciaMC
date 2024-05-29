@@ -6,7 +6,7 @@ from acaciamc.objects import *
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.mccmdgen.utils import unreachable
+from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.error import *
 from acaciamc.tools import axe, resultlib
 from acaciamc.constants import COLORS, COLORS_NEW
@@ -184,7 +184,7 @@ class FString(ConstExprCombined):
         elif isinstance(other, FString):
             res.rawtext.extend(other.rawtext)
         else:
-            unreachable()
+            raise InvalidOpError
         return res
 
     cradd = cadd
