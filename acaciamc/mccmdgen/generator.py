@@ -353,9 +353,9 @@ class Generator(ASTVisitor):
             if isinstance(section, str):
                 res.append(section)
             else:
-                expr = self.visit(section)
+                expr: AcaciaExpr = self.visit(section)
                 try:
-                    value = expr.cmdstr()
+                    value = expr.stringify()
                 except InvalidOpError:
                     self.error_node(section, ErrorType.INVALID_FEXPR)
                 res.append(value)

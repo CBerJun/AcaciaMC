@@ -52,9 +52,9 @@ class AcaciaExpr:
        the objects of this type.
        To make your object callable in Acacia, subclass `AcaciaCallable`
        and implement `call` method.
-       `cmdstr` is a special method that returns the string
+       `stringify` is a special method that returns the string
        representation of this expression used in raw command
-       substitution.
+       substitution and string interpolation.
     Extra things for "storable" types to implement:
      - at least one (usually 1) class that is a subclass of `VarValue`,
        to represent this kind of value that is stored in Minecraft.
@@ -96,10 +96,10 @@ class AcaciaExpr:
         """
         raise NotImplementedError
 
-    def cmdstr(self) -> str:
+    def stringify(self) -> str:
         """Return a string representation of this expression, used in
-        raw commands. If not implemented, then the object can not be
-        formatted in a command.
+        raw commands and string interpolations. If not implemented, then
+        the object can not be used for those purposes.
         """
         raise InvalidOpError
 
@@ -275,7 +275,7 @@ class ConstExprCombined(ConstExpr, CTObj):
     def to_rt(self):
         return self
 
-    def cmdstr(self):
+    def stringify(self):
         return self.cstringify()
 
     def compare(self, op: "Operator", other: AcaciaExpr, compiler):

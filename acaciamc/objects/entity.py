@@ -47,7 +47,7 @@ class _EntityBase(AcaciaExpr):
     def to_str(self) -> str:
         return self.get_selector().to_str()
 
-    def cmdstr(self) -> str:
+    def stringify(self) -> str:
         return self.to_str()
 
     def get_selector(self) -> MCSelector:
