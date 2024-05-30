@@ -449,12 +449,10 @@ class Tokenizer:
             eof = True
         elif self.current_char == '\\':
             self.forward()  # skip "\\"
-            while self.current_char != '\n':
-                if self.current_char is None:
-                    self.error(ErrorType.EOF_AFTER_CONTINUATION)
-                if not self.current_char.isspace():
-                    self.error(ErrorType.CHAR_AFTER_CONTINUATION)
-                self.forward()
+            if self.current_char is None:
+                self.error(ErrorType.EOF_AFTER_CONTINUATION)
+            if self.current_char != '\n':
+                self.error(ErrorType.CHAR_AFTER_CONTINUATION)
             backslash = self.last_line_continued = True
         # Count indent: if this physical line is not a continued line,
         # and (this physical line has content or ends with backslash)
