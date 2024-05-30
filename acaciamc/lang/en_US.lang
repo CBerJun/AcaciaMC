@@ -75,8 +75,8 @@ cli.argshelp.maxinline = optimizer option: maximum size for a function that is c
 ## checkid ##
 
 cli.checkid.empty = can't be empty
-cli.checkid.decimal = can't start with a number
-cli.checkid.invalid = invalid character %r
+cli.checkid.idstart = character %r cannot be used to start an identifier
+cli.checkid.idcontinue = invalid identifier character %r
 
 ## assertid ##
 

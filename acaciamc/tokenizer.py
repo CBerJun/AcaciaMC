@@ -138,6 +138,14 @@ BRACKETS = {
 }
 RB2LB = {v: k for k, v in BRACKETS.items()}
 
+def is_idstart(c: str) -> bool:
+    """Return if given character can start an identifier in Acacia."""
+    return c.isalpha() or c == '_'
+
+def is_idcontinue(c: str) -> bool:
+    """Return if given character is valid in an Acacia identifier."""
+    return is_idstart(c) or c in string.digits
+
 class Token(NamedTuple):
     type: TokenType
     lineno: int
@@ -347,7 +355,7 @@ class Tokenizer:
             ok = True
             if self.current_char in string.digits:
                 res.append(self.handle_number())
-            elif self.current_char.isalpha() or self.current_char == '_':
+            elif is_idstart(self.current_char):
                 id_token = self.handle_name()
                 res.append(id_token)
                 # Special case: `interface` keyword, since after it goes
@@ -577,8 +585,7 @@ class Tokenizer:
         """Read a keyword or an IDENTIFIER token."""
         chars = []
         ln, col = self.current_lineno, self.current_col
-        while ((self.current_char is not None)
-               and (self.current_char.isalnum() or self.current_char == '_')):
+        while is_idcontinue(self.current_char):
             chars.append(self.current_char)
             self.forward()
         name = ''.join(chars)
@@ -647,9 +654,8 @@ class Tokenizer:
             self.forward()  # skip '\\'
             code = []
             length = UNICODE_ESCAPES[second]
-            VALID_CHARS = frozenset('0123456789ABCDEFabcdef')
             for _ in range(length):
-                if self.current_char not in VALID_CHARS:
+                if self.current_char not in string.hexdigits:
                     _err()
                 code.append(self.current_char)
                 self.forward()

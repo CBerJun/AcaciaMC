@@ -6,11 +6,11 @@ import argparse
 import os
 import shutil
 import sys
-import string
 
 from acaciamc.error import Error as CompileError
 from acaciamc.compiler import Compiler, Config
 from acaciamc.localization import localize
+from acaciamc.tokenizer import is_idstart, is_idcontinue
 
 _NOTGIVEN = object()
 
@@ -97,11 +97,11 @@ def check_id(name: str):
     """Raise ValueError if `name` is not a valid Acacia identifier."""
     if not name:
         raise ValueError(localize("cli.checkid.empty"))
-    if name[0] in string.digits:
-        raise ValueError(localize("cli.checkid.decimal"))
-    for s in name:
-        if not (s.isalnum() or s == '_'):
-            raise ValueError(localize("cli.checkid.invalid") % s)
+    if not is_idstart(name[0]):
+        raise ValueError(localize("cli.checkid.idstart") % name[0])
+    for c in name:
+        if not is_idcontinue(c):
+            raise ValueError(localize("cli.checkid.idcontinue") % c)
 
 def assert_id(name: str, option: str):
     """Make sure `name` is a valid Acacia identifier."""
