@@ -6,6 +6,7 @@ import argparse
 import os
 import shutil
 import sys
+import string
 
 from acaciamc.error import Error as CompileError
 from acaciamc.compiler import Compiler, Config
@@ -96,7 +97,7 @@ def check_id(name: str):
     """Raise ValueError if `name` is not a valid Acacia identifier."""
     if not name:
         raise ValueError(localize("cli.checkid.empty"))
-    if name[0].isdecimal():
+    if name[0] in string.digits:
         raise ValueError(localize("cli.checkid.decimal"))
     for s in name:
         if not (s.isalnum() or s == '_'):

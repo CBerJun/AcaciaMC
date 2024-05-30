@@ -6,6 +6,7 @@ from typing import (
     Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, Any, TYPE_CHECKING
 )
 import enum
+import string
 
 from acaciamc.error import *
 from acaciamc.constants import COLORS, COLORS_NEW, FUNCTION_PATH_CHARS
@@ -344,7 +345,7 @@ class Tokenizer:
                 continue
             ## special tokens
             ok = True
-            if self.current_char.isdecimal():
+            if self.current_char in string.digits:
                 res.append(self.handle_number())
             elif self.current_char.isalpha() or self.current_char == '_':
                 id_token = self.handle_name()
@@ -529,7 +530,7 @@ class Tokenizer:
 
     @staticmethod
     def _isdecimal(char: Union[str, None]):
-        return char is not None and char.isdecimal()
+        return char is not None and char in string.digits
 
     def handle_number(self):
         """Read an INTEGER or a FLOAT token."""
