@@ -1,6 +1,7 @@
 """print - String formatting and printing module."""
 
 from typing import List, Optional, Tuple, TYPE_CHECKING
+from string import digits as DIGITS
 
 from acaciamc.objects import *
 from acaciamc.mccmdgen.expr import *
@@ -96,7 +97,7 @@ class _FStrParser:
         """Get the expr from an format
         e.g. "0" -> args[0]; "key" -> keywords["key"]
         """
-        if name.isdecimal():
+        if all(c in DIGITS for c in name):
             index = int(name)
             try:
                 expr = self.args[index]
@@ -143,7 +144,7 @@ class _FStrParser:
                     expr_char = self.next_char()
                 # expr is integer or an identifier
                 expr = self.expr_from_id(''.join(expr_str))
-            elif second.isdecimal():
+            elif second in DIGITS:
                 # %1 is the alias to %{1}
                 expr = self.expr_from_id(second)
             else:
