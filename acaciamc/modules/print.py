@@ -172,7 +172,15 @@ class FString(ConstExprCombined):
             raise InvalidOpError
         return res
 
-    cradd = cadd
+    def cradd(self, other):
+        # Only normal strings can be `other`, since if they are fstrings
+        # `cadd` would have handled it.
+        res = self.copy()
+        if isinstance(other, String):
+            res.rawtext.insert(0, cmds.RawtextText(other.value))
+        else:
+            raise InvalidOpError
+        return res
 
 ### Functions ###
 
