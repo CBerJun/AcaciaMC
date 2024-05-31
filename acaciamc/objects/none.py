@@ -41,3 +41,6 @@ class NoneLiteral(ConstExprCombined, VarValue):
 
     def cdatatype_hook(self) -> CTDataType:
         return ctdt_none
+
+    def stringify(self) -> str:
+        return 'None'
