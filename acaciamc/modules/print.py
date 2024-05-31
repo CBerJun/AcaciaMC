@@ -61,37 +61,18 @@ class _FStrParser:
     def add_text(self, text: str):
         self.rawtext.append(cmds.RawtextText(text))
 
-    def add_score(self, slot: cmds.ScbSlot):
-        self.rawtext.append(cmds.RawtextScore(slot))
-
     def add_expr(self, expr: AcaciaExpr):
         """Format an expression to string."""
-        if expr.data_type.matches_cls(IntDataType):
-            if isinstance(expr, IntLiteral):
-                # optimize for literals
-                self.add_text(str(expr.value))
-            else:
-                dependencies, var = to_IntVar(expr, self.compiler)
-                self.dependencies.extend(dependencies)
-                self.add_score(var.slot)
-        elif expr.data_type.matches_cls(BoolDataType):
-            if isinstance(expr, BoolLiteral):
-                # optimize for literals
-                self.add_text('1' if expr.value else '0')
-            else:
-                dependencies, var = to_BoolVar(expr, self.compiler)
-                self.dependencies.extend(dependencies)
-                self.add_score(var.slot)
-        elif isinstance(expr, String):
-            self.add_text(expr.value)
-        elif isinstance(expr, FString):
-            self.rawtext.extend(expr.rawtext)
-            self.dependencies.extend(expr.dependencies)
-        else:
+        try:
+            components, deps = expr.rawtextify(self.compiler)
+        except InvalidOpError:
             raise _FStrError(
                 localize("modules.print.fstr.addexpr.error")
                 % expr.data_type
             )
+        else:
+            self.rawtext.extend(components)
+            self.dependencies.extend(deps)
 
     def expr_from_id(self, name: str) -> AcaciaExpr:
         """Get the expr from an format
@@ -173,6 +154,9 @@ class FString(ConstExprCombined):
         super().__init__(FStringDataType())
         self.dependencies = dependencies
         self.rawtext = cmds.Rawtext(components)
+
+    def rawtextify(self, compiler):
+        return self.rawtext, self.dependencies
 
     def copy(self):
         return FString(self.dependencies.copy(), self.rawtext.copy())

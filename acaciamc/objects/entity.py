@@ -8,6 +8,7 @@ from acaciamc.error import *
 from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -49,6 +50,10 @@ class _EntityBase(AcaciaExpr):
 
     def stringify(self) -> str:
         return self.to_str()
+
+    def rawtextify(self, compiler):
+        # To override default behavior of calling `stringify`.
+        raise InvalidOpError
 
     def get_selector(self) -> MCSelector:
         res = self._get_selector()

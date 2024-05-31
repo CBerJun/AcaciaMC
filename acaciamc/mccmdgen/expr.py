@@ -10,25 +10,27 @@ __all__ = [
     'swap_exprs'
 ]
 
-from typing import List, Union, Dict, Tuple, Hashable, Optional, TYPE_CHECKING
+from typing import (
+    List, Union, Dict, Tuple, Hashable, Optional, Sequence, TYPE_CHECKING
+)
 from abc import ABCMeta, abstractmethod
 
 from acaciamc.error import *
 from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.ctexpr import CTObj
 from acaciamc.mccmdgen.utils import InvalidOpError
+from acaciamc.mccmdgen import cmds
 from acaciamc.localization import localize
 
 if TYPE_CHECKING:
     from acaciamc.ast import Operator
-    from acaciamc.mccmdgen.datatype import DataType
     from acaciamc.compiler import Compiler
-    from acaciamc.mccmdgen.cmds import Command
     from acaciamc.mccmdgen.ctexpr import CTExpr
+    from acaciamc.mccmdgen.datatype import DataType
 
 ARGS_T = List["AcaciaExpr"]  # Positional arguments
 KEYWORDS_T = Dict[str, "AcaciaExpr"]  # Keyword arguments
-CMDLIST_T = List[Union[str, "Command"]]
+CMDLIST_T = List[Union[str, cmds.Command]]
 CALLRET_T = Tuple["AcaciaExpr", CMDLIST_T]  # Result
 ITERLIST_T = List["AcaciaExpr"]
 
@@ -102,6 +104,17 @@ class AcaciaExpr:
         the object can not be used for those purposes.
         """
         raise InvalidOpError
+
+    def rawtextify(self, compiler: "Compiler") \
+            -> Tuple[Sequence[cmds.RawtextComponent], CMDLIST_T]:
+        """Used when this expression is formatted in a JSON rawtext. It
+        should return a list of rawtext components and commands or raise
+        `InvalidOpError`. If the error was raised, then this expression
+        cannot be used in rawtext. The returned lists are not modified.
+        The default implementation tries to return the string
+        representation by calling `stringify`.
+        """
+        return [cmds.RawtextText(self.stringify())], []
 
     def iterate(self) -> ITERLIST_T:
         """Implements for-in iteration. Should return an iterable

@@ -97,6 +97,11 @@ def _export_bool(subcmds: List["_ExecuteSubcmd"], var: "BoolVar",
         res.append(cmds.ScbOperation(cmds.ScbOp.ASSIGN, var.slot, tmp))
     return res
 
+def _bool_rawtextify(self: AcaciaExpr, compiler: "Compiler"):
+    """A generic `rawtextify` implementation for bool."""
+    dependencies, var = to_BoolVar(self, compiler)
+    return [cmds.RawtextScore(var.slot)], dependencies
+
 class BoolDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "bool"
 
@@ -142,6 +147,9 @@ class BoolLiteral(ConstExprCombined):
 
     def cstringify(self) -> str:
         return "true" if self.value else "false"
+
+    def rawtextify(self, compiler):
+        return [cmds.RawtextText("1" if self.value else "0")], []
 
     def chash(self):
         return self.value
@@ -202,6 +210,8 @@ class BoolVar(VarValue, SupportsAsExecute):
     def swap(self, other: "BoolVar", compiler):
         return [cmds.ScbOperation(cmds.ScbOp.SWAP, self.slot, other.slot)]
 
+    rawtextify = _bool_rawtextify
+
     # Unary operator
     def unarynot(self, compiler):
         return NotBoolVar(self.slot)
@@ -240,6 +250,8 @@ class NotBoolVar(AcaciaExpr):
         invert = (op is Operator.equal_to) == (isinstance(other, BoolVar))
         return ScbEqualCompare(self.slot, other.slot, invert)
 
+    rawtextify = _bool_rawtextify
+
     # Unary operator
     def unarynot(self, compiler):
         res = BoolVar(self.slot)
@@ -256,6 +268,7 @@ class CompareBase(SupportsAsExecute, metaclass=ABCMeta):
         return res
 
     compare = _bool_compare
+    rawtextify = _bool_rawtextify
 
     @abstractmethod
     def unarynot(self, compiler):
@@ -358,6 +371,7 @@ class WildBool(SupportsAsExecute):
         return self.dependencies.copy(), subcmds
 
     compare = _bool_compare
+    rawtextify = _bool_rawtextify
 
     # Unary operator
     def unarynot(self, compiler):
@@ -386,6 +400,7 @@ class NotWildBool(AcaciaExpr):
         return res
 
     compare = _bool_compare
+    rawtextify = _bool_rawtextify
 
     # Unary operator
     def unarynot(self, compiler):

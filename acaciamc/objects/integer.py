@@ -102,6 +102,11 @@ STR2PYINTOP: Dict[str, Callable[[int, int], int]] = {
     '/': c_int_div, '%': remainder
 }
 
+def _int_rawtextify(self: AcaciaExpr, compiler: "Compiler"):
+    """A generic `rawtextify` implementation for int."""
+    dependencies, var = to_IntVar(self, compiler)
+    return [cmds.RawtextScore(var.slot)], dependencies
+
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
 
@@ -268,6 +273,8 @@ class IntVar(VarValue):
 
     def swap(self, other: "IntVar", compiler):
         return [cmds.ScbOperation(cmds.ScbOp.SWAP, self.slot, other.slot)]
+
+    rawtextify = _int_rawtextify
 
     ## UNARY OPERATORS
 
@@ -507,6 +514,8 @@ class IntOpGroup(AcaciaExpr):
             commands, var = to_IntVar(self, compiler)
             return ScbMatchesCompare(commands, var.slot, op, other.value)
         return IntCompare(self, op, other)
+
+    rawtextify = _int_rawtextify
 
     def add_op(self, op: IntOp):
         self.ops.append(op)
