@@ -69,6 +69,10 @@ class _EntityBase(AcaciaExpr):
         raise NotImplementedError
 
     def export(self, var: "TaggedEntity", compiler):
+        """
+        NOTE this default implementation assumes that clearing the
+        target tag does not affect this object.
+        """
         cmds = var.clear()
         cmds.append("tag %s add %s" % (self, var.tag))
         return cmds
@@ -89,6 +93,18 @@ class EntityReference(_EntityBase):
     def cast_to(self, template):
         return EntityReference(self.selector, self.template, template)
 
+    def export(self, var: "TaggedEntity", compiler):
+        # Check if clearing the target tag would affect this object
+        if var.tag in self.selector.get_tags():
+            # By definition, an entity object must represent exactly one
+            # entity, which means that this entity must satisfy the
+            # selector, or else it's an undefined bahaviour.
+            # XXX add runtime check to see if the entity actually
+            # satisfies the selector.
+            return []
+        # Default implementation
+        return super().export(var, compiler)
+
 class TaggedEntity(_EntityBase, VarValue):
     def __init__(self, tag: str, template: "EntityTemplate",
                  cast_to: Optional["EntityTemplate"] = None):
@@ -97,6 +113,18 @@ class TaggedEntity(_EntityBase, VarValue):
 
     def cast_to(self, template):
         return TaggedEntity(self.tag, self.template, template)
+
+    def export(self, var: "TaggedEntity", compiler):
+        # Check self-assignment
+        if var.tag == self.tag:
+            return []
+        return super().export(var, compiler)
+
+    def swap(self, other: "TaggedEntity", compiler):
+        # Check self-swapping
+        if other.tag == self.tag:
+            return []
+        return super().swap(other, compiler)
 
     @classmethod
     def new_tag(cls, template: "EntityTemplate", compiler: "Compiler",

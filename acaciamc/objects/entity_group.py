@@ -209,9 +209,18 @@ class EntityGroup(VarValue):
         return cls(EGroupDataType(template), compiler)
 
     def export(self, var: "EntityGroup", compiler) -> CMDLIST_T:
+        # Check self-assignment
+        if var.tag == self.tag:
+            return []
         commands = var.clear()
         commands.append("tag @e[tag=%s] add %s" % (self.tag, var.tag))
         return commands
+
+    def swap(self, other: "EntityGroup", compiler) -> CMDLIST_T:
+        # Check self-swapping
+        if other.tag == self.tag:
+            return []
+        return super().swap(other, compiler)
 
     def get_selector(self) -> "MCSelector":
         res = MCSelector("e")

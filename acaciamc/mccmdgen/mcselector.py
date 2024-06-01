@@ -2,7 +2,7 @@
 
 __all__ = ["MCSelector", "SELECTORVAR_T"]
 
-from typing import Union, Dict, Any, Optional
+from typing import Union, Dict, Any, Optional, List
 from copy import deepcopy
 
 from acaciamc.mccmdgen.cmds import mc_str
@@ -26,6 +26,13 @@ class MCSelector:
 
     def has_arg(self, arg: str) -> bool:
         return arg in self.args
+
+    def get_tags(self) -> List[str]:
+        """
+        Return the list of tags in the selector.
+        Modifying the returned list will modify the selector.
+        """
+        return self.args.setdefault("tag", [])
 
     @staticmethod
     def arg_to_str(arg: str, value):
