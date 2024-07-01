@@ -1,20 +1,21 @@
 __all__ = ['CTObj', 'CTDataType', 'CTObjPtr', 'CTCallable', 'CTExpr']
 
+from abc import ABCMeta, abstractmethod
 from typing import (
     TYPE_CHECKING, Union, List, Dict, Hashable, Iterable, Optional
 )
-from abc import ABCMeta, abstractmethod
 
-from acaciamc.mccmdgen.symbol import SymbolTable
-from acaciamc.mccmdgen.utils import InvalidOpError
 from acaciamc.error import traced_call
 from acaciamc.localization import localize
+from acaciamc.mccmdgen.symbol import SymbolTable
+from acaciamc.mccmdgen.utils import InvalidOpError
 
 if TYPE_CHECKING:
     from acaciamc.ast import Operator
     from acaciamc.error import SourceLocation
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.expr import ConstExpr
+
 
 class CTDataType:
     def __init__(self, name: str, bases: Iterable["CTDataType"] = ()):
@@ -31,6 +32,7 @@ class CTDataType:
             if self.is_baseof(base):
                 return True
         return False
+
 
 class CTObj:
     cdata_type: CTDataType
@@ -50,30 +52,40 @@ class CTObj:
 
     def cadd(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def csub(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def cmul(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def cdiv(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def cmod(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
 
     def cradd(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def crsub(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def crmul(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def crdiv(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
+
     def crmod(self, other: "CTObj") -> "CTExpr":
         raise InvalidOpError
 
     def cunarypos(self) -> "CTExpr":
         raise InvalidOpError
+
     def cunaryneg(self) -> "CTExpr":
         raise InvalidOpError
+
     def cunarynot(self) -> "CTExpr":
         raise InvalidOpError
 
@@ -92,6 +104,7 @@ class CTObj:
     def chash(self) -> Hashable:
         raise InvalidOpError
 
+
 class CTObjPtr:
     def __init__(self, value: CTObj):
         self.set(value)
@@ -102,7 +115,9 @@ class CTObjPtr:
     def set(self, value: CTObj):
         self.v = value
 
+
 CTExpr = Union[CTObj, CTObjPtr]
+
 
 class CTCallable(CTObj, metaclass=ABCMeta):
     def __init__(self, *args, **kwds):
@@ -116,8 +131,8 @@ class CTCallable(CTObj, metaclass=ABCMeta):
         pass
 
     def ccall_withframe(
-        self, args: List["CTObj"], kwds: Dict[str, "CTObj"],
-        compiler, location: Optional["SourceLocation"] = None
+            self, args: List["CTObj"], kwds: Dict[str, "CTObj"],
+            compiler, location: Optional["SourceLocation"] = None
     ) -> CTExpr:
         return traced_call(
             self.ccall, location, self.source, self.func_repr,

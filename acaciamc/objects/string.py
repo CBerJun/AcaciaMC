@@ -2,15 +2,18 @@
 
 __all__ = ['StringDataType', 'String']
 
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import InvalidOpError
+
 
 class StringDataType(DefaultDataType):
     name = 'str'
 
+
 ctdt_string = CTDataType("str")
+
 
 class String(ConstExprCombined):
     cdata_type = ctdt_string

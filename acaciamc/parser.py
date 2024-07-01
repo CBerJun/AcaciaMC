@@ -6,17 +6,19 @@ from typing import (
     Callable, Optional, List, Tuple, NamedTuple, Type, TYPE_CHECKING
 )
 
+from acaciamc.ast import *
 from acaciamc.error import *
 from acaciamc.tokenizer import TokenType, BRACKETS
-from acaciamc.ast import *
 
 if TYPE_CHECKING:
     from acaciamc.tokenizer import Tokenizer
+
 
 class FuncType(NamedTuple):
     allowed_ports: Tuple[FuncPortType, ...]
     type_required: bool
     ast_class: Type[FuncData]
+
 
 FUNC_NORMAL = FuncType(
     allowed_ports=(FuncPortType.by_value,),
@@ -34,6 +36,7 @@ FUNC_CONST = FuncType(
     type_required=False,
     ast_class=ConstFuncData
 )
+
 
 class Parser:
     def __init__(self, tokenizer: "Tokenizer"):
@@ -63,7 +66,7 @@ class Parser:
         token.
         """
         if ((expect_token_type is not None) and
-            (self.current_token.type != expect_token_type)):
+                (self.current_token.type != expect_token_type)):
             self.error(ErrorType.UNEXPECTED_TOKEN, token=self.current_token)
         if self.next_token is None:
             self.current_token = self.tokenizer.get_next_token()
@@ -198,8 +201,8 @@ class Parser:
             | str_literal | self | list | map
         """
         if self.current_token.type in (
-            TokenType.integer, TokenType.float_, TokenType.true,
-            TokenType.false, TokenType.none
+                TokenType.integer, TokenType.float_, TokenType.true,
+                TokenType.false, TokenType.none
         ):
             return self.literal()
         elif self.current_token.type is TokenType.identifier:
@@ -227,6 +230,7 @@ class Parser:
         )*
         """
         node = self.expr_l0()
+
         def _attribute(node: Expression):
             self.eat(TokenType.point)
             attr = self.current_token.value
@@ -385,6 +389,7 @@ class Parser:
             (ELSE COLON statement_block)?
         """
         pos = self.current_pos
+
         def _if_extra():
             """
             if_extra := (ELIF expr COLON statement_block if_extra?)
@@ -406,6 +411,7 @@ class Parser:
                 return [If(condition, stmts, else_stmts, **elif_pos)]
             else:
                 return []
+
         # if_stmt := IF expr COLON statement_block if_extra?
         self.eat(TokenType.if_)
         condition = self.expr()
@@ -617,7 +623,7 @@ class Parser:
         pos = self.current_pos
         res = []
         while self.current_token.type in (
-            TokenType.text_body, TokenType.dollar_lbrace
+                TokenType.text_body, TokenType.dollar_lbrace
         ):
             if self.current_token.type is TokenType.text_body:
                 res.append(self.current_token.value)
@@ -691,10 +697,12 @@ class Parser:
             return FromImportAll(meta, **pos)
         names = []
         aliases = []
+
         def _id_alias():
             names.append(self.current_token.value)
             self.eat(TokenType.identifier)
             aliases.append(self.alias())
+
         if self.current_token.type is TokenType.lparen:
             self.paren_list_of(_id_alias)
         else:
@@ -772,11 +780,13 @@ class Parser:
         names = []
         types = []
         values = []
+
         def _add_const_decl():
             name, type_, value = self._constant_decl()
             names.append(name)
             types.append(type_)
             values.append(value)
+
         if self.current_token.type is TokenType.lparen:
             self.paren_list_of(_add_const_decl)
         else:
@@ -930,6 +940,7 @@ class Parser:
         """
         arg_table = ArgumentTable(**self.current_pos)
         got_default = False
+
         def _arg_decl():
             nonlocal got_default
             pos = self.current_pos
@@ -959,6 +970,7 @@ class Parser:
                 self.error(ErrorType.DUPLICATE_ARG_DEF, **pos, arg=name)
             # add arg
             arg_table.add_arg(name, port, default)
+
         self.paren_list_of(_arg_decl)
         return arg_table
 
@@ -976,6 +988,7 @@ class Parser:
         pos = self.current_pos
         args, keywords = [], {}
         got_keyword = False  # if a keyword argument has been read
+
         def _arg():
             nonlocal got_keyword
             self.peek()
@@ -995,6 +1008,7 @@ class Parser:
                 if got_keyword:
                     self.error(ErrorType.POSITIONED_ARG_AFTER_KEYWORD)
                 args.append(self.expr())
+
         self.paren_list_of(_arg)
         return CallTable(args, keywords, **pos)
 

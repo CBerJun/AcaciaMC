@@ -23,27 +23,27 @@ __all__ = [
     "AcaciaNewFunction", "DEFAULT_ENTITY_NEW",
 ]
 
+from itertools import chain
 from typing import (
     List, Tuple, Dict, Union, Optional, Callable, NamedTuple, TYPE_CHECKING
 )
-from itertools import chain
 
 from acaciamc.ast import MethodQualifier
 from acaciamc.error import *
-from acaciamc.tools import axe, resultlib
 from acaciamc.mccmdgen import cmds
-from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType, Storable
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import unreachable
+from acaciamc.tools import axe, resultlib
 from .entity import TaggedEntity, EntityDataType
 from .functions import (
     BoundVirtualMethod, BoundMethod, InlineFunction, ConstructorFunction,
     BinaryFunction
 )
-from .position import PosDataType
-from .none import NoneDataType
 from .integer import IntVar, IntLiteral
+from .none import NoneDataType
+from .position import PosDataType
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -56,16 +56,20 @@ SUMMON_AT = "@a[c=1]"  # this always selects one player
 # Note that @p only selects players that are alive.
 SUMMON_Y = -75  # must be below -64 so it's not reachable
 
+
 class ETemplateDataType(DefaultDataType):
     name = 'entity_template'
 
+
 ctdt_etemplate = CTDataType("entity_template")
+
 
 class _MethodDispatcher:
     """
     Every virtual method and methods that override it share one
     `_MethodDispatcher`.
     """
+
     def __init__(self, method_name: str, compiler: "Compiler"):
         self.compiler = compiler
         self.method_name = method_name
@@ -93,6 +97,7 @@ class _MethodDispatcher:
             get_self_var = None
         else:
             _sv = None
+
             def get_self_var():
                 nonlocal _sv
                 if _sv is None:
@@ -138,8 +143,10 @@ class _MethodDispatcher:
         _, impl, get_self_var = best
         return BoundMethod(entity, self.method_name, impl, get_self_var)
 
+
 class _SimpleMethod:
     """Non-virtual and non-override methods."""
+
     def __init__(self, name: str, implementation: "METHODDEF_T",
                  template: "EntityTemplate", compiler: "Compiler"):
         self.name = name
@@ -164,6 +171,7 @@ class _SimpleMethod:
             None if self.is_inline else self.get_self_var,
         )
 
+
 def _check_override(implementation: "METHODDEF_T", method: str):
     """
     Check if `implementation` can be used as virtual method or
@@ -175,8 +183,9 @@ def _check_override(implementation: "METHODDEF_T", method: str):
             raise Error(ErrorType.OVERRIDE_RESULT_UNSTORABLE,
                         name=method, type_=str(res_type))
 
+
 def default_entity_new(
-    compiler, template_id: AcaciaExpr, tag: str, args, keywords
+        compiler, template_id: AcaciaExpr, tag: str, args, keywords
 ):
     @axe.chop
     @axe.arg("type", axe.LiteralString(), rename="e_type")
@@ -184,8 +193,8 @@ def default_entity_new(
     @axe.arg("name", axe.Nullable(axe.LiteralString()), default=None)
     @axe.arg("event", axe.Nullable(axe.LiteralString()), default=None)
     def new_entity(
-        compiler: "Compiler", e_type: str, e_pos: "Position",
-        name: Optional[str], event: Optional[str]
+            compiler: "Compiler", e_type: str, e_pos: "Position",
+            name: Optional[str], event: Optional[str]
     ):
         e_event = "*" if event is None else event
         e_name = "" if name is None else f" {cmds.mc_str(name)}"
@@ -207,23 +216,30 @@ def default_entity_new(
                 compiler
             )
         ])
+
     _, commands = BinaryFunction(new_entity).call(args, keywords, compiler)
     return commands
+
 
 def get_deleted_entity_new(template_name: str):
     def _res(compiler, template_id: AcaciaExpr, tag: str, args, keywords):
         raise Error(ErrorType.CANT_CREATE_ENTITY, type_=template_name)
+
     return _res
+
 
 class AcaciaNewFunction(NamedTuple):
     impl: "AcaciaFunction"
     self_tag: str
     template_id_var: cmds.ScbSlot
 
+
 class _DefaultEntityNewType:
     pass
 
+
 DEFAULT_ENTITY_NEW = _DefaultEntityNewType()
+
 
 class EntityTemplate(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_etemplate
@@ -234,7 +250,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                  methods: Dict[str, AcaciaCallable],
                  method_qualifiers: Dict[str, MethodQualifier],
                  method_new: Union[AcaciaNewFunction, InlineFunction,
-                                   _DefaultEntityNewType, None],
+                 _DefaultEntityNewType, None],
                  parents: List["EntityTemplate"],
                  compiler: "Compiler",
                  source=None):
@@ -301,6 +317,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
         for parent in parents:
             self.field_types.update(parent.field_types)
             self.field_metas.update(parent.field_metas)
+
         ## Check method name conflicts
         # Methods can appear multiple times, but all override/virtual
         # methods must override from the same template (same
@@ -310,6 +327,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                 raise Error(ErrorType.EMETHOD_MULTIPLE_DEFS, method=m)
             if m in self.field_types:
                 raise Error(ErrorType.METHOD_ATTR_CONFLICT, name=m)
+
         # `m_*` records methods that exist in base templates.
         m_virtual: Dict[str, _MethodDispatcher] = {}
         m_simple: Dict[str, _SimpleMethod] = {}
@@ -403,6 +421,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                 # (see `Generator.visit_EntityTemplateDef`).
                 commands.append(f"tag @e[tag={method_new.self_tag}] add {tag}")
                 return commands
+
             mnew_src = method_new.impl.source
         elif isinstance(method_new, _DefaultEntityNewType):
             mnew = default_entity_new
@@ -422,6 +441,7 @@ class EntityTemplate(ConstExprCombined, ConstructorFunction):
                 method_new.context.entity_new_data = None
                 method_new.context.self_value = None
                 return c
+
             mnew_src = method_new.source
         # method_new: NOTE that it is the caller's responsibility to
         # clear the given tag (third parameter).

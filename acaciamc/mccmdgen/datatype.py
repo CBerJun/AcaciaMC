@@ -2,13 +2,14 @@
 
 __all__ = ['DataType', 'DefaultDataType', 'Storable', 'SupportsEntityField']
 
-from typing import TYPE_CHECKING, Type as PythonType
 from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING, Type as PythonType
 
 if TYPE_CHECKING:
     from acaciamc.objects.entity import _EntityBase
     from acaciamc.mccmdgen.expr import AcaciaExpr, VarValue
     from acaciamc.compiler import Compiler
+
 
 class DataType(metaclass=ABCMeta):
     """
@@ -21,6 +22,7 @@ class DataType(metaclass=ABCMeta):
      specifies the type of an expression including extra information
      like template for entity and `Engroup`.
     """
+
     @abstractmethod
     def __str__(self) -> str:
         pass
@@ -48,15 +50,19 @@ class DataType(metaclass=ABCMeta):
         """Return whether this class is of `other` type."""
         return issubclass(cls, other)
 
+
 class Storable(DataType):
     """A "storable" data type. (See `AcaciaExpr`)."""
+
     @abstractmethod
     def new_var(self, compiler: "Compiler") -> "VarValue":
         """Construct a `VarValue` of this type."""
         pass
 
+
 class SupportsEntityField(DataType):
     """Data type that can be used as a field of an entity."""
+
     @abstractmethod
     def new_entity_field(self, compiler: "Compiler") -> dict:
         """When a field of an entity template is this type, this is
@@ -76,10 +82,12 @@ class SupportsEntityField(DataType):
         """
         pass
 
+
 class DefaultDataType(DataType):
     """A data type that carries no extra information like entity
     template.
     """
+
     @property
     @abstractmethod
     def name(self) -> str:

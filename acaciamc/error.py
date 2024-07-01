@@ -6,8 +6,10 @@ from typing import Optional, Tuple, NamedTuple, List, Callable, Union
 
 from acaciamc.localization import LocalizedEnum, localize
 
+
 class SourceLocation:
     """Represent a location in a source file for showing errors."""
+
     def __init__(
             self, file: Optional[str] = None,
             linecol: Optional[Tuple[int, int]] = None):
@@ -26,6 +28,7 @@ class SourceLocation:
         if self.linecol is None:
             return self.file
         return "%s:%d:%d" % (self.file, self.linecol[0], self.linecol[1])
+
 
 class ErrorType(LocalizedEnum):
     # Tokenizer
@@ -154,10 +157,12 @@ class ErrorType(LocalizedEnum):
     # Any; should only be used by binary modules
     ANY = "error.errortype.any"
 
+
 class ErrFrame(NamedTuple):
     location: SourceLocation
     msg: str
     note: Optional[str]
+
 
 class Error(Exception):
     def __init__(self, err_type: ErrorType, **kwargs):
@@ -175,24 +180,25 @@ class Error(Exception):
 
     def full_msg(self) -> str:
         return (
-            localize("error.fullmsg.compilererror")
-            + ("\n" if self.frames else " ")
-            + "".join(
-                "  %s: %s" % (frame.location, frame.msg)
-                + ("\n    %s" % frame.note if frame.note else "")
-                + "\n"
-                for frame in reversed(self.frames)
-            )
-            + str(self)
+                localize("error.fullmsg.compilererror")
+                + ("\n" if self.frames else " ")
+                + "".join(
+            "  %s: %s" % (frame.location, frame.msg)
+            + ("\n    %s" % frame.note if frame.note else "")
+            + "\n"
+            for frame in reversed(self.frames)
+        )
+                + str(self)
         )
 
     def add_frame(self, frame: ErrFrame):
         self.frames.append(frame)
 
+
 def traced_call(
-    func: Callable, location: Union[SourceLocation, str, None],
-    source: Optional[SourceLocation], func_repr: str,
-    *args, **kwds
+        func: Callable, location: Union[SourceLocation, str, None],
+        source: Optional[SourceLocation], func_repr: str,
+        *args, **kwds
 ):
     try:
         return func(*args, **kwds)

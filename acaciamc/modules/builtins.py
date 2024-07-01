@@ -1,17 +1,18 @@
 from typing import Union, TYPE_CHECKING
 
-from acaciamc.objects import *
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DataType
-from acaciamc.tools import axe, resultlib
+import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.error import Error, ErrorType
 from acaciamc.localization import localize
 from acaciamc.mccmdgen.ctexpr import CTDataType
-import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.mccmdgen.datatype import DataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.objects import *
+from acaciamc.tools import axe, resultlib
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.objects.entity import _EntityBase
+
 
 class AnyDataType(DataType):
     def __str__(self) -> str:
@@ -24,11 +25,14 @@ class AnyDataType(DataType):
     def matches(self, other: "DataType") -> bool:
         return True
 
+
 class _AnyCTDataType(CTDataType):
     def is_baseof(self, other: CTDataType) -> bool:
         return True
 
+
 any_ctdt = _AnyCTDataType("Any")
+
 
 class AnyType(Type):
     def datatype_hook(self):
@@ -36,6 +40,7 @@ class AnyType(Type):
 
     def cdatatype_hook(self):
         return any_ctdt
+
 
 @axe.chop
 @axe.arg("x", axe.AnyValue())
@@ -62,6 +67,7 @@ def swap(compiler: "Compiler", x: AcaciaExpr, y: AcaciaExpr):
         )
     return resultlib.commands(swap_exprs(x, y, compiler))
 
+
 @axe.chop
 @axe.arg("target", axe.AnyOf(axe.LiteralString(), axe.Typed(EntityDataType)))
 @axe.arg("objective", axe.LiteralString())
@@ -73,6 +79,7 @@ def scb(compiler, target: Union["_EntityBase", str], objective: str):
     """
     tg = target if isinstance(target, str) else target.to_str()
     return IntVar(cmds.ScbSlot(tg, objective))
+
 
 @axe.chop
 @axe.arg("object", EntityDataType, rename="obj")
@@ -88,22 +95,23 @@ def upcast(compiler, obj: "_EntityBase", template: EntityTemplate):
                     t1=obj.template.name, t2=template.name)
     return obj.cast_to(template)
 
+
 def acacia_build(compiler: "Compiler"):
     res = {}
     # builtin types
     for name, cls in (
-        ('int', IntType),
-        ('bool', BoolType),
-        ('Pos', PosType),
-        ('Rot', RotType),
-        ('Offset', PosOffsetType),
-        ('Engroup', EGroupGeneric),
-        ('Enfilter', EFilterType),
-        ('list', ListType),
-        ('map', MapType),
-        ('AbsPos', AbsPosType),
-        ('Any', AnyType),
-        ('float', FloatType),
+            ('int', IntType),
+            ('bool', BoolType),
+            ('Pos', PosType),
+            ('Rot', RotType),
+            ('Offset', PosOffsetType),
+            ('Engroup', EGroupGeneric),
+            ('Enfilter', EFilterType),
+            ('list', ListType),
+            ('map', MapType),
+            ('AbsPos', AbsPosType),
+            ('Any', AnyType),
+            ('float', FloatType),
     ):
         res[name] = cls()
     res['ExternEngroup'] = ExternEGroupType(compiler)

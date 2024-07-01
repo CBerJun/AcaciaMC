@@ -5,27 +5,28 @@ It assembles files and classes together and writes output.
 
 __all__ = ['Compiler', 'Config']
 
+import os
+from contextlib import contextmanager
 from typing import (
     Tuple, Union, Optional, Callable, Dict, NamedTuple, List, TYPE_CHECKING
 )
-import os
-from contextlib import contextmanager
 
+import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.ast import ModuleMeta
 from acaciamc.error import *
-from acaciamc.tokenizer import Tokenizer
-from acaciamc.parser import Parser
-from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.generator import Generator
 from acaciamc.mccmdgen.optimizer import Optimizer
 from acaciamc.mccmdgen.utils import unreachable
 from acaciamc.objects import (
     IntVar, BinaryModule, EntityTemplate, DEFAULT_ENTITY_NEW
 )
-import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.parser import Parser
+from acaciamc.tokenizer import Tokenizer
 
 if TYPE_CHECKING:
     from acaciamc.tools.versionlib import VERSION_T
+
 
 class OutputManager(cmds.FunctionsManager):
     def __init__(self, cfg: "Config"):
@@ -49,14 +50,15 @@ class OutputManager(cmds.FunctionsManager):
         fname = f"{self._cfg.internal_folder}/acalib{self._lib_count}"
         self.new_file(file, fname)
 
+
 class OutputOptimized(OutputManager, Optimizer):
     def entry_files(self):
         internal = self.mcfunction_path(self._cfg.internal_folder) + "/"
         for file in self.files:
             path = file.get_path()
             if (
-                not path.startswith(internal)
-                or path == self.tick_file_full_path
+                    not path.startswith(internal)
+                    or path == self.tick_file_full_path
             ):
                 yield file
 
@@ -68,6 +70,7 @@ class OutputOptimized(OutputManager, Optimizer):
         # Expanding /execute function calls in tick.mcfunction can
         # decrease performance badly.
         return file.get_path() == self.tick_file_full_path
+
 
 class Config(NamedTuple):
     # Generate debug comments in .mcfunction files
@@ -102,6 +105,7 @@ class Config(NamedTuple):
     # Encoding of input and output files
     encoding: Optional[str] = None
 
+
 class CachedModule(NamedTuple):
     # Path to module source file
     path: str
@@ -113,11 +117,13 @@ class CachedModule(NamedTuple):
     # (None if `main` is None)
     loaded_var: Optional[cmds.ScbSlot] = None
 
+
 class Compiler:
     """Start compiling the project
     A Compiler manage the resources in the compile task and
     connect the steps to compile: Tokenizer -> Parser -> Generator.
     """
+
     def __init__(self, main_path: str, cfg: Optional[Config] = None):
         """
         main_path: path of main source file
@@ -338,7 +344,7 @@ class Compiler:
                     continue
                 got_name, ext = os.path.splitext(child)
                 if (got_name == meta.last_name
-                    and (ext == '.py' or ext == '.aca')):
+                        and (ext == '.py' or ext == '.aca')):
                     return path
         return None
 

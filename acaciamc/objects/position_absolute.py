@@ -3,21 +3,24 @@ Most important: it is compatible with both `Pos` and `Offset`.
 """
 
 import acaciamc.mccmdgen.cmds as cmds
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.tools import axe, cmethod_of, transform_immutable
 from acaciamc.constants import XYZ
-from .types import Type
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.tools import axe, cmethod_of, transform_immutable
+from .float_ import Float
 from .position import PosDataType, Position, ctdt_position
 from .position_offset import (
     PosOffsetDataType, PosOffset, CoordinateType, ctdt_posoffset
 )
-from .float_ import Float
+from .types import Type
+
 
 class AbsPosDataType(PosDataType, PosOffsetDataType):
     name = "AbsPos"
 
+
 ctdt_abspos = CTDataType("AbsPos", (ctdt_posoffset, ctdt_position))
+
 
 class AbsPosType(Type):
     def do_init(self):
@@ -35,6 +38,7 @@ class AbsPosType(Type):
     def cdatatype_hook(self):
         return ctdt_abspos
 
+
 class AbsPos(Position, PosOffset):
     cdata_type = ctdt_abspos
 
@@ -48,6 +52,7 @@ class AbsPos(Position, PosOffset):
         self.value_types = [CoordinateType.ABSOLUTE for _ in range(3)]
         self.already_set = set()
         self._update()
+
         # for attr in ("dim", "local", "apply", "align"):
         #     self.attribute_table.delete(attr)
 
@@ -62,6 +67,7 @@ class AbsPos(Position, PosOffset):
                 if value is not None:
                     self.set_abs(i, value)
             return self
+
         @cmethod_of(self, "offset")
         @axe.chop
         @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)

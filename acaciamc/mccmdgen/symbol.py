@@ -11,10 +11,12 @@ if TYPE_CHECKING:
     from acaciamc.mccmdgen.ctexpr import CTExpr
     from acaciamc.mccmdgen.expr import AcaciaExpr
 
+
 class CTRTConversionError(Exception):
     def __init__(self, obj: Union["AcaciaExpr", "CTExpr"]):
         super().__init__(obj)
         self.expr = obj
+
 
 class SymbolTable:
     def __init__(self, outer: Optional["SymbolTable"] = None,

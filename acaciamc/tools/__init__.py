@@ -9,14 +9,18 @@ from typing import Callable as _Callable, Union as _Union
 from acaciamc import objects
 from acaciamc.mccmdgen import ctexpr, expr
 
+
 def method_of(obj: "expr.AcaciaExpr", name: str):
     """Return a decorator that defines a method for `obj` with `name`
     whose implementation is decorated function.
     """
+
     def _decorator(func: _Callable):
         obj.attribute_table.set(name, objects.BinaryFunction(func))
         return func
+
     return _decorator
+
 
 def cmethod_of(obj: _Union[expr.AcaciaExpr, ctexpr.CTObj],
                name: str, runtime=True):
@@ -25,6 +29,7 @@ def cmethod_of(obj: _Union[expr.AcaciaExpr, ctexpr.CTObj],
         table1 = obj.attribute_table
     if isinstance(obj, ctexpr.CTObj):
         table2 = obj.attributes
+
     def _decorator(func):
         if runtime:
             obj = objects.BinaryCTFunction(func)
@@ -35,14 +40,18 @@ def cmethod_of(obj: _Union[expr.AcaciaExpr, ctexpr.CTObj],
         if table2:
             table2.set(name, obj)
         return func
+
     return _decorator
+
 
 class ImmutableMixin:
     """An `AcaciaExpr` that can't be changed and only allows
     transformations into another object of same type.
     """
+
     def copy(self) -> "ImmutableMixin":
         raise NotImplementedError
+
 
 def transform_immutable(self: ImmutableMixin):
     """Return a decorator for binary function implementations that
@@ -50,8 +59,11 @@ def transform_immutable(self: ImmutableMixin):
     """
     if not isinstance(self, ImmutableMixin):
         raise TypeError("can't transform non-ImmutableMixin")
+
     def _decorator(func: _Callable):
         def _decorated(*args, **kwds):
             return func(self.copy(), *args, **kwds)
+
         return _decorated
+
     return _decorator

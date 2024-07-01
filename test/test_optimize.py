@@ -1,11 +1,13 @@
 # Add `acaciamc` directory to path
 import os
 import sys
+
 sys.path.append(os.path.realpath(
     os.path.join(__file__, os.pardir, os.pardir)
 ))
 
 from acaciamc.mccmdgen import optimizer, cmds
+
 
 class MyOpt(optimizer.Optimizer):
     def entry_files(self):
@@ -18,6 +20,7 @@ class MyOpt(optimizer.Optimizer):
             str(file) + '\n' + file.to_str(debugging=True)
             for file in self.files
         ))
+
 
 project = MyOpt("scb")
 f1 = cmds.MCFunctionFile("test/path1")

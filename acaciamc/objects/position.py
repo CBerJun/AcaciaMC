@@ -4,28 +4,31 @@ __all__ = ["PosType", "PosDataType", "Position"]
 
 from typing import List, TYPE_CHECKING
 
-from acaciamc.error import *
-from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
-from acaciamc.constants import DEFAULT_ANCHOR, XYZ
-from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.constants import DEFAULT_ANCHOR, XYZ
+from acaciamc.error import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
 from . import entity as entity_module
-from .types import Type
-from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
 from .functions import BinaryFunction
+from .position_offset import PosOffsetDataType, PosOffset, CoordinateType
 from .rotation import RotDataType
+from .types import Type
 
 if TYPE_CHECKING:
     from .rotation import Rotation
     from .entity import _EntityBase
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
+
 class PosDataType(DefaultDataType):
     name = "Pos"
 
+
 ctdt_position = CTDataType("Pos")
+
 
 class PosType(Type):
     def do_init(self):
@@ -40,6 +43,7 @@ class PosType(Type):
                 If integer is provided for x and z, they are increased
                 by 0.5, so that the position is at block center.
             """
+
             @axe.overload
             @axe.arg("target", entity_module.EntityDataType)
             @axe.arg("anchor", axe.LiteralString())
@@ -74,6 +78,7 @@ class PosType(Type):
     def cdatatype_hook(self):
         return ctdt_position
 
+
 class Position(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_position
 
@@ -89,11 +94,13 @@ class Position(ConstExprCombined, ImmutableMixin):
             """.dim(id: str): change dimension of position."""
             self.context.append(cmds.ExecuteEnv("in", id_))
             return self
+
         _abs = self._create_offset_alias("abs")
         _offset = self._create_offset_alias("offset")
         """.abs(...) .offset(...)
         Alias of .apply(Offset().abs/offset(...)).
         """
+
         @cmethod_of(self, "local")
         @axe.chop
         @axe.arg("rot", RotDataType)
@@ -111,6 +118,7 @@ class Position(ConstExprCombined, ImmutableMixin):
             self.context.extend(rot.context)
             self.context.append(cmds.ExecuteEnv("positioned", str(offset)))
             return self
+
         @cmethod_of(self, "apply")
         @axe.chop
         @axe.arg("offset", PosOffsetDataType)
@@ -119,6 +127,7 @@ class Position(ConstExprCombined, ImmutableMixin):
             """.apply(offset: Offset): Apply offset to current position."""
             self.context.append(cmds.ExecuteEnv("positioned", str(offset)))
             return self
+
         @cmethod_of(self, "align")
         @axe.chop
         @axe.arg("axis", axe.LiteralString(), default="xyz")
@@ -135,6 +144,7 @@ class Position(ConstExprCombined, ImmutableMixin):
                 raise Error(ErrorType.INVALID_POS_ALIGN, align=axis)
             self.context.append(cmds.ExecuteEnv("align", axis))
             return self
+
         self.attribute_table.set("abs", BinaryFunction(_abs))
         self.attribute_table.set("offset", BinaryFunction(_offset))
 
@@ -149,6 +159,7 @@ class Position(ConstExprCombined, ImmutableMixin):
                               .call([offset], {}, compiler))
             cmds.extend(_cmds)
             return new_obj, cmds
+
         return _offset_alias
 
     def copy(self) -> "Position":

@@ -36,10 +36,10 @@ __all__ = ["ExternEGroupDataType", "ExternEGroupType", "ExternEGroup"]
 
 from typing import TYPE_CHECKING
 
-from acaciamc.tools import axe
+from acaciamc.localization import localize
 from acaciamc.mccmdgen import cmds
 from acaciamc.mccmdgen.expr import *
-from acaciamc.localization import localize
+from acaciamc.tools import axe
 from .entity_group import *
 from .entity_template import ETemplateDataType
 from .functions import (
@@ -49,6 +49,7 @@ from .functions import (
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from .entity_template import EntityTemplate
+
 
 class ExternEGroupDataType(EGroupDataType):
     def __init__(self, compiler: "Compiler"):
@@ -64,6 +65,7 @@ class ExternEGroupDataType(EGroupDataType):
     def new_var(self, compiler):
         return ExternEGroup(compiler)
 
+
 class ExternEGroupType(EGroupType):
     def __init__(self, compiler: "Compiler"):
         super().__init__(compiler.external_template)
@@ -71,6 +73,7 @@ class ExternEGroupType(EGroupType):
 
     def datatype_hook(self):
         return ExternEGroupDataType(self.compiler)
+
 
 class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_function
@@ -94,13 +97,16 @@ class _ExternEGroupResolve(ConstExprCombined, ConstructorFunction):
 
     def pre_initialize(self, args: ARGS_T, keywords: KEYWORDS_T, compiler):
         template_out = None
+
         @axe.chop
         @axe.arg("template", ETemplateDataType)
         def _call_me(compiler, template: "EntityTemplate"):
             nonlocal template_out
             template_out = template
+
         BinaryFunction(_call_me).call(args, keywords, compiler)
         return EGroupDataType(template_out), {}
+
 
 class ExternEGroup(EntityGroup):
     def __init__(self, compiler: "Compiler"):

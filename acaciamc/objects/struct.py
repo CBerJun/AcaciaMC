@@ -2,17 +2,18 @@
 
 __all__ = ["StructDataType", "Struct"]
 
-from typing import TYPE_CHECKING, Dict, Tuple
 from itertools import chain
+from typing import TYPE_CHECKING, Dict, Tuple
 
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
 from acaciamc.error import *
+from acaciamc.mccmdgen.datatype import SupportsEntityField, Storable
+from acaciamc.mccmdgen.expr import *
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
     from .struct_template import StructTemplate
     from .types import DataType
+
 
 class StructDataType(Storable, SupportsEntityField):
     def __init__(self, template: "StructTemplate"):
@@ -46,12 +47,13 @@ class StructDataType(Storable, SupportsEntityField):
     def new_var_as_field(
             self, entity: "_EntityBase",
             field_info: Dict[str, Tuple[dict, SupportsEntityField]]
-        ) -> "Struct":
+    ) -> "Struct":
         vars_ = {}
         for name, (submeta, type_) in field_info.items():
             subvar = type_.new_var_as_field(entity, **submeta)
             vars_[name] = subvar
         return Struct(self.template, vars_)
+
 
 class Struct(VarValue):
     def __init__(self, template: "StructTemplate", vars_: Dict[str, VarValue]):

@@ -2,23 +2,23 @@
 
 __all__ = ['Generator', 'Context']
 
-from typing import TYPE_CHECKING, Union, Optional, List, Tuple, Dict
 import contextlib
+from typing import TYPE_CHECKING, Union, Optional, List, Tuple, Dict
 
+import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.ast import *
-from acaciamc.error import *
-from acaciamc.objects import *
-from acaciamc.objects.none import ctdt_none
 from acaciamc.constants import FUNCTION_PATH_CHARS
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
-from acaciamc.mccmdgen.mcselector import MCSelector
-from acaciamc.mccmdgen.datatype import *
+from acaciamc.error import *
+from acaciamc.localization import localize
 from acaciamc.mccmdgen.ctexecuter import CTExecuter
 from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr
+from acaciamc.mccmdgen.datatype import *
+from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.mcselector import MCSelector
+from acaciamc.mccmdgen.symbol import SymbolTable, CTRTConversionError
 from acaciamc.mccmdgen.utils import unreachable, InvalidOpError
-from acaciamc.localization import localize
-import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.objects import *
+from acaciamc.objects.none import ctdt_none
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -39,6 +39,7 @@ OP2METHOD = {
     Operator.negative: 'unaryneg',
     Operator.not_: 'unarynot'
 }
+
 
 class Context:
     def __init__(self, scope: SymbolTable):
@@ -70,8 +71,10 @@ class Context:
     def new_scope(self):
         self.scope = SymbolTable(self.scope, self.scope.builtins)
 
+
 class Generator(ASTVisitor):
     """Generates MC function from an AST for a single file."""
+
     def __init__(self, node: AST, main_file: cmds.MCFunctionFile,
                  file_name: str, compiler: "Compiler"):
         super().__init__()
@@ -520,8 +523,8 @@ class Generator(ASTVisitor):
             # make sure default value matches type
             # e.g. `def f(a: int = True)`
             if (defaults[arg] is not None
-                and types[arg] is not None
-                and not types[arg].is_type_of(defaults[arg])):
+                    and types[arg] is not None
+                    and not types[arg].is_type_of(defaults[arg])):
                 self.error_c(
                     ErrorType.UNMATCHED_ARG_DEFAULT_TYPE,
                     arg=arg, arg_type=str(types[arg]),
@@ -565,7 +568,7 @@ class Generator(ASTVisitor):
         for name in args:
             if types[name] is None:
                 types[name] = defaults[name].data_type
-        # make sure default values are constants
+            # make sure default values are constants
             if defaults[name] is None:
                 continue
             if not isinstance(defaults[name], ConstExpr):
@@ -626,7 +629,7 @@ class Generator(ASTVisitor):
             -> AcaciaFunction:
         func = self._func_expr(name, node)
         with self._in_noninline_func(func), \
-             self.new_mcfunc_file() as body_file:
+                self.new_mcfunc_file() as body_file:
             # Register arguments to scope
             for arg, var in func.arg_vars.items():
                 self.register_symbol(arg, var)
@@ -658,9 +661,9 @@ class Generator(ASTVisitor):
             # make sure default value matches type
             # e.g. `def f(a: int = True)`
             if (
-                defaults[arg] is not None
-                and arg_types[arg] is not None
-                and not arg_types[arg].is_typeof(defaults[arg])
+                    defaults[arg] is not None
+                    and arg_types[arg] is not None
+                    and not arg_types[arg].is_typeof(defaults[arg])
             ):
                 self.error_c(
                     ErrorType.UNMATCHED_ARG_DEFAULT_TYPE,
@@ -719,8 +722,8 @@ class Generator(ASTVisitor):
             self.ctx.scope.no_export.add(name)
 
     def _method_body(
-        self, method: AcaciaFunction, self_var: TaggedEntity,
-        template_name: str, body: List[Statement]
+            self, method: AcaciaFunction, self_var: TaggedEntity,
+            template_name: str, body: List[Statement]
     ):
         with self._in_noninline_func(method):
             # Set self
@@ -757,10 +760,12 @@ class Generator(ASTVisitor):
         # method a `MCFunctionFile` without parsing its body.
         methods_2ndpass: List[Tuple[AcaciaFunction, FuncDef]] = []
         names_seen = set()
+
         def _name(node: AST, name: str):
             if name in names_seen:
                 self.error_node(node, ErrorType.DUPLICATE_EFIELD, name=name)
             names_seen.add(name)
+
         for decl in node.body:
             res = self.visit(decl)
             if isinstance(decl, EntityField):
@@ -774,8 +779,8 @@ class Generator(ASTVisitor):
                 methods[decl.content.name] = res
                 method_qualifiers[decl.content.name] = decl.qualifier
                 if (
-                    isinstance(res, AcaciaFunction)
-                    and decl.qualifier is not MethodQualifier.static
+                        isinstance(res, AcaciaFunction)
+                        and decl.qualifier is not MethodQualifier.static
                 ):
                     methods_2ndpass.append((res, decl.content))
             else:
@@ -886,7 +891,7 @@ class Generator(ASTVisitor):
         else:
             assert isinstance(iterable, EntityGroup)
             with self.new_mcfunc_file() as body_file, \
-                 self.new_ctx():
+                    self.new_ctx():
                 self.ctx.new_scope()
                 self.write_debug("Entity group iteration body")
                 this = TaggedEntity.new_tag(iterable.template, self.compiler)
@@ -933,10 +938,12 @@ class Generator(ASTVisitor):
 
     def visit_Result(self, node: Result):
         rt = self.ctx.current_function.result_type
+
         def _check(t: "DataType"):
             if rt is not None and not rt.matches(t):
                 self.error_c(ErrorType.WRONG_RESULT_TYPE,
                              expect=str(rt), got=str(t))
+
         if self.ctx.function_state == FUNC_NORMAL:
             if isinstance(node.value, Call):
                 func, table = self._call_inspect(node.value)
@@ -1007,8 +1014,8 @@ class Generator(ASTVisitor):
             err.add_frame(ErrFrame(
                 self.node_location(node),
                 localize("generator.visit.newcall.tracemsg") % primary.name,
-                note = None if s is None else
-                    localize("generator.visit.newcall.tracenote") % s
+                note=None if s is None else
+                localize("generator.visit.newcall.tracenote") % s
             ))
             raise
         self.current_file.extend(commands)
@@ -1191,7 +1198,7 @@ class Generator(ASTVisitor):
         # We visit the AST node every time an inline function is called
         file = cmds.MCFunctionFile()
         with self.set_ctx(func.context), self.new_ctx(), \
-             self.set_mcfunc_file(file):
+                self.set_mcfunc_file(file):
             self.ctx.new_scope()
             self.ctx.inline_result = None
             self.ctx.current_function = func

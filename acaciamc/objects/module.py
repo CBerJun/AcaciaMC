@@ -2,26 +2,29 @@
 
 __all__ = ['ModuleDataType', 'BinaryModule', 'AcaciaModule', 'BuiltModule']
 
-from typing import Dict, Optional
 import importlib.util
+from typing import Dict, Optional
 
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.symbol import SymbolTable
 from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.error import *
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.symbol import SymbolTable
+
 
 class ModuleDataType(DefaultDataType):
     name = 'module'
 
+
 ctdt_module = CTDataType("module")
+
 
 class BuiltModule:
     """Object that should be returned by acacia_build to specify a module."""
+
     def __init__(
-        self,
-        attributes: Optional[Dict[str, AcaciaExpr]] = None,
-        init_cmds: Optional[CMDLIST_T] = None
+            self,
+            attributes: Optional[Dict[str, AcaciaExpr]] = None,
+            init_cmds: Optional[CMDLIST_T] = None
     ):
         if attributes is None:
             attributes = {}
@@ -29,6 +32,7 @@ class BuiltModule:
             init_cmds = []
         self.attributes = attributes
         self.init_cmds = init_cmds
+
 
 class BinaryModule(ConstExprCombined):
     """A binary module that is implemented in Python."""
@@ -61,6 +65,7 @@ class BinaryModule(ConstExprCombined):
         for name, value in res.attributes.items():
             self.attribute_table.set(name, value)
         return res.init_cmds
+
 
 class AcaciaModule(ConstExprCombined):
     """An Acacia module that is implemented in Acacia."""

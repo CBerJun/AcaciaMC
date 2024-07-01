@@ -5,18 +5,21 @@ __all__ = ["FloatDataType", "Float", "FloatType"]
 from functools import partialmethod
 
 from acaciamc.error import Error, ErrorType
-from acaciamc.tools import axe, cmethod_of
-from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import InvalidOpError
+from acaciamc.tools import axe, cmethod_of
 from .integer import IntLiteral
 from .types import Type
+
 
 class FloatDataType(DefaultDataType):
     name = "float"
 
+
 ctdt_float = CTDataType("float")
+
 
 class FloatType(Type):
     def do_init(self):
@@ -32,6 +35,7 @@ class FloatType(Type):
 
     def cdatatype_hook(self):
         return ctdt_float
+
 
 class Float(ConstExprCombined):
     cdata_type = ctdt_float

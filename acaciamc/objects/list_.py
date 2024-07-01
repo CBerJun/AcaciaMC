@@ -10,26 +10,29 @@ expressions that can be calculated in compile time.
 
 __all__ = ["ListType", "ListDataType", "AcaciaList", "CTConstList", "CTList"]
 
-from typing import TYPE_CHECKING, List, Union, Iterable
 from itertools import repeat
+from typing import TYPE_CHECKING, List, Union, Iterable
 
-from .types import Type
-from .integer import IntDataType, IntLiteral
-from acaciamc.tools import axe, cmethod_of
 from acaciamc.error import *
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTObj, CTObjPtr, CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import InvalidOpError
+from acaciamc.tools import axe, cmethod_of
+from .integer import IntDataType, IntLiteral
+from .types import Type
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.ctexpr import CTExpr
 
+
 class ListDataType(DefaultDataType):
     name = "const_list"
 
+
 ctdt_constlist = CTDataType("const_list")
 ctdt_list = CTDataType("list", (ctdt_constlist,))
+
 
 class ListType(Type):
     def do_init(self):
@@ -57,18 +60,21 @@ class ListType(Type):
             @axe.arg("step", axe.LiteralInt())
             def full(cls, compiler, start: int, stop: int, step: int):
                 return cls._impl(start, stop, step)
+
         @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("x", axe.Iterator())
         @axe.slash
         def _new(compiler, x: ITERLIST_T):
             return AcaciaList(x)
+
         @cmethod_of(self, "repeat")
         @axe.chop
         @axe.arg("object", axe.AnyValue(), rename="obj")
         @axe.arg("times", axe.LiteralInt())
         def _repeat(compiler, obj: AcaciaExpr, times: int):
             return AcaciaList(repeat(obj, times))
+
         @cmethod_of(self, "geometric")
         @axe.chop
         @axe.arg("start", axe.LiteralInt())
@@ -88,8 +94,10 @@ class ListType(Type):
     def cdatatype_hook(self):
         return ctdt_constlist
 
+
 def list2ct(x: Iterable[ConstExpr]) -> List[CTObj]:
     return [i.to_ctexpr() for i in x]
+
 
 class AcaciaList(ConstExpr):
     def __init__(self, items: Iterable[ConstExpr]):
@@ -102,10 +110,12 @@ class AcaciaList(ConstExpr):
         def _getitem(compiler, index: int):
             self._validate_index(index)
             return self.items[index]
+
         @cmethod_of(self, "copy")
         @axe.chop
         def _copy(compiler):
             return AcaciaList(self.items)
+
         @cmethod_of(self, "slice")
         class _slice(metaclass=axe.OverloadChopped):
             @classmethod
@@ -129,11 +139,13 @@ class AcaciaList(ConstExpr):
             @axe.arg("step", axe.LiteralInt())
             def full(cls, compiler, start, stop, step: int):
                 return cls._impl(start, stop, step)
+
         @cmethod_of(self, "cycle")
         @axe.chop
         @axe.arg("times", axe.RangedLiteralInt(0, None))
         def _cycle(compiler, times: int):
             return AcaciaList(self.items * times)
+
         @cmethod_of(self, "size")
         @axe.chop
         def _size(compiler):
@@ -166,6 +178,7 @@ class AcaciaList(ConstExpr):
     def to_ctexpr(self):
         return CTConstList(list2ct(self.items))
 
+
 class CTConstList(CTObj):
     cdata_type = ctdt_constlist
 
@@ -179,10 +192,12 @@ class CTConstList(CTObj):
         def _getitem(compiler, index: int):
             self._validate_index(index)
             return abs(self.ptrs[index])
+
         @cmethod_of(self, "copy")
         @axe.chop
         def _copy(compiler):
             return CTList(self.ptrs)
+
         @cmethod_of(self, "slice")
         class _slice(metaclass=axe.OverloadChopped):
             @classmethod
@@ -206,11 +221,13 @@ class CTConstList(CTObj):
             @axe.arg("step", axe.LiteralInt())
             def full(cls, compiler, start, stop, step: int):
                 return cls._impl(start, stop, step)
+
         @cmethod_of(self, "cycle")
         @axe.chop
         @axe.arg("times", axe.RangedLiteralInt(0, None))
         def _cycle(compiler, times: int):
             return CTList(self.ptrs * times)
+
         @cmethod_of(self, "size")
         @axe.chop
         def _size(compiler):
@@ -234,6 +251,7 @@ class CTConstList(CTObj):
     def to_rt(self):
         return AcaciaList([abs(x).to_rt() for x in self.ptrs])
 
+
 class CTList(CTConstList):
     cdata_type = ctdt_list
 
@@ -247,18 +265,21 @@ class CTList(CTConstList):
         def _getitem(compiler, index: int):
             self._validate_index(index)
             return self.ptrs[index]
+
         @cmethod_of(self, "extend", runtime=False)
         @axe.chop
         @axe.arg("values", axe.CTIterator())
         @axe.slash
         def _extend(compiler, values: List["CTExpr"]):
             self.ptrs.extend(map(self._new_element, values))
+
         @cmethod_of(self, "append", runtime=False)
         @axe.chop
         @axe.arg("value", axe.Constant())
         @axe.slash
         def _append(compiler, value: CTObj):
             self.ptrs.append(self._new_element(value))
+
         @cmethod_of(self, "insert", runtime=False)
         @axe.chop
         @axe.arg("index", axe.LiteralInt())
@@ -267,10 +288,12 @@ class CTList(CTConstList):
         def _insert(compiler, index: int, value: CTObj):
             self._validate_index(index)
             self.ptrs.insert(index, self._new_element(value))
+
         @cmethod_of(self, "reverse", runtime=False)
         @axe.chop
         def _reverse(compiler):
             self.ptrs.reverse()
+
         @cmethod_of(self, "pop", runtime=False)
         @axe.chop
         @axe.arg("index", axe.LiteralInt())

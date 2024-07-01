@@ -2,11 +2,12 @@
 
 __all__ = ['NoneDataType', 'NoneLiteral']
 
-from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
-from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
+
 
 class NoneDataType(DefaultDataType, Storable, SupportsEntityField):
     name = 'None'
@@ -20,7 +21,9 @@ class NoneDataType(DefaultDataType, Storable, SupportsEntityField):
     def new_var_as_field(self, entity) -> VarValue:
         return NoneLiteral()
 
+
 ctdt_none = CTDataType("None")
+
 
 class NoneLiteral(ConstExprCombined, VarValue):
     """Represents a literal None."""

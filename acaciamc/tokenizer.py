@@ -1,15 +1,15 @@
 """Tokenizer (Lexer) for Acacia."""
 
-__all__  = ['TokenType', 'Token', 'Tokenizer']
+__all__ = ['TokenType', 'Token', 'Tokenizer']
 
+import enum
+import string
 from typing import (
     Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, Any, TYPE_CHECKING
 )
-import enum
-import string
 
-from acaciamc.error import *
 from acaciamc.constants import COLORS, COLORS_NEW, FUNCTION_PATH_CHARS
+from acaciamc.error import *
 
 if TYPE_CHECKING:
     from acaciamc.tools.versionlib import VERSION_T
@@ -21,6 +21,7 @@ FONTS = {
     "italic": "o",
     "obfuscated": "k",
 }
+
 
 class TokenType(enum.Enum):
     """
@@ -117,17 +118,22 @@ class TokenType(enum.Enum):
     new = 'new'
     false = 'False'  # must at end of keyword part
 
+
 KEYWORDS: Dict[str, TokenType] = {}
+
+
 def _kw_builder():
     # NOTE this relies on that keywords in `TokenType` enum are all
     # between `true` and `false`.
     token_types = tuple(TokenType)
     for i in range(
-        token_types.index(TokenType.true),
-        token_types.index(TokenType.false) + 1
+            token_types.index(TokenType.true),
+            token_types.index(TokenType.false) + 1
     ):
         token_type = token_types[i]
         KEYWORDS[token_type.value] = token_type
+
+
 _kw_builder()
 del _kw_builder
 
@@ -138,13 +144,16 @@ BRACKETS = {
 }
 RB2LB = {v: k for k, v in BRACKETS.items()}
 
+
 def is_idstart(c: str) -> bool:
     """Return if given character can start an identifier in Acacia."""
     return c.isalpha() or c == '_'
 
+
 def is_idcontinue(c: str) -> bool:
     """Return if given character is valid in an Acacia identifier."""
     return is_idstart(c) or c in string.digits
+
 
 class Token(NamedTuple):
     type: TokenType
@@ -169,6 +178,7 @@ class Token(NamedTuple):
             self.type.name, value_str,
             self.lineno, self.col
         )
+
 
 class _FormattedStrManager:
     def __init__(self, owner: 'Tokenizer',
@@ -212,19 +222,23 @@ class _FormattedStrManager:
         self._dump_texts()
         self._tokens.append(self.owner.gen_token(self.end_tok))
 
+
 class _CommandManager(_FormattedStrManager):
     def __init__(self, owner: 'Tokenizer') -> None:
         super().__init__(owner, TokenType.command_begin, TokenType.command_end)
 
+
 class _StrLiteralManager(_FormattedStrManager):
     def __init__(self, owner: 'Tokenizer') -> None:
         super().__init__(owner, TokenType.string_begin, TokenType.string_end)
+
 
 class _BracketFrame(NamedTuple):
     type: TokenType
     pos: Tuple[int, int]
     cmd_fexpr: bool = False
     str_fexpr: bool = False
+
 
 class Tokenizer:
     def __init__(self, src: TextIO, mc_version: "VERSION_T"):
@@ -421,10 +435,10 @@ class Tokenizer:
                 self.forward()
         # Now self.current_char is either '\n', '\\' or None (EOF)
         if (
-            # ${} in single line command can't use implicit line continuation.
-            (self.in_command_fexpr and not self.continued_command)
-            # And so is ${} in string literal.
-            or self.in_string_fexpr
+                # ${} in single line command can't use implicit line continuation.
+                (self.in_command_fexpr and not self.continued_command)
+                # And so is ${} in string literal.
+                or self.in_string_fexpr
         ):
             self.error(ErrorType.UNCLOSED_FEXPR)
         backslash = False
@@ -433,8 +447,8 @@ class Tokenizer:
             self.has_content = True
         if self.current_char == '\n':
             if self.has_content and not (
-                self.continued_comment or self.continued_command
-                or self.is_in_bracket()
+                    self.continued_comment or self.continued_command
+                    or self.is_in_bracket()
             ):
                 res.append(self.handle_logical_newline())
             self.last_line_continued = False
@@ -526,7 +540,7 @@ class Tokenizer:
         elif spaces in self.indent_record:
             i = self.indent_record.index(spaces)
             dedent_count = self.indent_len - 1 - i
-            self.indent_record = self.indent_record[:i+1]
+            self.indent_record = self.indent_record[:i + 1]
             self.indent_len -= dedent_count
             tokens.extend(Token(TokenType.dedent, lineno=ln, col=0)
                           for _ in range(dedent_count))
@@ -565,8 +579,8 @@ class Tokenizer:
             self.forward()
         ## convert string to number
         if (self.current_char == "."
-            and base == 10
-            and self._isdecimal(self.peek())
+                and base == 10
+                and self._isdecimal(self.peek())
         ):  # float
             self.forward()
             res.append(".")
@@ -651,6 +665,7 @@ class Tokenizer:
             def _err():
                 self.error(ErrorType.INVALID_UNICODE_ESCAPE,
                            escape_char=second)
+
             self.forward()  # skip '\\'
             code = []
             length = UNICODE_ESCAPES[second]
@@ -760,8 +775,8 @@ class Tokenizer:
         # that Acacia removes support for parenthesis characters.
         chars = []
         while (
-            self.current_char in FUNCTION_PATH_CHARS
-            and self.current_char not in ('(', ')')
+                self.current_char in FUNCTION_PATH_CHARS
+                and self.current_char not in ('(', ')')
         ):
             chars.append(self.current_char)
             self.forward()

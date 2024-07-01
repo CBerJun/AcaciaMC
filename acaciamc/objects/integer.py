@@ -30,25 +30,25 @@ __all__ = [
     'to_IntVar'
 ]
 
-from typing import TYPE_CHECKING, List, Tuple, Callable, Optional, Dict, Union
-from functools import partialmethod
 import operator
+from functools import partialmethod
+from typing import TYPE_CHECKING, List, Tuple, Callable, Optional, Dict, Union
 
-from .types import Type
-from .boolean import (
-    CompareBase, BoolDataType, BoolLiteral, ScbMatchesCompare, to_BoolVar
-)
-from acaciamc.error import *
-from acaciamc.constants import INT_MIN, INT_MAX
-from acaciamc.tools import axe, cmethod_of
+import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.ast import Operator, COMPOP_INVERT
-from acaciamc.mccmdgen.expr import *
+from acaciamc.constants import INT_MIN, INT_MAX
+from acaciamc.error import *
+from acaciamc.mccmdgen.ctexpr import CTDataType
 from acaciamc.mccmdgen.datatype import (
     DefaultDataType, Storable, SupportsEntityField
 )
-from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.expr import *
 from acaciamc.mccmdgen.utils import InvalidOpError, unreachable
-import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.tools import axe, cmethod_of
+from .boolean import (
+    CompareBase, BoolDataType, BoolLiteral, ScbMatchesCompare, to_BoolVar
+)
+from .types import Type
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
@@ -85,10 +85,12 @@ COMPOP2PYOP = {
     Operator.less_equal: operator.le
 }
 
+
 def remainder(a: int, b: int) -> int:
     """C-style % operator, which MC uses."""
     res = abs(a) % abs(b)
     return res if a >= 0 else -res
+
 
 def c_int_div(a: int, b: int) -> int:
     """C-style / operator, which MC uses."""
@@ -97,15 +99,18 @@ def c_int_div(a: int, b: int) -> int:
     else:
         return a // b
 
+
 STR2PYINTOP: Dict[str, Callable[[int, int], int]] = {
     '+': int.__add__, '-': int.__sub__, '*': int.__mul__,
     '/': c_int_div, '%': remainder
 }
 
+
 def _int_rawtextify(self: AcaciaExpr, compiler: "Compiler"):
     """A generic `rawtextify` implementation for int."""
     dependencies, var = to_IntVar(self, compiler)
     return [cmds.RawtextScore(var.slot)], dependencies
+
 
 class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     name = "int"
@@ -119,12 +124,15 @@ class IntDataType(DefaultDataType, Storable, SupportsEntityField):
     def new_var_as_field(self, entity, scoreboard: str) -> "IntVar":
         return IntVar(cmds.ScbSlot(entity.to_str(), scoreboard))
 
+
 ctdt_int = CTDataType("int")
+
 
 class IntType(Type):
     def do_init(self):
         self.attribute_table.set('MAX', IntLiteral(INT_MAX))
         self.attribute_table.set('MIN', IntLiteral(INT_MIN))
+
         @cmethod_of(self, "__new__")
         @axe.chop
         @axe.arg("b", BoolDataType)
@@ -150,15 +158,17 @@ class IntType(Type):
     def cdatatype_hook(self):
         return ctdt_int
 
+
 class IntCompare(CompareBase):
     """
     A boolean that stores comparison between 2 integer expressions.
     This only stores one comparison, unlike the AST node `CompareOp`,
     so "a > b > 1" is stored in two `IntCompare`s.
     """
+
     def __init__(
-        self, left: AcaciaExpr, operator: Operator,
-        right: AcaciaExpr
+            self, left: AcaciaExpr, operator: Operator,
+            right: AcaciaExpr
     ):
         super().__init__()
         self.left = left
@@ -189,6 +199,7 @@ class IntCompare(CompareBase):
     # Unary operator
     def unarynot(self, compiler):
         return IntCompare(self.left, COMPOP_INVERT[self.operator], self.right)
+
 
 class IntLiteral(ConstExprCombined):
     """Represents a literal integer.
@@ -250,8 +261,10 @@ class IntLiteral(ConstExprCombined):
     cdiv = partialmethod(_bin_op, '/')
     cmod = partialmethod(_bin_op, '%')
 
+
 class IntVar(VarValue):
     """An integer variable."""
+
     def __init__(self, slot: cmds.ScbSlot):
         super().__init__(IntDataType())
         self.slot = slot
@@ -366,6 +379,7 @@ class IntVar(VarValue):
     idiv = partialmethod(_imul_div_mod, '/')
     imod = partialmethod(_imul_div_mod, '%')
 
+
 class IntOp:
     # This is intended to be immutable
     def scb_did_read(self, slot: cmds.ScbSlot) -> bool:
@@ -392,12 +406,14 @@ class IntOp:
         """
         return self.resolve(var)
 
+
 class IntSetConst(IntOp):
     def __init__(self, value: int) -> None:
         self.value = value
 
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return [cmds.ScbSetConst(var.slot, self.value)]
+
 
 class IntRandom(IntOp):
     def __init__(self, min_: int, max_: int) -> None:
@@ -406,6 +422,7 @@ class IntRandom(IntOp):
 
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return [cmds.ScbRandom(var.slot, self.min, self.max)]
+
 
 class IntOpConst(IntOp):
     def __init__(self, op: str, value: int) -> None:
@@ -419,6 +436,7 @@ class IntOpConst(IntOp):
         c = compiler.add_int_const(self.value)
         return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, c.slot)]
 
+
 class IntOpVar(IntOp):
     def __init__(self, op: str, slot: cmds.ScbSlot) -> None:
         self.op = STR2SCBOP[op]
@@ -430,9 +448,11 @@ class IntOpVar(IntOp):
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return [cmds.ScbOperation(self.op, var.slot, self.slot)]
 
+
 class IntSetVar(IntOpVar):
     def __init__(self, slot: cmds.ScbSlot) -> None:
         super().__init__("=", slot)
+
 
 class IntOpSelf(IntOp):
     def __init__(self, op: str) -> None:
@@ -440,6 +460,7 @@ class IntOpSelf(IntOp):
 
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return [cmds.ScbOperation(STR2SCBOP[self.op], var.slot, var.slot)]
+
 
 class IntCmdOp(IntOp):
     def __init__(self, commands: CMDLIST_T) -> None:
@@ -460,8 +481,10 @@ class IntCmdOp(IntOp):
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return self.commands
 
+
 class IntOpGroup(AcaciaExpr):
     """An `IntOpGroup` stores complex integer operations."""
+
     def __init__(self, init: Optional[IntOp]):
         super().__init__(IntDataType())
         self.ops: List[IntOp] = []
@@ -574,6 +597,7 @@ class IntOpGroup(AcaciaExpr):
     rsub = partialmethod(_r_sub_div_mod, 'sub')
     rdiv = partialmethod(_r_sub_div_mod, 'div')
     rmod = partialmethod(_r_sub_div_mod, 'mod')
+
 
 # Utils
 def to_IntVar(expr: AcaciaExpr, compiler, tmp=True) \

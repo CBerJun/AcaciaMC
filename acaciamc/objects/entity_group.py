@@ -4,19 +4,19 @@ __all__ = ["EGroupDataType", "EGroupGeneric", "EGroupType", "EntityGroup"]
 
 from typing import TYPE_CHECKING, List
 
-from acaciamc.tools import axe, resultlib, method_of, cmethod_of
-from acaciamc.mccmdgen.mcselector import MCSelector
+import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.utils import InvalidOpError
-import acaciamc.mccmdgen.cmds as cmds
-from .entity_template import ETemplateDataType
-from .entity_filter import EFilterDataType
-from .entity import EntityDataType, EntityReference
+from acaciamc.tools import axe, resultlib, method_of, cmethod_of
 from .boolean import WildBool
-from .integer import IntOpGroup, IntOp
+from .entity import EntityDataType, EntityReference
+from .entity_filter import EFilterDataType
+from .entity_template import ETemplateDataType
 from .functions import BinaryFunction, ConstructorFunction
 from .generic import BinaryGeneric
+from .integer import IntOpGroup, IntOp
 from .types import TypeDataType, ctdt_type
 
 if TYPE_CHECKING:
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from .entity_template import EntityTemplate
     from .entity_filter import EntityFilter
     from .entity import _EntityBase
+
 
 class EGroupDataType(Storable):
     name = "Engroup"
@@ -48,14 +49,17 @@ class EGroupDataType(Storable):
     def new_var(self, compiler):
         return EntityGroup.from_template(self.template, compiler)
 
+
 class EGroupGeneric(BinaryGeneric):
     def __init__(self):
         super().__init__()
+
         @cmethod_of(self, "__getitem__")
         @axe.chop
         @axe.arg("template", ETemplateDataType)
         def _getitem(compiler, template: "EntityTemplate"):
             return EGroupType(template)
+
 
 class EGroupType(ConstExprCombined, ConstructorFunction):
     cdata_type = ctdt_type
@@ -65,17 +69,19 @@ class EGroupType(ConstExprCombined, ConstructorFunction):
         self.template = template
 
     def initialize(
-        self, instance: "EntityGroup", compiler: "Compiler",
-        args: "ARGS_T", keywords: "KEYWORDS_T"
+            self, instance: "EntityGroup", compiler: "Compiler",
+            args: "ARGS_T", keywords: "KEYWORDS_T"
     ) -> CMDLIST_T:
         @axe.chop
         def _call_me(compiler: "Compiler"):
             return resultlib.commands(instance.clear())
+
         _, c = BinaryFunction(_call_me).call(args, keywords, compiler)
         return c
 
     def datatype_hook(self):
         return EGroupDataType(self.template)
+
 
 class IntEntityCount(IntOp):
     init = True
@@ -92,6 +98,7 @@ class IntEntityCount(IntOp):
             )
         ]
 
+
 class EntityGroup(VarValue):
     def __init__(self, data_type: EGroupDataType, compiler: "Compiler"):
         super().__init__(data_type)
@@ -103,37 +110,39 @@ class EntityGroup(VarValue):
 
         @method_of(self, "select")
         @axe.chop
-        @axe.arg("filter", EFilterDataType, rename="filter_")
+        @axe.arg("entity_filter", EFilterDataType, rename="filter_")
         def _select(compiler, filter_: "EntityFilter"):
             """
-            .select(filter: Enfilter) -> EntityGroup
+            .select(entity_filter: Enfilter) -> EntityGroup
             Selects entities from all entities in the world that match
-            the filter and add them to this entity group.
+            the entity_filter and add them to this entity group.
             """
             cmds = filter_.dump("tag {selected} add %s" % self.tag)
             return self, cmds
+
         @method_of(self, "drop")
         @axe.chop
-        @axe.arg("filter", EFilterDataType, rename="filter_")
+        @axe.arg("entity_filter", EFilterDataType, rename="filter_")
         def _drop(compiler, filter_: "EntityFilter"):
             """
-            .drop(filter: Enfilter) -> EntityGroup
+            .drop(entity_filter: Enfilter) -> EntityGroup
             Selects entities from this entity group that match the
-            filter and remove them.
+            entity_filter and remove them.
             """
             cmds = filter_.dump(
                 "tag {selected} remove %s" % self.tag,
                 among_tag=self.tag
             )
             return self, cmds
-        @method_of(self, "filter")
+
+        @method_of(self, "entity_filter")
         @axe.chop
-        @axe.arg("filter", EFilterDataType, rename="filter_")
+        @axe.arg("entity_filter", EFilterDataType, rename="filter_")
         def _filter(compiler: "Compiler", filter_: "EntityFilter"):
             """
-            .filter(filter: Enfilter) -> EntityGroup
+            .entity_filter(entity_filter: Enfilter) -> EntityGroup
             Selects entities from this entity group that match the
-            filter and only keep them.
+            entity_filter and only keep them.
             """
             tmp = compiler.allocate_entity_tag()
             cmds = filter_.dump(
@@ -145,55 +154,66 @@ class EntityGroup(VarValue):
             ))
             cmds.append("tag @e[tag={0}] remove {0}".format(tmp))
             return self, cmds
+
         @method_of(self, "extend")
         @axe.chop
         @axe.arg("other", OPERAND_TYPE)
         def _extend(compiler, other: "EntityGroup"):
             return self, ["tag @e[tag=%s] add %s" % (other.tag, self.tag)]
+
         @method_of(self, "subtract")
         @axe.chop
         @axe.arg("other", OPERAND_TYPE)
         def _subtract(compiler, other: "EntityGroup"):
             return self, ["tag @e[tag=%s] remove %s" % (other.tag, self.tag)]
+
         @method_of(self, "intersect")
         @axe.chop
         @axe.arg("other", OPERAND_TYPE)
         def _intersect(compiler, other: "EntityGroup"):
             return self, ["tag @e[tag=!%s] remove %s" % (other.tag, self.tag)]
+
         @method_of(self, "copy")
         @axe.chop
         def _copy(compiler):
             res = data_type.new_var(compiler)
             return res, self.export(res, compiler)
+
         @method_of(self, "clear")
         @axe.chop
         def _clear(compiler):
             return self, ["tag %s remove %s" % (SELF, self.tag)]
+
         @method_of(self, "add")
         @axe.chop
         @axe.star_arg("entities", MEMBER_TYPE)
         def _add(compiler, entities: List["_EntityBase"]):
             return self, ["tag %s add %s" % (entity, self.tag)
                           for entity in entities]
+
         @method_of(self, "remove")
         @axe.chop
         @axe.star_arg("entities", MEMBER_TYPE)
         def _remove(compiler, entities: List["_EntityBase"]):
             return self, ["tag %s remove %s" % (entity, self.tag)
                           for entity in entities]
+
         @method_of(self, "is_empty")
         @axe.chop
         def _is_empty(compiler: "Compiler"):
             subcmds = [cmds.ExecuteCond("entity", SELF, invert=True)]
             return WildBool(subcmds, [])
+
         @method_of(self, "size")
         @axe.chop
         def _size(compiler: "Compiler"):
             return IntOpGroup(init=IntEntityCount(SELF))
+
         @method_of(self, "to_single")
         @axe.chop
         def _to_single(compiler: "Compiler"):
             return EntityReference(self.get_selector(), self.template)
+
         @method_of(self, "has")
         @axe.chop
         @axe.arg("ent", MEMBER_TYPE)
