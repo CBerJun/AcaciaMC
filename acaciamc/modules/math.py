@@ -1,24 +1,26 @@
 """math - Math related utilities."""
 from typing import List, Optional, TYPE_CHECKING
 
-from acaciamc.objects import *
+from acaciamc.ast import ModuleMeta
+from acaciamc.constants import INT_MIN, INT_MAX
+from acaciamc.localization import localize
 from acaciamc.mccmdgen.expr import *
+from acaciamc.objects import *
 from acaciamc.objects.integer import (
     IntRandom, IntCmdOp, IntOpSelf, IntOpVar, IntOp, STR2SCBOP
 )
-from acaciamc.ast import ModuleMeta
 from acaciamc.tools import axe
-from acaciamc.constants import INT_MIN, INT_MAX
-from acaciamc.localization import localize
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
+
 
 def internal(name: str) -> AcaciaExpr:
     res = _math.attribute_table.lookup(name)
     if res is None:
         raise ValueError(name)
     return res
+
 
 @axe.chop
 @axe.arg("min", axe.LiteralInt(), rename="min_")
@@ -30,6 +32,7 @@ def _randint(compiler, min_: int, max_: int):
     """
     return IntOpGroup(init=IntRandom(min_, max_))
 
+
 class IntXOpSelf(IntOp):
     def __init__(self, x: cmds.ScbSlot, op: str) -> None:
         self.op = op
@@ -40,6 +43,7 @@ class IntXOpSelf(IntOp):
 
     def resolve(self, var: IntVar) -> CMDLIST_T:
         return [cmds.ScbOperation(STR2SCBOP[self.op], self.x, var.slot)]
+
 
 @axe.chop
 @axe.arg("base", IntDataType)
@@ -80,6 +84,7 @@ def _pow(compiler: "Compiler", base, exp):
         res.add_op(IntOpVar("*", y))
     return res
 
+
 class IntRestrict(IntOp):
     def __init__(self, value: int, is_upper: bool):
         self.value = value
@@ -97,6 +102,7 @@ class IntRestrict(IntOp):
                 cmds.ScbSetConst(var.slot, self.value)
             )
         ]
+
 
 @axe.chop
 @axe.star_arg("operands", IntDataType)
@@ -129,6 +135,7 @@ def _min(compiler, operands: List[AcaciaExpr]):
         res.add_op(IntRestrict(upper, is_upper=True))
     return res
 
+
 @axe.chop
 @axe.star_arg("operands", IntDataType)
 def _max(compiler, operands: List[AcaciaExpr]):
@@ -160,6 +167,7 @@ def _max(compiler, operands: List[AcaciaExpr]):
         res.add_op(IntRestrict(lower, is_upper=False))
     return res
 
+
 @axe.chop
 @axe.arg("x", IntDataType)
 @axe.arg("y", IntDataType)
@@ -169,6 +177,7 @@ def _mod(compiler, x, y):
             raise axe.ArgumentError('y', localize("modules.math.mod.zero"))
         return IntLiteral(x.value % y.value)
     return internal("mod").call([x, y], {}, compiler)
+
 
 @axe.chop
 @axe.arg("x", IntDataType)
@@ -181,6 +190,7 @@ def _floordiv(compiler, x, y):
             )
         return IntLiteral(x.value // y.value)
     return internal("floordiv").call([x, y], {}, compiler)
+
 
 def acacia_build(compiler: "Compiler"):
     global _math

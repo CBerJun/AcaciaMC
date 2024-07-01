@@ -2,15 +2,17 @@
 
 __all__ = ["MCSelector", "SELECTORVAR_T"]
 
-from typing import Union, Dict, Any, Optional, List
 from copy import deepcopy
+from typing import Union, Dict, Any, Optional, List
 
 from acaciamc.mccmdgen.cmds import mc_str
 
 SELECTORVAR_T = str  # Literal["a", "e", "r", "p", "s", "initiator"]
 
+
 class MCSelector:
     """Low-level utility for Minecraft selectors."""
+
     def __init__(self, var: Union[SELECTORVAR_T, None] = None) -> None:
         # When `var` is None, the variable is unknown.
         self.var = var

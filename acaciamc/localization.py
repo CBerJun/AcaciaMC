@@ -13,21 +13,24 @@ __all__ = [
     "get_mapping", "localize", "LocalizedEnum"
 ]
 
-from typing import Dict
 from enum import Enum
 from pkgutil import get_data
+from typing import Dict
 
 lang_cache: Dict[str, Dict[str, str]] = {}
 DEFAULT_LANGUAGE = _language = 'en_US'
+
 
 def current_language() -> str:
     """Get current language code."""
     return _language
 
+
 def set_language(lang: str) -> None:
     """Change the language."""
     global _language
     _language = lang
+
 
 def get_mapping(lang: str) -> Dict[str, str]:
     """
@@ -49,12 +52,14 @@ def get_mapping(lang: str) -> Dict[str, str]:
         lang_file_dict[key] = text
     return lang_file_dict
 
+
 def localize(key: str) -> str:
     """Get localized text under current language."""
     mapping = get_mapping(_language)
     if key in mapping:
         return mapping[key]
     return get_mapping(DEFAULT_LANGUAGE)[key]
+
 
 class LocalizedEnum(Enum):
     """

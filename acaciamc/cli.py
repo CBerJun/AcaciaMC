@@ -7,16 +7,18 @@ import os
 import shutil
 import sys
 
-from acaciamc.error import Error as CompileError
 from acaciamc.compiler import Compiler, Config
+from acaciamc.error import Error as CompileError
 from acaciamc.localization import localize
 from acaciamc.tokenizer import is_idstart, is_idcontinue
 
 _NOTGIVEN = object()
 
+
 def fatal(message: str):
     print(localize("cli.fatal") % message, file=sys.stderr)
     sys.exit(1)
+
 
 def build_argparser():
     argparser = argparse.ArgumentParser(
@@ -93,6 +95,7 @@ def build_argparser():
     )
     return argparser
 
+
 def check_id(name: str):
     """Raise ValueError if `name` is not a valid Acacia identifier."""
     if not name:
@@ -103,6 +106,7 @@ def check_id(name: str):
         if not is_idcontinue(c):
             raise ValueError(localize("cli.checkid.idcontinue") % c)
 
+
 def assert_id(name: str, option: str):
     """Make sure `name` is a valid Acacia identifier."""
     try:
@@ -110,6 +114,7 @@ def assert_id(name: str, option: str):
     except ValueError as e:
         fatal(localize("cli.assertid.fatal")
               .format(option=option, msg=e.args[0]))
+
 
 def get_config(args) -> Config:
     """Create a `Config` object from `args`."""
@@ -164,6 +169,7 @@ def get_config(args) -> Config:
         kwds["internal_folder"] = args.internal_folder
     return Config(**kwds)
 
+
 def try_rmtree(path: str):
     """
     Delete `path` if this path exists.
@@ -175,6 +181,7 @@ def try_rmtree(path: str):
         except OSError as e:
             fatal(localize("cli.tryrmtree.failure")
                   .format(path=path, message=e.strerror))
+
 
 def run(args):
     if not os.path.exists(args.file):
@@ -216,6 +223,7 @@ def run(args):
                 localize("cli.run.unexpectederror")
                 % traceback.format_exception_only(err)[-1].strip()
             )
+
 
 def main():
     argparser = build_argparser()

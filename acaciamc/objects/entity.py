@@ -4,16 +4,16 @@ __all__ = ['EntityDataType', 'TaggedEntity', 'EntityReference']
 
 from typing import TYPE_CHECKING, List, Optional
 
-from acaciamc.error import *
-from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.datatype import Storable
 from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.mcselector import MCSelector
 from acaciamc.mccmdgen.utils import InvalidOpError
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.datatype import DataType
     from .entity_template import EntityTemplate
+
 
 class EntityDataType(Storable):
     def __init__(self, template: "EntityTemplate"):
@@ -33,6 +33,7 @@ class EntityDataType(Storable):
 
     def new_var(self, compiler) -> "TaggedEntity":
         return TaggedEntity.new_tag(self.template, compiler)
+
 
 class _EntityBase(AcaciaExpr):
     def __init__(self, template: "EntityTemplate",
@@ -77,6 +78,7 @@ class _EntityBase(AcaciaExpr):
         cmds.append("tag %s add %s" % (self, var.tag))
         return cmds
 
+
 class EntityReference(_EntityBase):
     def __init__(self, selector: MCSelector, template: "EntityTemplate",
                  cast_to: Optional["EntityTemplate"] = None):
@@ -104,6 +106,7 @@ class EntityReference(_EntityBase):
             return []
         # Default implementation
         return super().export(var, compiler)
+
 
 class TaggedEntity(_EntityBase, VarValue):
     def __init__(self, tag: str, template: "EntityTemplate",
