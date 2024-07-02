@@ -30,20 +30,19 @@ class FuncPortType(_DisplayableEnum):
 
 class ModuleMeta:
     """Specifies a module."""
-    def __init__(self, last_name: str, leading_dots: int = 0,
-                 parents: _Iterable[str] = ()):
-        self.leading_dots = leading_dots
-        self.last_name = last_name
-        self.parents = list(parents)
 
-    def __str__(self) -> str:
-        return ("." * self.leading_dots
-                + ".".join(self.parents)
-                + ("." if self.parents else "")
-                + self.last_name)
+    def __init__(self, path: _Iterable[str]):
+        self.path = tuple(path)
+        assert self.path
 
     def __repr__(self) -> str:
-        return "<ModuleMeta %r>" % str(self)
+        return f"<ModuleMeta {self.unparse()!r}>"
+
+    def unparse(self) -> str:
+        """
+        Return a normalized string that represents this module meta.
+        """
+        return ".".join(self.path)
 
 #################
 ### AST NODES ###

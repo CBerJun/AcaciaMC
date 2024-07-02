@@ -523,9 +523,9 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             ]
         }
     }),
-    ("import .foo.spam as bar", {
-        "@type": ast.Import, "begin": (1, 1), "end": (1, 24),
-        "meta": ".foo.spam",
+    ("import foo.spam as bar", {
+        "@type": ast.Import, "begin": (1, 1), "end": (1, 23),
+        "meta": "foo.spam",
         "name": "bar"
     }),
     ("from spam import ham as wood, tree", {
@@ -634,7 +634,7 @@ def _compare_ast_values(value, serialized) -> bool:
             if not _compare_ast_values(val, ser):
                 return False
     elif isinstance(value, ast.ModuleMeta):
-        if str(value) != serialized:
+        if value.unparse() != serialized:
             return False
     else:
         if value != serialized:

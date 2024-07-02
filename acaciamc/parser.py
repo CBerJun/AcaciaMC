@@ -801,12 +801,7 @@ class Parser:
         return Command(content, begin=pos1, end=self.prev_pos2)
 
     def module_meta(self) -> Tuple[ModuleMeta, TwoIntPairs]:
-        """module_meta := POINT* IDENTIFIER (POINT IDENTIFIER)*"""
-        # leading dots
-        leadint_dots = 0
-        while self.current_token.type is TokenType.point:
-            leadint_dots += 1
-            self.eat()
+        """module_meta := IDENTIFIER (POINT IDENTIFIER)*"""
         # at least one name should be given
         names = [self.current_token.value]
         last_range = self.current_range
@@ -817,8 +812,7 @@ class Parser:
             names.append(self.current_token.value)
             last_range = self.current_range
             self.eat(TokenType.identifier)
-        last_name = names.pop()
-        return ModuleMeta(last_name, leadint_dots, names), last_range
+        return ModuleMeta(names), last_range
 
     def alias(self) -> Optional[IdentifierDef]:
         """alias := (AS IDENTIFIER)?"""
@@ -834,7 +828,7 @@ class Parser:
         meta, last_range = self.module_meta()
         alias = self.alias()
         if alias is None:
-            alias = IdentifierDef(meta.last_name, *last_range)
+            alias = IdentifierDef(meta.path[-1], *last_range)
         return Import(meta, alias, begin=pos1, end=self.prev_pos2)
 
     def from_import_stmt(self):
