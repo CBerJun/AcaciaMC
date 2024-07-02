@@ -1,20 +1,58 @@
 """Tokenizer (Lexer) for Acacia."""
 
-__all__  = ['TokenType', 'Token', 'Tokenizer']
-
 from typing import (
-    Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, Any, TYPE_CHECKING
+    Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, Any, Callable,
+    Generator, Mapping, TYPE_CHECKING
 )
+from contextlib import contextmanager
+from string import ascii_letters, digits
 import enum
 import string
 
-from acaciamc.error import *
-from acaciamc.constants import COLORS, COLORS_NEW, FUNCTION_PATH_CHARS
+from acaciamc.reader import SourceRange, SourceLocation
+from acaciamc.utils.str_template import STInt, STStr, STArgument
+from acaciamc.diagnostic import Diagnostic, DiagnosticError
 
 if TYPE_CHECKING:
-    from acaciamc.tools.versionlib import VERSION_T
+    from acaciamc.reader import FileEntry
+    from acaciamc.diagnostic import DiagnosticsManager
 
 UNICODE_ESCAPES = {'x': 2, 'u': 4, 'U': 8}
+# These are the only characters allowed in function paths.
+FUNCTION_PATH_CHARS = frozenset(ascii_letters + digits + ".(-)_/")
+# Color codes
+COLORS = {
+    "black": "0",
+    "dark_blue": "1",
+    "dark_green": "2",
+    "dark_aqua": "3",
+    "dark_red": "4",
+    "dark_purple": "5",
+    "gold": "6",
+    "gray": "7",
+    "dark_gray": "8",
+    "blue": "9",
+    "green": "a",
+    "aqua": "b",
+    "red": "c",
+    "light_purple": "d",
+    "yellow": "e",
+    "white": "f",
+    "minecoin_gold": "g",
+}
+# 1.19.80+ colors
+COLORS_NEW = {
+    "material_quartz": "h",
+    "material_iron": "i",
+    "material_netherite": "j",
+    "material_redstone": "m",
+    "material_copper": "n",
+    "material_gold": "p",
+    "material_emerald": "q",
+    "material_diamond": "s",
+    "material_lapis": "t",
+    "material_amethyst": "u",
+}
 FONTS = {
     "reset": "r",
     "bold": "l",
@@ -82,7 +120,7 @@ class TokenType(enum.Enum):
     # expressions
     ## literal
     integer = 'INTEGER'  # value: int
-    float_ = 'FLOAT'  # value: float
+    float = 'FLOAT'  # value: float
     interface_path = 'INTERFACE_PATH'  # value: str
     ## id
     identifier = 'IDENTIFIER'  # value: str
@@ -147,89 +185,93 @@ def is_idcontinue(c: str) -> bool:
     return is_idstart(c) or c in string.digits
 
 class Token(NamedTuple):
+    """
+    A token with `type` type that ranges from before the character
+    pointed by `pos1` to before the character pointed by `pos2`. The
+    payload `value` defaults to None. Line and column numbers are
+    1-indexed (just like all other places).
+    """
+
     type: TokenType
-    lineno: int
-    col: int
+    pos1: Tuple[int, int]  # lineno, col
+    pos2: Tuple[int, int]
     value: Any = None
 
-    def __str__(self) -> str:
-        v = self.type.value
-        if not v.isupper():
-            v = repr(v)
-        if self.value is not None:
-            v += ' (%s)' % self.value
-        return v
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.value is None:
             value_str = ''
         else:
-            value_str = '(%s)' % (self.value,)
-        return '<Token %s%s at %s:%s>' % (
+            value_str = f'({self.value!r})'
+        return '<Token %s%s at %d:%d-%d:%d>' % (
             self.type.name, value_str,
-            self.lineno, self.col
+            *self.pos1, *self.pos2
         )
 
+    def to_source_range(self, file_entry: "FileEntry") -> SourceRange:
+        l1 = file_entry.get_location(self.pos1)
+        l2 = file_entry.get_location(self.pos2)
+        return SourceRange(l1, l2)
+
+    def display_string(self) -> str:
+        """Get a string representation to display to user."""
+        v = self.type.value
+        if not v.isupper():
+            # Add quotes to symbols or keywords
+            v = repr(v)
+        return v
+
 class _FormattedStrManager:
-    def __init__(self, owner: 'Tokenizer',
-                 begin_tok: TokenType, end_tok: TokenType) -> None:
-        self.lineno = owner.current_lineno
-        self.col = owner.current_col
-        self.owner = owner
-        self.begin_tok = begin_tok
-        self.end_tok = end_tok
-        self._texts: List[str] = []
-        self._text_ln = 0
-        self._text_col = 0
-        self._tokens: List[Token] = [
-            Token(self.begin_tok, self.lineno, self.col)
-        ]
+    """
+    This object is created by `Tokenizer` to indicate that we are now
+    parsing some literal text that could contain formatted expression
+    like ${this}. It collects all the text portions (`add_text`), and
+    when end of the literal text is reached *or* an ${interpolation}
+    is found, `retrieve_text_token` will be called to dump all the texts
+    we have collected. Then when we leave the ${interpolation} texts
+    start to accumulate again, etc.
+    """
 
-    def _dump_texts(self):
-        if self._texts:
-            self._tokens.append(Token(
-                TokenType.text_body,
-                self._text_ln, self._text_col, "".join(self._texts)
-            ))
-            self._texts.clear()
+    def __init__(self, start_token: Token):
+        self.texts: List[str] = []
+        self.text_pos: Optional[Tuple[int, int]] = None
+        # The `start_token` is not used by us, but `Tokenizer` uses it
+        # to track where the we start in source.
+        self.start_token = start_token
+        # This is not used by us, but by `Tokenizer`:
+        self.last_dollar_lbrace: Optional[Token] = None
 
-    def add_text(self, text: str):
-        if not self._texts:
-            self._text_ln = self.owner.current_lineno
-            self._text_col = self.owner.current_col
-        self._texts.append(text)
+    def add_text(self, text: str, pos: Tuple[int, int]) -> None:
+        if self.text_pos is None:
+            self.text_pos = pos
+        self.texts.append(text)
 
-    def add_token(self, token: Token):
-        self._dump_texts()
-        self._tokens.append(token)
-
-    def get_tokens(self) -> List[Token]:
-        res = self._tokens.copy()
-        self._tokens.clear()
-        return res
-
-    def finish(self):
-        self._dump_texts()
-        self._tokens.append(self.owner.gen_token(self.end_tok))
-
-class _CommandManager(_FormattedStrManager):
-    def __init__(self, owner: 'Tokenizer') -> None:
-        super().__init__(owner, TokenType.command_begin, TokenType.command_end)
-
-class _StrLiteralManager(_FormattedStrManager):
-    def __init__(self, owner: 'Tokenizer') -> None:
-        super().__init__(owner, TokenType.string_begin, TokenType.string_end)
+    def retrieve_text_token(self, pos: Tuple[int, int]) -> Optional[Token]:
+        if not self.texts:
+            return None
+        assert self.text_pos is not None
+        tok = Token(TokenType.text_body, self.text_pos, pos,
+                    value=''.join(self.texts))
+        self.texts.clear()
+        self.text_pos = None
+        return tok
 
 class _BracketFrame(NamedTuple):
+    """A frame that represents an opening bracket."""
+
     type: TokenType
+    # We assume that every bracket is 1-character long and `pos` points
+    # to that character.
     pos: Tuple[int, int]
     cmd_fexpr: bool = False
     str_fexpr: bool = False
 
 class Tokenizer:
-    def __init__(self, src: TextIO, mc_version: "VERSION_T"):
-        """src: source code"""
+    def __init__(self, src: TextIO, file_entry: "FileEntry",
+                 diagnostic_manager: "DiagnosticsManager",
+                 mc_version: Tuple[int, ...]):
         self.src = src
+        self.file_entry = file_entry
+        self.diagnostic_manager = diagnostic_manager
         self.mc_version = mc_version
         self.current_char = ''
         self.current_lineno = 0
@@ -238,26 +280,56 @@ class Tokenizer:
         self.buffer_tokens: List[Token] = []
         self.bracket_stack: List[_BracketFrame] = []
         self.indent_record: List[int] = [0]
-        self.indent_len: int = 1  # always = len(self.indent_record)
-        self.has_content = False  # if this logical line produced token
+        # Indicates if this logical line has produced token:
+        self.has_content = False
+        # Indicates if current line is continued from last line:
         self.last_line_continued = False
-        self.inside_command: Optional[_CommandManager] = None
-        self.in_command_fexpr = False
-        self.string_stack: List[_StrLiteralManager] = []
-        self.in_string_fexpr = False  # in fexpr of the most inner string
+        # Indicates if we are in a command (single or multi-line):
+        self.inside_command: Optional[_FormattedStrManager] = None
+        # Indicates if it's multi-line command (exists only if
+        # `inside_command` is not None):
         self.continued_command = False
+        # Indicates if we are in a formatted expression of command:
+        self.in_command_fexpr = False
+        # Track nested string literal like "1${"2${"3"}"}":
+        self.string_stack: List[_FormattedStrManager] = []
+        # Indicates if we are in formatted expression of the most inner
+        # string (we must be in fexpr of any outer string since this is
+        # the only way you could put a string literal inside another):
+        self.in_string_fexpr = False
+        # Indicates if we are in multi-line comment:
         self.continued_comment = False
-        self.continued_comment_pos: Union[None, Tuple[int, int]] = None
+        # Records pos of start of long comment (pos before "#*"). Exists
+        # iff continued_comment is True:
+        self.continued_comment_pos: Optional[Tuple[int, int]] = None
+        # Indicate if the last token was INTERFACE:
         self.last_is_interface = False
 
-    def error(self, err_type: ErrorType, lineno=None, col=None, **kwargs):
-        if lineno is None:
-            lineno = self.current_lineno
-        if col is None:
-            col = self.current_col
-        err = Error(err_type, **kwargs)
-        err.location.linecol = (lineno, col)
-        raise err
+    @property
+    def current_pos(self) -> Tuple[int, int]:
+        return self.current_lineno, self.current_col
+
+    @property
+    def currnet_location(self) -> SourceLocation:
+        return self.file_entry.get_location(self.current_pos)
+
+    def error(self, diag_id: str, pos: Optional[Tuple[int, int]] = None,
+              args: Optional[Mapping[str, STArgument]] = None):
+        """Raise an ERROR diagnostic on a specific location in source."""
+        if pos is None:
+            pos = self.current_pos
+        location = self.file_entry.get_location(pos)
+        loc_range = SourceRange(location, location)
+        self.error_range(diag_id, loc_range, args)
+
+    def error_range(
+        self, diag_id: str, rng: SourceRange,
+        args: Optional[Mapping[str, STArgument]] = None
+    ):
+        """Raise an ERROR diagnostic on a range in source."""
+        if args is None:
+            args = {}
+        raise DiagnosticError(Diagnostic(id=diag_id, source=rng, args=args))
 
     def forward(self):
         """Read next char and push pointer."""
@@ -282,9 +354,6 @@ class Tokenizer:
             self.buffer_tokens = self.parse_line()
         return self.buffer_tokens.pop(0)
 
-    def is_in_bracket(self) -> bool:
-        return bool(self.bracket_stack)
-
     def parse_line(self) -> List[Token]:
         """Parse a line."""
         self.current_line = self.src.readline()
@@ -298,7 +367,7 @@ class Tokenizer:
         if not (self.continued_command
                 or self.continued_comment
                 or self.last_line_continued
-                or self.is_in_bracket()):
+                or self.bracket_stack):
             # Generate indent token if this is not a continued line
             # (start of a new logical line).
             self.has_content = False
@@ -330,10 +399,9 @@ class Tokenizer:
             # comment
             if self.current_char == "#":
                 if self.peek() == "*":
+                    self.continued_comment_pos = self.current_pos
                     self.forward()
                     self.forward()
-                    self.continued_comment_pos = (self.current_lineno,
-                                                  self.current_col)
                     self.handle_long_comment()
                     continue
                 else:
@@ -344,8 +412,9 @@ class Tokenizer:
             if self.last_is_interface:
                 if self.current_char == '"':
                     # Quoted path
-                    self.enter_string()
-                    self.forward()
+                    with self.make_string_begin() as gettok:
+                        self.forward()  # skip '"'
+                    res.append(gettok())
                 else:
                     # Unquoted path
                     res.append(self.handle_interface_path())
@@ -364,14 +433,18 @@ class Tokenizer:
                     self.last_is_interface = True
             elif self.current_char == '/' and not (self.has_content or res):
                 # Only read when "/" is first token of this logical line.
-                self.inside_command = _CommandManager(self)
-                self.forward()  # skip "/"
-                if self.current_char == '*':
-                    self.continued_command = True
-                    self.forward()  # skip "*"
+                with self.make_token(TokenType.command_begin) as gettok:
+                    self.forward()  # skip "/"
+                    if self.current_char == '*':
+                        self.continued_command = True
+                        self.forward()  # skip "*"
+                command_begin = gettok()
+                res.append(command_begin)
+                self.inside_command = _FormattedStrManager(command_begin)
             elif self.current_char == '"':
-                self.forward()  # skip '"'
-                self.enter_string()
+                with self.make_string_begin() as gettok:
+                    self.forward()  # skip '"'
+                res.append(gettok())
             else:
                 ok = False
             if ok:
@@ -386,39 +459,52 @@ class Tokenizer:
                     pass
                 else:
                     # It is indeed a two-char token!
-                    res.append(self.gen_token(token_type))
-                    self.forward()
-                    self.forward()
+                    with self.make_token(token_type) as gettok:
+                        self.forward()
+                        self.forward()
+                    res.append(gettok())
                     continue
             ## try one-char token
             try:
                 token_type = TokenType(self.current_char)
             except ValueError:
                 # We've run out of possibilities.
-                self.error(ErrorType.INVALID_CHAR, char=self.current_char)
+                self.error_range(
+                    'invalid-char', self.currnet_location.to_range(1),
+                    args={'char': STStr(self.current_char)}
+                )
             else:
                 if token_type in BRACKETS:
                     self.bracket_stack.append(_BracketFrame(
-                        token_type,
-                        (self.current_lineno, self.current_col)
+                        token_type, self.current_pos
                     ))
                 elif token_type in RB2LB:
                     if not self.bracket_stack:
-                        self.error(ErrorType.UNMATCHED_BRACKET,
-                                   char=self.current_char)
+                        self.error_range(
+                            'unmatched-bracket',
+                            self.currnet_location.to_range(1),
+                            args={'char': STStr(self.current_char)}
+                        )
                     expect = RB2LB[token_type]
                     got_f = self.bracket_stack.pop()
                     got = got_f.type
                     if got is not expect:
-                        self.error(ErrorType.UNMATCHED_BRACKET_PAIR,
-                                   open=got.value, close=token_type.value)
+                        self.error_range(
+                            'unmatched-bracket-pair',
+                            self.currnet_location.to_range(1),
+                            args={
+                                'open': STStr(got.value),
+                                'close': STStr(token_type.value),
+                            }
+                        )
                     if got is TokenType.lbrace:
                         if got_f.cmd_fexpr:
                             self.in_command_fexpr = False
                         elif got_f.str_fexpr:
                             self.in_string_fexpr = False
-                res.append(self.gen_token(token_type))
-                self.forward()
+                with self.make_token(token_type) as gettok:
+                    self.forward()
+                res.append(gettok())
         # Now self.current_char is either '\n', '\\' or None (EOF)
         if (
             # ${} in single line command can't use implicit line continuation.
@@ -426,7 +512,16 @@ class Tokenizer:
             # And so is ${} in string literal.
             or self.in_string_fexpr
         ):
-            self.error(ErrorType.UNCLOSED_FEXPR)
+            # Get where the last "${" is
+            if self.in_command_fexpr:
+                mgr = self.inside_command
+            else:
+                mgr = self.string_stack[-1]
+            assert mgr is not None
+            assert mgr.last_dollar_lbrace is not None
+            src_range = mgr.last_dollar_lbrace.to_source_range(self.file_entry)
+            # Throw
+            self.error_range('unclosed-fexpr', src_range)
         backslash = False
         eof = False
         if res:
@@ -434,55 +529,98 @@ class Tokenizer:
         if self.current_char == '\n':
             if self.has_content and not (
                 self.continued_comment or self.continued_command
-                or self.is_in_bracket()
+                or self.bracket_stack
             ):
-                res.append(self.handle_logical_newline())
+                with self.make_newline() as gettok:
+                    self.forward()  # skip '\n'
+                res.append(gettok())
             self.last_line_continued = False
         elif self.current_char is None:
             if self.continued_comment:
-                self.error(ErrorType.UNCLOSED_LONG_COMMENT,
-                           *self.continued_comment_pos)
+                assert self.continued_comment_pos
+                cpos = self.file_entry.get_location(self.continued_comment_pos)
+                # 2 is the length of "#*".
+                self.error_range('unclosed-long-comment', cpos.to_range(2))
             if self.continued_command:
+                assert self.inside_command
                 if self.in_command_fexpr:
-                    self.error(ErrorType.UNCLOSED_FEXPR)
-                self.error(ErrorType.UNCLOSED_LONG_COMMAND,
-                           self.inside_command.lineno,
-                           self.inside_command.col)
-            if self.is_in_bracket():
+                    assert self.inside_command.last_dollar_lbrace
+                    src_range = self.inside_command.last_dollar_lbrace \
+                        .to_source_range(self.file_entry)
+                    self.error_range('unclosed-fexpr', src_range)
+                src_range = self.inside_command.start_token \
+                    .to_source_range(self.file_entry)
+                self.error_range('unclosed-long-command', src_range)
+            if self.bracket_stack:
                 br = self.bracket_stack[-1]
-                self.error(ErrorType.UNCLOSED_BRACKET,
-                           *br.pos, char=br.type.value)
+                # Assume that all brackets are made of just 1 character
+                src_range = self.file_entry.get_location(br.pos).to_range(1)
+                self.error_range(
+                    'unclosed-bracket', src_range,
+                    args={'char': STStr(br.type.value)}
+                )
             if self.has_content:
-                res.append(self.handle_logical_newline())
+                with self.make_newline() as gettok:
+                    pass  # This NEWLINE is added implicitly, so zerowidth
+                res.append(gettok())
             eof = True
         elif self.current_char == '\\':
             self.forward()  # skip "\\"
             if self.current_char is None:
-                self.error(ErrorType.EOF_AFTER_CONTINUATION)
+                self.error('eof-after-continuation')
             if self.current_char != '\n':
-                self.error(ErrorType.CHAR_AFTER_CONTINUATION)
+                self.error_range('char-after-continuation',
+                                 self.currnet_location.to_range(1))
             backslash = self.last_line_continued = True
         # Count indent: if this physical line is not a continued line,
         # and (this physical line has content or ends with backslash)
         if (res or backslash) and prespaces != -1:
-            res[:0] = self.handle_indent(prespaces)
-        # Add a fake line to clean up if we reach end of file
+            res[:0] = self.handle_indent(
+                prespaces, begin_col=1,
+                # Based on the fact that only spaces are allowed for
+                # indentations:
+                end_col=prespaces+1
+            )
+        # Now clean up if we reach end of file; this is delayed to be
+        # done here because we still want the indent to be emitted
+        # first.
         if eof:
-            self.current_lineno += 1
-            self.current_col = 0
-            res.extend(self.handle_indent(0))  # dump DEDENTs
-            res.append(self.gen_token(TokenType.end_marker))
+            # Dump DEDENTs and emit END_MARKER
+            res.extend(self.handle_indent(
+                0, begin_col=self.current_col, end_col=self.current_col
+            ))
+            res.append(self.make_zerowidth_token(TokenType.end_marker))
         return res
 
-    def gen_token(self, *args, **kwargs):
-        """Generate a token at current pos."""
-        return Token(
-            lineno=self.current_lineno, col=self.current_col,
-            *args, **kwargs
-        )
+    def make_zerowidth_token(self, tok_type: TokenType, value=None) -> Token:
+        """Generate a token at `current_pos` with 0 width."""
+        return Token(tok_type, self.current_pos, self.current_pos, value)
+
+    @contextmanager
+    def make_token(self, tok_type: Optional[TokenType] = None) \
+            -> Generator[Callable[..., Token], None, None]:
+        """
+        "Make" a token. Used as a context manager.
+        Return a callback that produces a `Token` whose beginning point
+        is position when the context manager enters and ending point is
+        the position when we exits.
+        Callback accepts an optional `value` that is used as token
+        value. If `tok_type` is None, callback has a required argument
+        that is used as token type. 
+        """
+        if tok_type is None:
+            # Redeclaration of `_get` causes type checker error.
+            def _get(tok_type: TokenType, value=None) -> Token:  # type: ignore
+                return Token(tok_type, pos1, pos2, value)
+        else:
+            def _get(value=None) -> Token:
+                return Token(tok_type, pos1, pos2, value)
+        pos1 = self.current_pos
+        yield _get
+        pos2 = self.current_pos
 
     def skip_spaces(self):
-        """Skip white spaces."""
+        """Skip space characters."""
         while self.current_char == ' ':
             self.forward()
 
@@ -491,10 +629,15 @@ class Tokenizer:
         while self.current_char is not None and self.current_char != '\n':
             self.forward()
 
-    def enter_string(self):
-        """Enter a string literal."""
-        self.string_stack.append(_StrLiteralManager(self))
+    @contextmanager
+    def make_string_begin(self) -> Generator[Callable[[], Token], None, None]:
         self.in_string_fexpr = False
+        def _my_gettok():
+            return token
+        with self.make_token(TokenType.string_begin) as gettok:
+            yield _my_gettok
+        token = gettok()
+        self.string_stack.append(_FormattedStrManager(token))
 
     def handle_long_comment(self):
         # we want to leave current_char on next char after "#",
@@ -509,29 +652,35 @@ class Tokenizer:
         self.forward()  # skip char "#"
         self.continued_comment = False
 
-    def handle_logical_newline(self):
-        """Generate a logical NEWLINE token and do checks."""
+    def make_newline(self):
+        """Make a logical NEWLINE token and do checks."""
         if self.last_is_interface:
-            self.error(ErrorType.INTERFACE_PATH_EXPECTED)
-        return self.gen_token(TokenType.new_line)
+            self.error('interface-path-expected')
+        return self.make_token(TokenType.new_line)
 
-    def handle_indent(self, spaces: int) -> List[Token]:
-        """Generate INDENT and DEDENT."""
+    def handle_indent(self, spaces: int, begin_col: int, end_col: int) \
+            -> List[Token]:
+        """
+        Generate INDENT and DEDENT.
+        Usually INDENTs and DEDENTs appear in beginning of line, with
+        beginning column number 1, but when dumping DEDENTs at end of
+        file, the `begin_col` could be different.
+        """
         ln = self.current_lineno
         tokens = []
         if spaces > self.indent_record[-1]:
             self.indent_record.append(spaces)
-            self.indent_len += 1
-            tokens.append(Token(TokenType.indent, lineno=ln, col=0))
-        elif spaces in self.indent_record:
+            tokens.append(Token(
+                TokenType.indent, (ln, begin_col), (ln, end_col)
+            ))
+        try:
             i = self.indent_record.index(spaces)
-            dedent_count = self.indent_len - 1 - i
-            self.indent_record = self.indent_record[:i+1]
-            self.indent_len -= dedent_count
-            tokens.extend(Token(TokenType.dedent, lineno=ln, col=0)
-                          for _ in range(dedent_count))
-        else:
-            self.error(ErrorType.INVALID_DEDENT)
+        except ValueError:
+            self.error('invalid-dedent', (ln, begin_col))
+        dedent_count = len(self.indent_record) - 1 - i
+        self.indent_record = self.indent_record[:i+1]
+        tokens.extend(Token(TokenType.dedent, (ln, end_col), (ln, end_col))
+                        for _ in range(dedent_count))
         return tokens
 
     @staticmethod
@@ -541,74 +690,73 @@ class Tokenizer:
     def handle_number(self):
         """Read an INTEGER or a FLOAT token."""
         res = []
-        ln, col = self.current_lineno, self.current_col
-        ## decide base
-        base = 10
-        peek = self.peek()
-        if self.current_char == '0' and peek is not None:
-            peek = peek.upper()
-            if peek in "BOX":
-                if peek == 'B':
-                    base = 2
-                elif peek == 'O':
-                    base = 8
-                elif peek == 'X':
-                    base = 16
-                # skip 2 chars ("0x" "0b" "0o")
-                self.forward()
-                self.forward()
-        ## read
-        valid_chars = '0123456789ABCDEF'[:base]
-        while ((self.current_char is not None)
-               and (self.current_char.upper() in valid_chars)):
-            res.append(self.current_char)
-            self.forward()
-        ## convert string to number
-        if (self.current_char == "."
-            and base == 10
-            and self._isdecimal(self.peek())
-        ):  # float
-            self.forward()
-            res.append(".")
-            while self._isdecimal(self.current_char):
+        with self.make_token() as gettok:
+            ## decide base
+            base = 10
+            peek = self.peek()
+            if self.current_char == '0' and peek is not None:
+                peek = peek.upper()
+                if peek in "BOX":
+                    if peek == 'B':
+                        base = 2
+                    elif peek == 'O':
+                        base = 8
+                    elif peek == 'X':
+                        base = 16
+                    # skip 2 chars ("0x" "0b" "0o")
+                    self.forward()
+                    self.forward()
+            ## read
+            valid_chars = '0123456789ABCDEF'[:base]
+            while ((self.current_char is not None)
+                and (self.current_char.upper() in valid_chars)):
                 res.append(self.current_char)
                 self.forward()
-            value = float(''.join(res))
-            return Token(TokenType.float_, value=value, lineno=ln, col=col)
-        else:  # integer
-            if not res:
-                self.error(ErrorType.INTEGER_REQUIRED, base=base)
-            value = int(''.join(res), base=base)
-            return Token(TokenType.integer, value=value, lineno=ln, col=col)
+            ## convert string to number
+            if (self.current_char == "."
+                and base == 10
+                and self._isdecimal(self.peek())
+            ):  # float
+                self.forward()
+                res.append(".")
+                while self._isdecimal(self.current_char):
+                    res.append(self.current_char)
+                    self.forward()
+                value = float(''.join(res))
+                tok_type = TokenType.float
+            else:  # integer
+                if not res:
+                    self.error('integer-expected',
+                            args={'base': STInt(base)})
+                value = int(''.join(res), base=base)
+                tok_type = TokenType.integer
+        return gettok(tok_type, value)
 
     def handle_name(self):
         """Read a keyword or an IDENTIFIER token."""
         chars = []
-        ln, col = self.current_lineno, self.current_col
-        while is_idcontinue(self.current_char):
-            chars.append(self.current_char)
-            self.forward()
+        with self.make_token() as gettok:
+            while (self.current_char is not None
+                   and is_idcontinue(self.current_char)):
+                chars.append(self.current_char)
+                self.forward()
         name = ''.join(chars)
         token_type = KEYWORDS.get(name)
         if token_type is None:  # IDENTIFIER
-            return Token(TokenType.identifier, value=name, lineno=ln, col=col)
+            return gettok(TokenType.identifier, value=name)
         # Keyword
-        return Token(token_type, lineno=ln, col=col)
-
-    def _font2char(self, word: str) -> Optional[str]:
-        if word in COLORS:
-            return COLORS[word]
-        if word in COLORS_NEW and self.mc_version >= (1, 19, 80):
-            return COLORS_NEW[word]
-        if word in FONTS:
-            return FONTS[word]
-        return None
+        return gettok(token_type)
 
     def _read_escapable_char(self) -> str:
-        """Read current char as an escapable one (in string or command)
-        and skip the read char(s). Return the handled char(s).
         """
+        Read current char as an escapable one (in string or command)
+        and skip the read char(s). Return the handled char(s).
+        NOTE Caller needs to ensure `self.current_char` is not None.
+        """
+        beginning_col = self.current_col
+        lineno = self.current_lineno
         first = self.current_char
+        assert first is not None
         self.forward()
         # not escapable
         if first != '\\':
@@ -622,24 +770,80 @@ class Tokenizer:
             self.forward()  # skip '#'
             if self.current_char != '(':
                 return '\xA7'
-            start_ln, start_col = self.current_lineno, self.current_col
             res: List[str] = []
             cur_spec: List[str] = []
             self.forward()  # skip '('
+            # Start of current font specifier (since we do not allow
+            # line breaks in middle, we do not need to track line
+            # number) Note that trailing spaces are included:
+            cur_col = self.current_col
             while True:
                 if self.current_char is None or self.current_char == '\n':
-                    self.error(ErrorType.UNCLOSED_FONT,
-                               lineno=start_ln, col=start_col)
+                    src_range = (
+                        self.file_entry
+                        .get_location((lineno, beginning_col))
+                        .to_range(3)  # len("\\#(") == 3
+                    )
+                    self.error_range('unclosed-font', src_range)
                 if self.current_char in (',', ')'):
-                    font = ''.join(cur_spec).strip()
+                    font_withspaces = ''.join(cur_spec)
+                    font = font_withspaces.strip(' ')
                     cur_spec.clear()
-                    ch = self._font2char(font)
-                    if ch is None:
-                        self.error(ErrorType.INVALID_FONT, font=font,
-                                   lineno=start_ln, col=start_col)
+                    diag_id: Optional[str] = None
+                    ch: Optional[str] = None
+                    if font in COLORS:
+                        ch = COLORS[font]
+                    elif font in COLORS_NEW:
+                        ch = COLORS_NEW[font]
+                        if self.mc_version < (1, 19, 80):
+                            diag_id = 'new-font'
+                    elif font in FONTS:
+                        ch = FONTS[font]
+                    else:
+                        diag_id = 'invalid-font'
+                    if diag_id is not None:
+                        # An diagnostic occured ('new-font' or
+                        # 'invalid-font')
+                        # Work out source range of this font specifier
+                        # with spaces stripped.
+                        font_ls = font_withspaces.lstrip(' ')
+                        # If `font_withspaces` only consists of spaces,
+                        # we have to treat specially.
+                        if font_ls:
+                            font_rs = font_withspaces.rstrip(' ')
+                            nlspaces = len(font_withspaces) - len(font_ls)
+                            nrspaces = len(font_withspaces) - len(font_rs)
+                            loc1 = self.file_entry.get_location(
+                                (lineno, cur_col + nlspaces)
+                            )
+                            loc2 = self.file_entry.get_location(
+                                (lineno, self.current_col - nrspaces)
+                            )
+                            src_range = SourceRange(loc1, loc2)
+                        else:
+                            src_range = (
+                                self.file_entry
+                                .get_location((lineno, cur_col))
+                                .to_range(0)
+                            )
+                    if diag_id == 'invalid-font':
+                        self.error_range(
+                            diag_id, src_range,
+                            args={'font': STStr(font)}
+                        )
+                    elif diag_id is not None:
+                        assert diag_id == 'new-font'
+                        self.diagnostic_manager.push_diagnostic(
+                            Diagnostic(
+                                id=diag_id, source=src_range,
+                                args={'font': STStr(font)}
+                            )
+                        )
+                    assert ch is not None
                     res.append(f"\xA7{ch}")
                     if self.current_char == ')':
                         break
+                    cur_col = self.current_col + 1
                 else:
                     cur_spec.append(self.current_char)
                 self.forward()
@@ -649,13 +853,21 @@ class Tokenizer:
         ## because MC use '\n' escape too
         elif second in UNICODE_ESCAPES:  # unicode number
             def _err():
-                self.error(ErrorType.INVALID_UNICODE_ESCAPE,
-                           escape_char=second)
-            self.forward()  # skip '\\'
+                src_range = (
+                    self.file_entry
+                    .get_location((lineno, beginning_col))
+                    .to_range(2)  # len('\\x') == 2, for example
+                )
+                self.error_range(
+                    'invalid-unicode-escape', src_range,
+                    args={'char': STStr(second)}
+                )
+            self.forward()  # skip UNICODE_ESCAPES character
             code = []
             length = UNICODE_ESCAPES[second]
             for _ in range(length):
-                if self.current_char not in string.hexdigits:
+                if (self.current_char is None
+                        or self.current_char not in string.hexdigits):
                     _err()
                 code.append(self.current_char)
                 self.forward()
@@ -673,99 +885,124 @@ class Tokenizer:
         while self.current_char != '"':
             # check None and \n
             if (self.current_char is None) or (self.current_char == '\n'):
-                self.error(ErrorType.UNCLOSED_QUOTE,
-                           lineno=mgr.lineno, col=mgr.col)
+                src_range = mgr.start_token.to_source_range(self.file_entry)
+                self.error_range('unclosed-quote', src_range)
             if self.current_char == '\\' and self.peek() == '"':
                 # special escape in strings
-                mgr.add_text('"')
+                mgr.add_text('"', self.current_pos)
                 self.forward()
                 self.forward()
                 continue
-            if self._fexpr_unit(mgr, is_cmd=False):
-                break
+            tokens = self._fexpr_unit(mgr, is_cmd=False)
+            if tokens:
+                return tokens
         else:
-            self.forward()  # skip last '"'
-            mgr.finish()
+            tok = mgr.retrieve_text_token(self.current_pos)
+            with self.make_token(TokenType.string_end) as gettok:
+                self.forward()  # skip last '"'
+            endtok = gettok()
             self.string_stack.pop()
             self.in_string_fexpr = bool(self.string_stack)
-        return mgr.get_tokens()
+            if tok:
+                return [tok, endtok]
+            return [endtok]
 
-    def _fexpr_unit(self, mgr: _FormattedStrManager, is_cmd: bool) -> bool:
+    def _fexpr_unit(self, mgr: _FormattedStrManager, is_cmd: bool) \
+            -> List[Token]:
         """
         Helper for parsing formatted expression in string and command.
         Read a character / escape sequence / start of a formatted
         expression. Return True if we got a formatted expression.
         is_cmd: True if we are in a command, False if we are in a string
+        NOTE Caller needs to ensure `self.current_char` is not None.
         """
         peek = self.peek()
-        do_break = False
+        res = []
         if self.current_char == '\\' and peek == '$':
             # special escape in commands
-            mgr.add_text('$')
+            mgr.add_text('$', self.current_pos)
             self.forward()  # skip "\\"
             self.forward()  # skip "$"
         elif self.current_char == '$' and peek == '{':
             # formatted expression
-            mgr.add_token(self.gen_token(TokenType.dollar_lbrace))
-            self.forward()  # skip "$"
-            self.bracket_stack.append(_BracketFrame(
-                TokenType.lbrace,
-                (self.current_lineno, self.current_col),
-                **{("cmd_fexpr" if is_cmd else "str_fexpr"): True}
-            ))  # Make sure position points to "{", not "$"
-            self.forward()  # skip "{"
+            tok = mgr.retrieve_text_token(self.current_pos)
+            if tok:
+                res.append(tok)
+            with self.make_token(TokenType.dollar_lbrace) as gettok:
+                self.forward()  # skip "$"
+                self.bracket_stack.append(_BracketFrame(
+                    TokenType.lbrace, self.current_pos,
+                    **{("cmd_fexpr" if is_cmd else "str_fexpr"): True}
+                ))  # Make sure position points to "{", not "$"
+                self.forward()  # skip "{"
+            dollar_lbrace = gettok()
+            res.append(dollar_lbrace)
+            # Use `mgr.last_dollar_lbrace` to track where last "${" is
+            # for better error messages.
+            mgr.last_dollar_lbrace = dollar_lbrace
             if is_cmd:
                 self.in_command_fexpr = True
             else:
                 self.in_string_fexpr = True
-            do_break = True
         else:  # a normal character
-            mgr.add_text(self._read_escapable_char())
-        return do_break
+            pos = self.current_pos
+            mgr.add_text(self._read_escapable_char(), pos)
+        return res
 
     def handle_long_command(self) -> List[Token]:
         """Help read a multi-line /*...*/ command. Return the tokens."""
         mgr = self.inside_command
+        assert mgr is not None
         while not (self.current_char == '*' and self.peek() == '/'):
             # check whether we reach end of line
             if self.current_char in ("\n", None):
                 # replace "\n" with " " (space)
-                mgr.add_text(' ')
-                break
-            if self._fexpr_unit(mgr, is_cmd=True):
-                break
+                mgr.add_text(' ', self.current_pos)
+                return []
+            tokens = self._fexpr_unit(mgr, is_cmd=True)
+            if tokens:
+                return tokens
         else:
-            mgr.finish()
-            self.forward()  # skip "*"
-            self.forward()  # skip "/"
+            tok = mgr.retrieve_text_token(self.current_pos)
+            with self.make_token(TokenType.command_end) as gettok:
+                self.forward()  # skip "*"
+                self.forward()  # skip "/"
+            endtok = gettok()
             self.continued_command = False
             self.inside_command = None
-        return mgr.get_tokens()
+            if tok:
+                return [tok, endtok]
+            return [endtok]
 
     def handle_command(self) -> List[Token]:
         """Help read a single line command. Return the tokens."""
         mgr = self.inside_command
+        assert mgr is not None
         while self.current_char is not None and self.current_char != '\n':
-            if self._fexpr_unit(mgr, is_cmd=True):
-                break
+            tokens = self._fexpr_unit(mgr, is_cmd=True)
+            if tokens:
+                return tokens
         else:
-            mgr.finish()
             self.inside_command = None
-        return mgr.get_tokens()
+            tok = mgr.retrieve_text_token(self.current_pos)
+            endtok = self.make_zerowidth_token(TokenType.command_end)
+            if tok:
+                return [tok, endtok]
+            return [endtok]
 
     def handle_interface_path(self) -> Token:
         """Help read an interface path."""
-        ln, col = self.current_lineno, self.current_col
         # Read as long as current char is in FUNCTION_PATH_CHARS. Note
-        # that Acacia removes support for parenthesis characters.
+        # that Acacia removes support for unquoted parenthesis
+        # characters.
         chars = []
-        while (
-            self.current_char in FUNCTION_PATH_CHARS
-            and self.current_char not in ('(', ')')
-        ):
-            chars.append(self.current_char)
-            self.forward()
+        with self.make_token(TokenType.interface_path) as gettok:
+            while (
+                self.current_char in FUNCTION_PATH_CHARS
+                and self.current_char not in ('(', ')')
+            ):
+                chars.append(self.current_char)
+                self.forward()
         if not chars:
-            self.error(ErrorType.INTERFACE_PATH_EXPECTED)
-        path = ''.join(chars)
-        return Token(TokenType.interface_path, lineno=ln, col=col, value=path)
+            self.error('interface-path-expected')
+        return gettok(value=''.join(chars))
