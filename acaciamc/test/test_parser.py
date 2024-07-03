@@ -525,12 +525,20 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("import foo.spam as bar", {
         "@type": ast.Import, "begin": (1, 1), "end": (1, 23),
-        "meta": "foo.spam",
+        "meta": {
+            "@type": ast.ModuleMeta,
+            "path": ["foo", "spam"],
+            "begin": (1, 8), "end": (1, 16)
+        },
         "name": "bar"
     }),
     ("from spam import ham as wood, tree", {
         "@type": ast.FromImport, "begin": (1, 1), "end": (1, 35),
-        "meta": "spam",
+        "meta": {
+            "@type": ast.ModuleMeta,
+            "path": ["spam"],
+            "begin": (1, 6), "end": (1, 10)
+        },
         "items": [
             {
                 "@type": ast.ImportItem,
@@ -546,7 +554,12 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("from wood import *", {
         "@type": ast.FromImportAll, "begin": (1, 1), "end": (1, 19),
-        "meta": "wood", "star_begin": (1, 18), "star_end": (1, 19)
+        "meta": {
+            "@type": ast.ModuleMeta,
+            "path": ["wood"],
+            "begin": (1, 6), "end": (1, 10)
+        },
+        "star_begin": (1, 18), "star_end": (1, 19)
     }),
     ("for x in y:\n pass", {
         "@type": ast.For, "begin": (1, 1), "end": (2, 6),
@@ -633,9 +646,6 @@ def _compare_ast_values(value, serialized) -> bool:
             ser = serialized[key]
             if not _compare_ast_values(val, ser):
                 return False
-    elif isinstance(value, ast.ModuleMeta):
-        if value.unparse() != serialized:
-            return False
     else:
         if value != serialized:
             return False

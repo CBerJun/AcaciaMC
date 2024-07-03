@@ -28,22 +28,6 @@ class FuncPortType(_DisplayableEnum):
     by_reference = 1, "&"
     const = 2, "const"
 
-class ModuleMeta:
-    """Specifies a module."""
-
-    def __init__(self, path: _Iterable[str]):
-        self.path = tuple(path)
-        assert self.path
-
-    def __repr__(self) -> str:
-        return f"<ModuleMeta {self.unparse()!r}>"
-
-    def unparse(self) -> str:
-        """
-        Return a normalized string that represents this module meta.
-        """
-        return ".".join(self.path)
-
 #################
 ### AST NODES ###
 #################
@@ -114,6 +98,20 @@ class FunctionPort(HasSource):
 class FormattedStr(AST):  # a literal string with ${formatted exprs}
     def __init__(self, content: _List[_Union[Expression, str]]):
         self.content = content
+
+class ModuleMeta(HasSource):
+    """Specifies a module."""
+
+    def __init__(self, path: _Iterable[str], begin, end):
+        super().__init__(begin, end)
+        self.path = list(path)
+        assert self.path
+
+    def unparse(self) -> str:
+        """
+        Return a normalized string that represents this module meta.
+        """
+        return ".".join(self.path)
 
 # --- Operators
 

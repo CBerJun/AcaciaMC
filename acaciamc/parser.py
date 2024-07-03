@@ -801,6 +801,7 @@ class Parser:
     def module_meta(self) -> Tuple[ModuleMeta, TwoIntPairs]:
         """module_meta := IDENTIFIER (POINT IDENTIFIER)*"""
         # at least one name should be given
+        pos1 = self.current_pos1
         names = [self.current_token.value]
         last_range = self.current_range
         self.eat(TokenType.identifier)
@@ -810,7 +811,8 @@ class Parser:
             names.append(self.current_token.value)
             last_range = self.current_range
             self.eat(TokenType.identifier)
-        return ModuleMeta(names), last_range
+        meta = ModuleMeta(names, begin=pos1, end=self.prev_pos2)
+        return meta, last_range
 
     def alias(self) -> Optional[IdentifierDef]:
         """alias := (AS IDENTIFIER)?"""
