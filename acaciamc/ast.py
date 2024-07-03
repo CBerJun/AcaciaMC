@@ -2,7 +2,8 @@
 
 from typing import (
     Union as _Union, List as _List, Optional as _Optional, Dict as _Dict,
-    Iterable as _Iterable, Tuple as _Tuple, Type as _Type
+    Iterable as _Iterable, Tuple as _Tuple, Any as _Any,
+    FrozenSet as _FrozenSet
 )
 # Unfortunately typing.OrderedDict is not available in Python 3.6
 from collections import OrderedDict as _OrderedDict
@@ -32,10 +33,37 @@ class FuncPortType(_DisplayableEnum):
 ### AST NODES ###
 #################
 
+# These fields are not considered a "children" of an AST:
+RESERVED_FIELDS = frozenset((
+    # For `HasSource`:
+    'begin', 'end',
+    # Public function in `AST`:
+    'get_fields',
+    # Annotation
+    'annotation',
+))
+
 class AST:
     """Base class for Acacia's AST."""
 
-    pass
+    # See `get_fields`:
+    _fields: _Optional[_Tuple[str, ...]] = None
+    _fields_ignore: _FrozenSet[str] = frozenset()
+    # Extra information on this node (used by post AST visitor):
+    annotation: _Any = None
+
+    def get_fields(self) -> _Tuple[str, ...]:
+        """Get the names of fields of a node."""
+        cls = type(self)
+        if cls._fields is None:
+            cls._fields = tuple(
+                name
+                for name in dir(self)
+                if (not name.startswith('_')
+                    and name not in RESERVED_FIELDS
+                    and name not in cls._fields_ignore)
+            )
+        return cls._fields
 
 class HasSource(AST):
     """
@@ -101,6 +129,8 @@ class FormattedStr(AST):  # a literal string with ${formatted exprs}
 
 class ModuleMeta(HasSource):
     """Specifies a module."""
+
+    _fields_ignore = frozenset(("unparse",))
 
     def __init__(self, path: _Iterable[str], begin, end):
         super().__init__(begin, end)
@@ -483,39 +513,55 @@ class MapDef(Expression):  # a literal compile time map
 #############
 
 class ASTVisitor:
-    """Base class of an AST handler."""
+    """
+    A base class that walks through the whole AST tree and calls a
+    visitor function for every node found. The visitor function for
+    a node of type `T` is named `visit_T`. If no visitor function is
+    defined, `generic_visit` will be used.
+    """
+
     def visit(self, node: AST, **kwargs):
         visitor = getattr(
             self,
             'visit_%s' % node.__class__.__name__,
-            self.general_visit
+            self.generic_visit
         )
         return visitor(node, **kwargs)
 
-    def general_visit(self, node: AST):
-        raise NotImplementedError
+    def child_visit(self, obj: object):
+        """
+        If `obj` is an `AST`, visit it.
+        If `obj` is a list of `AST`, visit all the elements.
+        If `obj` is a dictionary whose values are `AST` nodes, visit
+        all the values.
+        Otherwise, do nothing.
+        """
+        if isinstance(obj, AST):
+            self.visit(obj)
+        elif isinstance(obj, list):
+            for x in obj:
+                if isinstance(x, AST):
+                    self.visit(x)
+        elif isinstance(obj, dict):
+            for x in obj.values():
+                if isinstance(x, AST):
+                    self.visit(x)
+
+    def generic_visit(self, node: AST):
+        """
+        Called when a specific visitor function does not exist. This
+        default implementation visits all the children of given node
+        using `child_visit`.
+        """
+        for field in node.get_fields():
+            self.child_visit(getattr(node, field))
 
 class ASTVisualizer:
-    _fields_cache: _Dict[_Type[AST], _List[str]] = {}
+    """This class converts an AST node to string representation."""
 
     def __init__(self, node: AST, indent=2):
         self.node = node
         self.indent = indent
-
-    @classmethod
-    def get_fields(cls, node: AST) -> _List[str]:
-        """Get the names of fields of a node."""
-        tp = type(node)
-        if tp not in cls._fields_cache:
-            cls._fields_cache[tp] = [
-                name for name in dir(node)
-                if (
-                    not name.startswith('_')
-                    and name != 'begin'
-                    and name != 'end'
-                )
-            ]
-        return cls._fields_cache[tp]
 
     def _convert(self, value, indent: int = 0) -> str:
         res: _List[str] = []
@@ -526,7 +572,7 @@ class ASTVisualizer:
             else:
                 location_str = ""
             res.append(f'{location_str}{type(value).__name__}(\n')
-            for field in self.get_fields(value):
+            for field in value.get_fields():
                 fvalue = getattr(value, field)
                 res.append('%s%s = %s\n' % (
                     ' ' * indent_next, field,
@@ -550,4 +596,5 @@ class ASTVisualizer:
         return "".join(res)
 
     def get_string(self) -> str:
+        """Get the conversion result."""
         return self._convert(self.node)
