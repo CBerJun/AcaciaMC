@@ -1,7 +1,5 @@
 """Unit test for Acacia."""
 
-__all__ = []
-
 from typing import (
     Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Tuple, Dict
 )
