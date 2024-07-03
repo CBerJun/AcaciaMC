@@ -118,6 +118,16 @@ class FileEntry:
         """
         return SourceLocation(self, pos)
 
+    def get_range(self, begin: Tuple[int, int], end: Tuple[int, int]) \
+            -> SourceRange:
+        """
+        Convert two (line number, column number) pairs into a
+        SourceRange in this file.
+        """
+        loc1 = self.get_location(begin)
+        loc2 = self.get_location(end)
+        return SourceRange(loc1, loc2)
+
 class Reader:
     """A source file manager."""
 

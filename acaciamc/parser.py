@@ -152,9 +152,7 @@ class Parser:
         """Helper to create a `Diagnostic`."""
         if args is None:
             args = {}
-        loc1 = self.tokenizer.file_entry.get_location(pos1)
-        loc2 = self.tokenizer.file_entry.get_location(pos2)
-        rng = SourceRange(loc1, loc2)
+        rng = self.tokenizer.file_entry.get_range(pos1, pos2)
         return Diagnostic(id=diag_id, source=rng, args=args)
 
     def unexpected_token(self):

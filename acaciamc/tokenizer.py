@@ -208,9 +208,7 @@ class Token(NamedTuple):
         )
 
     def to_source_range(self, file_entry: "FileEntry") -> SourceRange:
-        l1 = file_entry.get_location(self.pos1)
-        l2 = file_entry.get_location(self.pos2)
-        return SourceRange(l1, l2)
+        return file_entry.get_range(self.pos1, self.pos2)
 
     def display_string(self) -> str:
         """Get a string representation to display to user."""

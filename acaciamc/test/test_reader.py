@@ -3,7 +3,6 @@
 import os
 
 from acaciamc.test import TestSuite
-from acaciamc.reader import SourceRange
 
 test_dir = os.path.dirname(__file__)
 dummy_file = os.path.join(test_dir, "data", "dummy.txt")
@@ -15,6 +14,11 @@ RANGES = (
     ((3, 2), (3, 6), ["a dummy"]),
     ((2, 1), (5, 1), ["is", "a dummy", "file for", "test/test_reader.py"]),
     ((6, 1), (6, 1), [""]),
+)
+LOCATION_AND_OFFSETS = (
+    ((3, 2), 4, (3, 6)),
+    ((2, 1), 2, (2, 3)),
+    ((6, 1), 0, (6, 1)),
 )
 
 class ReaderTests(TestSuite):
@@ -45,8 +49,13 @@ class ReaderTests(TestSuite):
 
     def test_source_range(self):
         for pos1, pos2, contents in RANGES:
-            loc1 = self.file_entry.get_location(pos1)
-            loc2 = self.file_entry.get_location(pos2)
-            rng = SourceRange(loc1, loc2)
+            rng = self.file_entry.get_range(pos1, pos2)
             self.assert_true(rng.get_lines() == contents,
                              "wrong get_lines() result")
+
+    def test_source_location(self):
+        for pos1, offset, pos2 in LOCATION_AND_OFFSETS:
+            loc1 = self.file_entry.get_location(pos1)
+            loc2 = loc1.to_range(offset).end
+            self.assert_true(loc2.pos == pos2,
+                             "wrong to_range() result")
