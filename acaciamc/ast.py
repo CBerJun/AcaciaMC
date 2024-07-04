@@ -557,13 +557,15 @@ class ASTVisitor:
             self.child_visit(getattr(node, field))
 
 class ASTVisualizer:
-    """This class converts an AST node to string representation."""
+    """
+    This class converts an AST node to string representation. Use
+    `convert` method.
+    """
 
-    def __init__(self, node: AST, indent=2):
-        self.node = node
+    def __init__(self, indent=2):
         self.indent = indent
 
-    def _convert(self, value, indent: int = 0) -> str:
+    def _convert(self, value, indent: int) -> str:
         res: _List[str] = []
         indent_next = indent + self.indent
         if isinstance(value, AST):
@@ -595,6 +597,6 @@ class ASTVisualizer:
             res.append(repr(value))
         return "".join(res)
 
-    def get_string(self) -> str:
-        """Get the conversion result."""
-        return self._convert(self.node)
+    def convert(self, node: AST) -> str:
+        """Make a string representation for given `node`."""
+        return self._convert(node, indent=0)

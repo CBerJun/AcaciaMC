@@ -141,6 +141,14 @@ class DiagnosticError(Exception):
     def add_note(self, note: Diagnostic):
         self.notes.append(note)
 
+@contextmanager
+def error_note(diag: Diagnostic):
+    try:
+        yield
+    except DiagnosticError as err:
+        err.add_note(diag)
+        raise
+
 DiagnosticKind.ERROR.registry.update({
     # From tokenizer
     'invalid-char': 'Invalid character ${char}',
@@ -179,6 +187,8 @@ DiagnosticKind.ERROR.registry.update({
         'argument',
     'multiple-new-methods': "Found ${nnews} 'new' methods in the same "
         "template; at most 1 expected",
+    # From post AST visitor
+    'module-not-found': "Module ${module} is not found",
 })
 DiagnosticKind.WARNING.registry.update({
     # From tokenizer
@@ -187,4 +197,6 @@ DiagnosticKind.WARNING.registry.update({
 DiagnosticKind.NOTE.registry.update({
     # From parser
     'multiple-new-methods-note': "Another 'new' method definition",
+    # From post AST visitor
+    'imported-here': "Imported here",
 })

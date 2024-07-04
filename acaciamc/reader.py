@@ -68,9 +68,11 @@ class SourceRange(NamedTuple):
 class FileEntry:
     """A file."""
 
-    def __init__(self, text: str, display_name: str):
+    def __init__(self, text: str, display_name: str,
+                 file_name: Optional[str] = None):
         self.display_name = display_name
         self.text = text
+        self.file_name = file_name
         self.line_offsets: Optional[List[int]] = None
 
     @classmethod
@@ -81,7 +83,7 @@ class FileEntry:
         """
         with open(filename, 'r', encoding='utf-8') as file:
             text = file.read()
-        return cls(text, display_name)
+        return cls(text, display_name, filename)
 
     def open(self) -> TextIO:
         return StringIO(self.text)
@@ -159,3 +161,11 @@ class Reader:
         entry = FileEntry(text, display_name)
         self.fake_entries.append(entry)
         return entry
+
+    def delete_real_file_cache(self, filename: str) -> None:
+        """
+        Delete cache of `filename` so that it can be reloaded later. If
+        the file does not exist in cache, this does nothing.
+        """
+        norm_filename = path.realpath(filename)
+        self.real_entries.pop(norm_filename, None)
