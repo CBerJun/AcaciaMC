@@ -1,7 +1,8 @@
 """Unit test for Acacia."""
 
 from typing import (
-    Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Tuple, Dict
+    Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Tuple, Dict,
+    Iterable
 )
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
@@ -20,9 +21,10 @@ class TrackedDiagnosticsManager(DiagnosticsManager):
         super().__init__(owner.reader, stream=None)
         self.owner = owner
 
-    def push_diagnostic(self, diag: Diagnostic):
+    def push_diagnostic(self, diag: Diagnostic,
+                        notes: Optional[Iterable[Diagnostic]] = None):
         self.owner.note_diag(diag)
-        return super().push_diagnostic(diag)
+        return super().push_diagnostic(diag, notes)
 
 class STArgRequirement(metaclass=ABCMeta):
     @abstractmethod

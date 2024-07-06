@@ -1,7 +1,7 @@
 """Diagnostic related stuffs."""
 
 from typing import (
-    NamedTuple, List, Mapping, Optional, TextIO, Dict, TYPE_CHECKING
+    NamedTuple, List, Mapping, Optional, TextIO, Dict, Iterable, TYPE_CHECKING
 )
 from enum import Enum
 from contextlib import contextmanager
@@ -68,6 +68,7 @@ class DiagnosticsManager:
 
     def __init__(self, reader: "Reader", stream: Optional[TextIO] = stderr):
         self.diags: List[Diagnostic] = []
+        self.note_context: List[Diagnostic] = []
         self.reader = reader
         self.stream = stream
         self.line_num_width = 5
@@ -80,14 +81,47 @@ class DiagnosticsManager:
         try:
             yield
         except DiagnosticError as err:
-            self.push_diagnostic(err.diag)
-            for diag in err.notes:
-                self.push_diagnostic(diag)
+            self.push_diagnostic(err.diag, err.notes)
 
-    def push_diagnostic(self, diag: Diagnostic):
-        """Add a diagnostic."""
+    @contextmanager
+    def using_note(self, note: Diagnostic):
+        """
+        Add the given note to WARNING or ERROR diagnostics that are
+        issued in this context. This can be nested, and the most recent
+        one appears first.
+        """
+        assert note.kind is DiagnosticKind.NOTE
+        self.note_context.append(note)
+        try:
+            yield
+        except DiagnosticError as err:
+            # When this error reaches `capture_errors`, this note would
+            # have been popped out of `self.note_context`, and thus the
+            # notes will not apply. To fix this we manually add this
+            # note to that error and reraise it.
+            err.add_note(note)
+            raise
+        finally:
+            self.note_context.pop()
+
+    def push_diagnostic(self, diag: Diagnostic,
+                        notes: Optional[Iterable[Diagnostic]] = None):
+        """
+        Add a diagnostic, optionally with some notes. The main
+        diagnostic will appear first, then the given `notes`, then the
+        notes added using `using_note`. If the given `diag` is itself
+        a note then notes specified by `using_note` will not be added.
+        """
         self.diags.append(diag)
         self.dump_diagnostic(diag)
+        if notes is not None:
+            for note in notes:
+                assert note.kind is DiagnosticKind.NOTE
+                self.push_diagnostic(note)
+        if diag.kind is not DiagnosticKind.NOTE:
+            # Apply notes added by `using_note`
+            for note in reversed(self.note_context):
+                self.push_diagnostic(note)
 
     def dump_diagnostic(self, diag: Diagnostic, file: Optional[TextIO] = None):
         """
@@ -140,14 +174,6 @@ class DiagnosticError(Exception):
 
     def add_note(self, note: Diagnostic):
         self.notes.append(note)
-
-@contextmanager
-def error_note(diag: Diagnostic):
-    try:
-        yield
-    except DiagnosticError as err:
-        err.add_note(diag)
-        raise
 
 DiagnosticKind.ERROR.registry.update({
     # From tokenizer

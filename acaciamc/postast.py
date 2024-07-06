@@ -169,7 +169,8 @@ class PostASTVisitor(ast.ASTVisitor):
 
     def visit_ModuleMeta(self, node: ast.ModuleMeta):
         meta_range = self.file_entry.get_range(node.begin, node.end)
-        with error_note(Diagnostic("imported-here", meta_range, args={})):
+        imported_here = Diagnostic("imported-here", meta_range, args={})
+        with self.forest.diag_mgr.using_note(imported_here):
             found = self.forest.load_module(node)
         if not found:
             raise DiagnosticError(Diagnostic(
