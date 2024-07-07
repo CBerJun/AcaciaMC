@@ -236,6 +236,8 @@ class FuncDef(Statement):  # function definition
         self.data = data
 
 class NormalFuncData(FuncData):
+    _fields_ignore = frozenset(("return_type",))
+
     def __init__(
         self, arg_table: ArgumentTable,
         body: _List[Statement], returns: _Optional[FunctionPort]
