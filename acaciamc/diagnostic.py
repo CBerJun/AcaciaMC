@@ -215,14 +215,22 @@ DiagnosticKind.ERROR.registry.update({
         "template; at most 1 expected",
     # From post AST visitor
     'module-not-found': "Module ${module} is not found",
+    'undefined-name': "Name ${name} is not defined",
+    'name-redefinition': "Redefinition of name ${name}",
+    'cannot-import-name': "Cannot import name ${name} from module ${module}",
 })
 DiagnosticKind.WARNING.registry.update({
     # From tokenizer
     'new-font': 'The font specifier ${font} is a Minecraft 1.19.80 feature',
+    # From post AST visitor
+    'unused-name': 'Name ${name} is defined but not used',
+    'partial-wildcard-import': 'Wildcard import on partially initialized '
+        'module ${module} may result in some names not being imported'
 })
 DiagnosticKind.NOTE.registry.update({
     # From parser
     'multiple-new-methods-note': "Another 'new' method definition",
     # From post AST visitor
     'imported-here': "Imported here",
+    'name-redefinition-note': "Previous definition here",
 })
