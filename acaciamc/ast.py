@@ -362,7 +362,7 @@ class Import(Statement):  # import a module
         self.name = alias
 
 class ImportItem(AST):  # used by FromImport
-    def __init__(self, name: str, alias: IdentifierDef):
+    def __init__(self, name: IdentifierDef, alias: IdentifierDef):
         self.name = name
         self.alias = alias
 

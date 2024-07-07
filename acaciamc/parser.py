@@ -852,12 +852,10 @@ class Parser:
             )
         items: List[ImportItem] = []
         def _id_alias():
-            name = self.current_token.value
-            id_range = self.current_range
-            self.eat(TokenType.identifier)
+            name = self._id_def()
             alias = self.alias()
             if alias is None:
-                alias = IdentifierDef(name, *id_range)
+                alias = IdentifierDef(name.name, name.begin, name.end)
             items.append(ImportItem(name, alias))
         if self.current_token.type is TokenType.lparen:
             self.paren_list_of(_id_alias)

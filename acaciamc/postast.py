@@ -394,13 +394,13 @@ class PostASTVisitor(ast.ASTVisitor):
         # Use `visit_ModuleMeta` for better type hints
         module = self.visit_ModuleMeta(node.meta)
         for item in node.items:
-            symbol = module.namespace.lookup_symbol(item.name)
+            name: str = item.name.name
+            symbol = module.namespace.lookup_symbol(name)
             if symbol is None:
-                # XXX source range
                 raise DiagnosticError(Diagnostic(
                     "cannot-import-name",
-                    self.file_entry.get_range(node.begin, node.end),
-                    args={"name": STStr(item.name),
+                    self.file_entry.get_range(item.name.begin, item.name.end),
+                    args={"name": STStr(name),
                           "module": STStr(node.meta.unparse())}
                 ))
             item.annotation = symbol
