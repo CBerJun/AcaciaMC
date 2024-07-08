@@ -221,7 +221,11 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
     }),
     ("def f():\n pass", {
-        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 6), "name": "f",
+        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 6),
+        "name": {
+            "@type": ast.IdentifierDef, "name": "f",
+            "begin": (1, 5), "end": (1, 6)
+        },
         "data": {
             "@type": ast.NormalFuncData,
             "arg_table": {
@@ -233,7 +237,11 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         }
     }),
     ("inline def f(x, y: int, const z=10) -> int:\n pass", {
-        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 6), "name": "f",
+        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 6),
+        "name": {
+            "@type": ast.IdentifierDef, "name": "f",
+            "begin": (1, 12), "end": (1, 13)
+        },
         "data": {
             "@type": ast.InlineFuncData,
             "arg_table": {
@@ -241,7 +249,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                 "params": OrderedDict((
                     ("x", {
                         "@type": ast.FormalParam,
-                        "name": "x",
+                        "name": {
+                            "@type": ast.IdentifierDef, "name": "x",
+                            "begin": (1, 14), "end": (1, 15)
+                        },
                         "default": None,
                         "port": {
                             "@type": ast.FunctionPort, "type": None,
@@ -251,7 +262,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                     }),
                     ("y", {
                         "@type": ast.FormalParam,
-                        "name": "y",
+                        "name": {
+                            "@type": ast.IdentifierDef, "name": "y",
+                            "begin": (1, 17), "end": (1, 18)
+                        },
                         "default": None,
                         "port": {
                             "@type": ast.FunctionPort,
@@ -267,7 +281,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         }
                     }),
                     ("z", {
-                        "name": "z",
+                        "name": {
+                            "@type": ast.IdentifierDef, "name": "z",
+                            "begin": (1, 31), "end": (1, 32)
+                        },
                         "default": {
                             "@type": ast.IntLiteral, "value": 10,
                             "begin": (1, 33), "end": (1, 35)
@@ -296,7 +313,11 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         }
     }),
     ("const def f(x: int = 20):\n pass", {
-        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 6), "name": "f",
+        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 6),
+        "name": {
+            "@type": ast.IdentifierDef, "name": "f",
+            "begin": (1, 11), "end": (1, 12)
+        },
         "data": {
             "@type": ast.ConstFuncData,
             "arg_table": {
@@ -304,7 +325,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                 "params": OrderedDict((
                     ("x", {
                         "@type": ast.FormalParam,
-                        "name": "x",
+                        "name": {
+                            "@type": ast.IdentifierDef, "name": "x",
+                            "begin": (1, 13), "end": (1, 14)
+                        },
                         "port": {
                             "@type": ast.FunctionPort,
                             "begin": (1, 13), "end": (1, 19),
@@ -349,7 +373,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "  pass",
         {
             "@type": ast.EntityTemplateDef, "begin": (1, 1), "end": (7, 7),
-            "name": "T",
+            "name": {
+                "@type": ast.IdentifierDef, "name": "T",
+                "begin": (1, 8), "end": (1, 9)
+            },
             "parents": [{
                 "@type": ast.Identifier, "begin": (1, 18), "end": (1, 19),
                 "name": "Y"
@@ -357,7 +384,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "body": [
                 {
                     "@type": ast.EntityField, "begin": (2, 2), "end": (2, 8),
-                    "name": "x",
+                    "name": {
+                        "@type": ast.IdentifierDef, "name": "x",
+                        "begin": (2, 2), "end": (2, 3)
+                    },
                     "type": {
                         "@type": ast.TypeSpec,
                         "content": {
@@ -372,7 +402,11 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                     "qualifier": ast.MethodQualifier.none,
                     "begin": (6, 2), "end": (7, 7),
                     "content": {
-                        "@type": ast.FuncDef, "name": "f",
+                        "@type": ast.FuncDef,
+                        "name": {
+                            "@type": ast.IdentifierDef, "name": "f",
+                            "begin": (6, 6), "end": (6, 7)
+                        },
                         "begin": (6, 2), "end": (7, 7),
                         "data": {
                             "@type": ast.NormalFuncData,
@@ -406,7 +440,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     ),
     ("x: int = 10", {
         "@type": ast.VarDef, "begin": (1, 1), "end": (1, 12),
-        "target": "x",
+        "target": {
+            "@type": ast.IdentifierDef, "name": "x",
+            "begin": (1, 1), "end": (1, 2)
+        },
         "type": {
             "@type": ast.TypeSpec,
             "content": {
@@ -421,7 +458,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("x := 10", {
         "@type": ast.AutoVarDef, "begin": (1, 1), "end": (1, 8),
-        "target": "x",
+        "target": {
+            "@type": ast.IdentifierDef, "name": "x",
+            "begin": (1, 1), "end": (1, 2)
+        },
         "value": {
             "@type": ast.IntLiteral, "value": 10,
             "begin": (1, 6), "end": (1, 8)
@@ -442,7 +482,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "@type": ast.ConstDef, "begin": (1, 1), "end": (1, 13),
         "contents": [{
             "@type": ast.CompileTimeAssign,
-            "name": "x",
+            "name": {
+                "@type": ast.IdentifierDef, "name": "x",
+                "begin": (1, 7), "end": (1, 8)
+            },
             "type": None,
             "value": {
                 "@type": ast.IntLiteral, "begin": (1, 11), "end": (1, 13),
@@ -455,7 +498,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "contents": [
             {
                 "@type": ast.CompileTimeAssign,
-                "name": "a",
+                "name": {
+                    "@type": ast.IdentifierDef, "name": "a",
+                    "begin": (1, 8), "end": (1, 9)
+                },
                 "type": None,
                 "value": {
                     "@type": ast.IntLiteral, "begin": (1, 10), "end": (1, 11),
@@ -464,7 +510,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             },
             {
                 "@type": ast.CompileTimeAssign,
-                "name": "b",
+                "name": {
+                    "@type": ast.IdentifierDef, "name": "b",
+                    "begin": (1, 13), "end": (1, 14)
+                },
                 "type": {
                     "@type": ast.TypeSpec,
                     "content": {
@@ -483,7 +532,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "@type": ast.ReferenceDef, "begin": (1, 1), "end": (1, 12),
         "content": {
             "@type": ast.CompileTimeAssign,
-            "name": "x",
+            "name": {
+                "@type": ast.IdentifierDef, "name": "x",
+                "begin": (1, 2), "end": (1, 3)
+            },
             "type": {
                 "@type": ast.TypeSpec,
                 "content": {
@@ -530,7 +582,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "path": ["foo", "spam"],
             "begin": (1, 8), "end": (1, 16)
         },
-        "name": "bar"
+        "name": {
+            "@type": ast.IdentifierDef, "name": "bar",
+            "begin": (1, 20), "end": (1, 23)
+        }
     }),
     ("from spam import ham as wood, tree", {
         "@type": ast.FromImport, "begin": (1, 1), "end": (1, 35),
@@ -542,13 +597,25 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "items": [
             {
                 "@type": ast.ImportItem,
-                "name": "ham",
-                "alias": "wood"
+                "name": {
+                    "@type": ast.IdentifierDef, "name": "ham",
+                    "begin": (1, 18), "end": (1, 21)
+                },
+                "alias": {
+                    "@type": ast.IdentifierDef, "name": "wood",
+                    "begin": (1, 25), "end": (1, 29)
+                }
             },
             {
                 "@type": ast.ImportItem,
-                "name": "tree",
-                "alias": "tree"
+                "name": {
+                    "@type": ast.IdentifierDef, "name": "tree",
+                    "begin": (1, 31), "end": (1, 35)
+                },
+                "alias": {
+                    "@type": ast.IdentifierDef, "name": "tree",
+                    "begin": (1, 31), "end": (1, 35)
+                }
             }
         ]
     }),
@@ -563,7 +630,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("for x in y:\n pass", {
         "@type": ast.For, "begin": (1, 1), "end": (2, 6),
-        "name": "x",
+        "name": {
+            "@type": ast.IdentifierDef, "name": "x",
+            "begin": (1, 5), "end": (1, 6)
+        },
         "expr": {
             "@type": ast.Identifier, "begin": (1, 10), "end": (1, 11),
             "name": "y"
@@ -572,11 +642,18 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("struct T:\n x: int\n pass\n y: bool", {
         "@type": ast.StructDef, "begin": (1, 1), "end": (4, 9),
-        "name": "T", "bases": [],
+        "name": {
+            "@type": ast.IdentifierDef, "name": "T",
+            "begin": (1, 8), "end": (1, 9)
+        },
+        "bases": [],
         "body": [
             {
                 "@type": ast.StructField, "begin": (2, 2), "end": (2, 8),
-                "name": "x",
+                "name": {
+                    "@type": ast.IdentifierDef, "name": "x",
+                    "begin": (2, 2), "end": (2, 3)
+                },
                 "type": {
                     "@type": ast.TypeSpec,
                     "content": {
@@ -588,7 +665,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             {"@type": ast.Pass, "begin": (3, 2), "end": (3, 6)},
             {
                 "@type": ast.StructField, "begin": (4, 2), "end": (4, 9),
-                "name": "y",
+                "name": {
+                    "@type": ast.IdentifierDef, "name": "y",
+                    "begin": (4, 2), "end": (4, 3)
+                },
                 "type": {
                     "@type": ast.TypeSpec,
                     "content": {
@@ -622,10 +702,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
 )
 
 def _compare_ast_values(value, serialized) -> bool:
-    if isinstance(value, ast.IdentifierDef):
-        if value.name != serialized:
-            return False
-    elif isinstance(value, ast.AST):
+    if isinstance(value, ast.AST):
         assert isinstance(serialized, dict)
         if not ast_compare(value, serialized):
             return False
