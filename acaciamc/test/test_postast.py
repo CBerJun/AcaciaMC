@@ -3,6 +3,7 @@
 from typing import Tuple
 from tempfile import TemporaryDirectory
 import os
+import shutil
 
 from acaciamc.test import TestSuite, DiagnosticRequirement, STArgReqSimpleValue
 from acaciamc.postast import ASTForest
@@ -24,6 +25,13 @@ class PostASTTests(TestSuite):
         the main file and return the `modules` of the `ASTForest` as
         parsing result.
         """
+        # Delete old files, in case they affect `import`s.
+        for path in os.listdir(self.tempdir.name):
+            fullpath = os.path.join(self.tempdir.name, path)
+            if os.path.isdir(fullpath):
+                shutil.rmtree(fullpath)
+            else:
+                os.remove(fullpath)
         # Set up files
         for path, content in files:
             fullpath = os.path.join(self.tempdir.name, path)
