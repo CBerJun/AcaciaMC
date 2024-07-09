@@ -1,0 +1,10 @@
+#*
+ * This file exists as a helper for test/test_postast.py
+ *
+ * We will be using another module in standard library instead when the
+ * v3 compiler is completely done.
+ *#
+
+x := 1
+const y = "Hello, world!"
+_z := 3
