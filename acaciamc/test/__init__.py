@@ -58,7 +58,7 @@ class DiagnosticRequirement(NamedTuple):
                 return False
         if self.args is not None:
             # Keys must exactly match
-            if tuple(self.args) != tuple(diag.args):
+            if self.args.keys() != diag.args.keys():
                 return False
             for name, argreq in self.args.items():
                 arg = diag.args[name]
