@@ -272,9 +272,11 @@ class PostASTSymbolTests(TestSuite):
         )
         assert mod  # Test should fail immediately if a diag is issued
         # Toplevel
+        def1 = mod.body[0]
         exprnode1 = mod.body[1]
         ifnode1 = mod.body[2]
         exprnode2 = mod.body[3]
+        assert isinstance(def1, ast.AutoVarDef)
         assert isinstance(exprnode1, ast.ExprStatement)
         assert isinstance(exprnode2, ast.ExprStatement)
         assert isinstance(ifnode1, ast.If)
@@ -282,14 +284,17 @@ class PostASTSymbolTests(TestSuite):
         expr2 = exprnode2.value
         assert isinstance(expr1, ast.Identifier)
         assert isinstance(expr2, ast.Identifier)
+        sym1_0 = def1.target.annotation
         sym1_1 = expr1.annotation
         sym1_2 = expr2.annotation
         # Under "if"
         exprnode3 = ifnode1.body[0]
+        def2 = ifnode1.body[1]
         ifnode2 = ifnode1.body[2]
         exprnode4 = ifnode1.body[3]
         ifnode3 = ifnode1.body[4]
         exprnode5 = ifnode1.body[5]
+        assert isinstance(def2, ast.AutoVarDef)
         assert isinstance(exprnode3, ast.ExprStatement)
         assert isinstance(exprnode4, ast.ExprStatement)
         assert isinstance(exprnode5, ast.ExprStatement)
@@ -302,17 +307,23 @@ class PostASTSymbolTests(TestSuite):
         assert isinstance(expr4, ast.Identifier)
         assert isinstance(expr5, ast.Identifier)
         sym1_3 = expr3.annotation
+        sym2_0 = def2.target.annotation
         sym2_1 = expr4.annotation
         sym2_2 = expr5.annotation
         # Under first inner "if"
+        def3 = ifnode2.body[0]
         exprnode6 = ifnode2.body[1]
+        assert isinstance(def3, ast.AutoVarDef)
         assert isinstance(exprnode6, ast.ExprStatement)
         expr6 = exprnode6.value
         assert isinstance(expr6, ast.Identifier)
+        sym3_0 = def3.target.annotation
         sym3_1 = expr6.annotation
         # Under second inner "if"
         exprnode7 = ifnode3.body[0]
+        def4 = ifnode3.body[1]
         exprnode8 = ifnode3.body[2]
+        assert isinstance(def4, ast.AutoVarDef)
         assert isinstance(exprnode7, ast.ExprStatement)
         assert isinstance(exprnode8, ast.ExprStatement)
         expr7 = exprnode7.value
@@ -320,12 +331,17 @@ class PostASTSymbolTests(TestSuite):
         assert isinstance(expr7, ast.Identifier)
         assert isinstance(expr8, ast.Identifier)
         sym2_3 = expr7.annotation
+        sym4_0 = def4.target.annotation
         sym4_1 = expr8.annotation
         # Assertions
-        self.assert_true(sym1_1 is sym1_2 is sym1_3,
+        self.assert_true(sym1_0 is sym1_1 is sym1_2 is sym1_3,
                          "Inconsistent first symbol")
-        self.assert_true(sym2_1 is sym2_2 is sym2_3,
+        self.assert_true(sym2_0 is sym2_1 is sym2_2 is sym2_3,
                          "Inconsistent second symbol")
+        self.assert_true(sym3_0 is sym3_1,
+                         "Inconsistent third symbo")
+        self.assert_true(sym4_0 is sym4_1,
+                         "Inconsistent fourth symbo")
         self.assert_true(
             sym1_1 is not sym2_1
             and sym1_1 is not sym3_1
@@ -373,11 +389,15 @@ class PostASTSymbolTests(TestSuite):
             "    x\n"
         )
         assert mod  # Test should fail immediately if a diag is issued
+        def1 = mod.body[0]
         ifnode = mod.body[1]
+        assert isinstance(def1, ast.AutoVarDef)
         assert isinstance(ifnode, ast.If)
         exprnode1 = ifnode.body[0]
         exprnode2 = ifnode.else_body[0]
+        def2 = ifnode.else_body[1]
         exprnode3 = ifnode.else_body[2]
+        assert isinstance(def2, ast.AutoVarDef)
         assert isinstance(exprnode1, ast.ExprStatement)
         assert isinstance(exprnode2, ast.ExprStatement)
         assert isinstance(exprnode3, ast.ExprStatement)
@@ -387,10 +407,15 @@ class PostASTSymbolTests(TestSuite):
         assert isinstance(expr1, ast.Identifier)
         assert isinstance(expr2, ast.Identifier)
         assert isinstance(expr3, ast.Identifier)
+        sym1_0 = def1.target.annotation
         sym1_1 = expr1.annotation
         sym1_2 = expr2.annotation
+        sym2_0 = def2.target.annotation
         sym2_1 = expr3.annotation
-        self.assert_true(sym1_1 is sym1_2, "Inconsistent first symbol")
+        self.assert_true(sym1_0 is sym1_1 is sym1_2,
+                         "Inconsistent first symbol")
+        self.assert_true(sym2_0 is sym2_1,
+                         "Inconsistent second symbol")
         self.assert_true(sym1_1 is not sym2_1,
                          "Two symbols should be different")
 

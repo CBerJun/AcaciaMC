@@ -235,8 +235,14 @@ class PostASTVisitor(ast.ASTVisitor):
     This class puts `annotation`s on these AST nodes:
     * `Identifier`: A `Symbol` that this node references.
     * `ImportItem`: A `Symbol` that this import item imports.
-    * `FromImportAll`: A `Dict[str, Symbol]` that stores all the names
-      that are imported and their `Symbol`s.
+    * `FromImportAll`: A `Dict[str, Tuple[Symbol, Symbol]]`. Each entry
+      represents an item that gets imported. First `Symbol` is the
+      symbol that gets defined in this file; second is the symbol that
+      represents the imported item in the file that gets imported.
+    * `IdentifierDef`: A `Optional[Symbol]`. Currently this is None iff
+      it is the `name` child of an `ImportItem`. Otherwise, this node
+      represents a definition of an identifier and its annotation will
+      be the `Symbol` this defines.
     """
 
     def __init__(self, file_entry: "FileEntry", root_scope: Scope,
@@ -269,13 +275,14 @@ class PostASTVisitor(ast.ASTVisitor):
         """
         Define a name in current scope using an `IdentifierDef` node.
         """
-        self.define_id(id_def.name, id_def.begin, id_def.end)
+        id_def.annotation = \
+            self.define_id(id_def.name, id_def.begin, id_def.end)
 
     def define_id(self, name: str, pos1: Tuple[int, int],
-                  pos2: Tuple[int, int]):
+                  pos2: Tuple[int, int]) -> Symbol:
         """
         Define `name` in current scope with source range from `pos1` to
-        `pos2`.
+        `pos2`. Return the related `Symbol`.
         """
         # Do not use `lookup_symbol` since we do not want to search in
         # outer scopes; plus we do not want to mark the symbol as used:
@@ -294,6 +301,7 @@ class PostASTVisitor(ast.ASTVisitor):
             raise err
         new_symbol = Symbol(name, pos1, pos2)
         self.scope.add_symbol(name, new_symbol)
+        return new_symbol
 
     def handle_body(self, body: Iterable[ast.AST]):
         """Visit all nodes in `body` in a new scope."""
@@ -412,16 +420,20 @@ class PostASTVisitor(ast.ASTVisitor):
         namespace = module.namespace
         # Toplevel namespace does not have outer
         assert namespace.outer is None
-        # Do not import names starting with an underscore
-        importing = node.annotation = {
-            name: symbol
+        node.annotation = {
+            name: (
+                # The symbol that is created (the alias) for this file:
+                # Use the position of "*" (in "from x import *") as
+                # source range of all the aliases:
+                self.define_id(name, node.star_begin, node.star_end),
+                # The symbol which defines the imported item in the file
+                # that is imported:
+                symbol
+            )
             for name, symbol in namespace.names.items()
+            # Do not import names starting with an underscore:
             if not name.startswith("_")
         }
-        for name in importing:
-            # Use the position of "*" (in "from x import *") as source
-            # range of all the items imported
-            self.define_id(name, node.star_begin, node.star_end)
         # Lastly, warn if the module that we import is partially
         # initialized
         if isinstance(module, LoadingModule):
