@@ -18,6 +18,10 @@ if TYPE_CHECKING:
     from acaciamc.diagnostic import DiagnosticsManager
 
 UNICODE_ESCAPES = {'x': 2, 'u': 4, 'U': 8}
+INT_LITERAL_BASES = {'x': 16, 'b': 2, 'o': 8}
+# I feel like defining this ourselves (instead of `string.hexdigits`) is
+# more straight forward since we are going to slice this:
+CAPITAL_HEX_DIGITS = '0123456789ABCDEF'
 # These are the only characters allowed in function paths.
 FUNCTION_PATH_CHARS = frozenset(ascii_letters + digits + ".(-)_/")
 # Color codes
@@ -685,49 +689,66 @@ class Tokenizer:
     def _isdecimal(char: Union[str, None]):
         return char is not None and char in string.digits
 
+    def _handle_integer(self, base: int) -> str:
+        """
+        Helper for `_handle_number`. Reads an integer of given `base`.
+        Return the original source text.
+        """
+        # Read as long as the character is an identifier character,
+        # This makes sure that things like "0a" are not accepted,
+        # instead of being tokenized as "0" then an identifier "a".
+        valid_chars = CAPITAL_HEX_DIGITS[:base]
+        res: List[str] = []
+        while (self.current_char is not None
+               and is_idcontinue(self.current_char)):
+            if self.current_char.upper() not in valid_chars:
+                self.error_range(
+                    "invalid-number-char",
+                    self.currnet_location.to_range(1),
+                    args={"char": STStr(self.current_char),
+                          "base": STInt(base)}
+                )
+            res.append(self.current_char)
+            self.forward()
+        return ''.join(res)
+
+    def _handle_number(self) -> Tuple[TokenType, Union[int, float]]:
+        """Helper for `handle_number`. Reads a number."""
+        # Decide base and check leading zero in decimal numbers
+        base = 10
+        if self.current_char == '0':
+            peek = self.peek()
+            if peek is None:
+                # "0" at end of file
+                self.forward()
+                return TokenType.integer, 0
+            maybe_base = INT_LITERAL_BASES.get(peek.lower())
+            if maybe_base is not None:
+                # Successfully read "0x", "0b" or "0o"
+                base = maybe_base
+                # Skip these two characters
+                self.forward()
+                self.forward()
+        # Read an integer first
+        part1 = self._handle_integer(base)
+        # Make sure the integer is not empty (e.g. "0x some_more_text")
+        if not part1:
+            self.error('integer-expected', args={'base': STInt(base)})
+        # Check if this is a float
+        if (
+            self.current_char == "." and base == 10
+            and self._isdecimal(self.peek())
+        ):
+            self.forward()  # skip '.'
+            part2 = self._handle_integer(base)
+            return TokenType.float, float(f"{part1}.{part2}")
+        # Not float -- integer then
+        return TokenType.integer, int(part1, base=base)
+
     def handle_number(self):
         """Read an INTEGER or a FLOAT token."""
-        res = []
         with self.make_token() as gettok:
-            ## decide base
-            base = 10
-            peek = self.peek()
-            if self.current_char == '0' and peek is not None:
-                peek = peek.upper()
-                if peek in "BOX":
-                    if peek == 'B':
-                        base = 2
-                    elif peek == 'O':
-                        base = 8
-                    elif peek == 'X':
-                        base = 16
-                    # skip 2 chars ("0x" "0b" "0o")
-                    self.forward()
-                    self.forward()
-            ## read
-            valid_chars = '0123456789ABCDEF'[:base]
-            while ((self.current_char is not None)
-                and (self.current_char.upper() in valid_chars)):
-                res.append(self.current_char)
-                self.forward()
-            ## convert string to number
-            if (self.current_char == "."
-                and base == 10
-                and self._isdecimal(self.peek())
-            ):  # float
-                self.forward()
-                res.append(".")
-                while self._isdecimal(self.current_char):
-                    res.append(self.current_char)
-                    self.forward()
-                value = float(''.join(res))
-                tok_type = TokenType.float
-            else:  # integer
-                if not res:
-                    self.error('integer-expected',
-                            args={'base': STInt(base)})
-                value = int(''.join(res), base=base)
-                tok_type = TokenType.integer
+            tok_type, value = self._handle_number()
         return gettok(tok_type, value)
 
     def handle_name(self):

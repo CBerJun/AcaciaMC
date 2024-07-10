@@ -5,7 +5,9 @@ from typing import List
 from acaciamc.test import (
     TestSuite, DiagnosticRequirement, STArgReqSimpleValue, TestFailure
 )
-from acaciamc.tokenizer import Tokenizer, TokenType as TT, Token, KEYWORDS
+from acaciamc.tokenizer import (
+    Tokenizer, TokenType as TT, Token, KEYWORDS, INT_LITERAL_BASES
+)
 
 class TokenizerTests(TestSuite):
     name = "tokenizer"
@@ -179,24 +181,43 @@ class TokenizerTests(TestSuite):
             )
 
     def test_err_integer_expected(self):
+        for prefix, base in INT_LITERAL_BASES.items():
+            with self.assert_diag(DiagnosticRequirement(
+                id="integer-expected",
+                source=((1, 3), (1, 3)),
+                args={'base': STArgReqSimpleValue(base)}
+            )):
+                self.tokenize(f'0{prefix}')
+
+    def test_err_invalid_number_char(self):
         with self.assert_diag(DiagnosticRequirement(
-            id="integer-expected",
-            source=((1, 3), (1, 3)),
-            args={'base': STArgReqSimpleValue(16)}
+            id="invalid-number-char",
+            source=((1, 3), (1, 4)),
+            args={'base': STArgReqSimpleValue(10),
+                  'char': STArgReqSimpleValue('a')}
         )):
-            self.tokenize('0xGH')
+            self.tokenize("10a")
         with self.assert_diag(DiagnosticRequirement(
-            id="integer-expected",
-            source=((1, 3), (1, 3)),
-            args={'base': STArgReqSimpleValue(2)}
+            id="invalid-number-char",
+            source=((1, 6), (1, 7)),
+            args={'base': STArgReqSimpleValue(10),
+                  'char': STArgReqSimpleValue('_')}
         )):
-            self.tokenize('0b')
+            self.tokenize("12.34_")
         with self.assert_diag(DiagnosticRequirement(
-            id="integer-expected",
-            source=((1, 3), (1, 3)),
-            args={'base': STArgReqSimpleValue(8)}
+            id="invalid-number-char",
+            source=((1, 4), (1, 5)),
+            args={'base': STArgReqSimpleValue(16),
+                  'char': STArgReqSimpleValue('g')}
         )):
-            self.tokenize('0o888')
+            self.tokenize("0xag")
+        with self.assert_diag(DiagnosticRequirement(
+            id="invalid-number-char",
+            source=((1, 3), (1, 4)),
+            args={'base': STArgReqSimpleValue(2),
+                  'char': STArgReqSimpleValue('2')}
+        )):
+            self.tokenize("0b222")
 
     def test_err_unclosed_font(self):
         with self.assert_diag(DiagnosticRequirement(
@@ -277,13 +298,14 @@ class TokenizerTests(TestSuite):
 
     def test_integer(self):
         self.assert_tokens(
-            '1230987 0b0001100 0o77665 0XfAc2 00222',
+            '1230987 0b0001100 0o77665 0XfAc2 00222 0',
             tokens=[
                 Token(TT.integer, (1, 1), (1, 8), 1230987),
                 Token(TT.integer, (1, 9), (1, 18), 0b0001100),
                 Token(TT.integer, (1, 19), (1, 26), 0o77665),
                 Token(TT.integer, (1, 27), (1, 33), 0xfac2),
                 Token(TT.integer, (1, 34), (1, 39), 222),
+                Token(TT.integer, (1, 40), (1, 41), 0),
             ]
         )
 

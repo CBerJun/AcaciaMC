@@ -190,6 +190,7 @@ DiagnosticKind.ERROR.registry.update({
     'interface-path-expected': "A path is expected after 'interface'",
     'invalid-dedent': 'Dedent does not match any outer indentation level',
     'integer-expected': 'Expected base ${base} integer',
+    'invalid-number-char': 'Invalid character ${char} in base ${base} number',
     'unclosed-font': 'Unclosed font specifier',
     'invalid-font': 'Invalid font specifier: ${font}',
     'invalid-unicode-escape': 'Invalid \\${char raw} escape',
