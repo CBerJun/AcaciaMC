@@ -247,7 +247,9 @@ class NormalFuncData(FuncData):
         body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         super().__init__(arg_table, body, returns)
-        if returns is not None:
+        if returns is None:
+            self.return_type = None
+        else:
             assert isinstance(returns.valpassing, PassByValue)
             assert returns.type is not None
             self.return_type = returns.type
