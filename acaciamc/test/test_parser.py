@@ -679,12 +679,16 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             }
         ]
     }),
-    ("result foo", {
-        "@type": ast.Result, "begin": (1, 1), "end": (1, 11),
+    ("return foo", {
+        "@type": ast.Return, "begin": (1, 1), "end": (1, 11),
         "value": {
             "@type": ast.Identifier, "name": "foo",
             "begin": (1, 8), "end": (1, 11)
         }
+    }),
+    ("return", {
+        "@type": ast.Return, "begin": (1, 1), "end": (1, 7),
+        "value": None
     }),
     ("new()", {
         "@type": ast.NewCall, "begin": (1, 1), "end": (1, 6),

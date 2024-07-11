@@ -108,7 +108,7 @@ class Parser:
             TokenType.import_: self.import_stmt,
             TokenType.from_: self.from_import_stmt,
             TokenType.ampersand: self.reference_def_stmt,
-            TokenType.result: self.result_stmt,
+            TokenType.return_: self.return_stmt,
             TokenType.new: self.simple_new_stmt
         }
 
@@ -946,12 +946,16 @@ class Parser:
         decl = self._constant_decl()
         return ReferenceDef(decl, begin=pos1, end=self.prev_pos2)
 
-    def result_stmt(self):
-        """result_stmt := RESULT expr"""
+    def return_stmt(self):
+        """return_stmt := RETURN expr?"""
         pos1 = self.current_pos1
-        self.eat(TokenType.result)
-        expr = self.expr()
-        return Result(expr, begin=pos1, end=self.prev_pos2)
+        self.eat(TokenType.return_)
+        # Expects an expression iff we are not at end of line:
+        if self.current_token.type is TokenType.new_line:
+            expr = None
+        else:
+            expr = self.expr()
+        return Return(expr, begin=pos1, end=self.prev_pos2)
 
     def simple_new_stmt(self):
         """simple_new_stmt := NEW call_table"""
@@ -968,7 +972,7 @@ class Parser:
         )
         simple_statement := (
             pass_stmt | command_stmt | import_stmt | from_import_stmt |
-            result_stmt | simple_new_stmt
+            return_stmt | simple_new_stmt
         )
         embedded_statement := (
             if_stmt | while_stmt | for_stmt | interface_stmt |

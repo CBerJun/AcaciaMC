@@ -402,8 +402,8 @@ class StructDef(Statement):  # struct definition
         self.bases = bases
         self.body = body
 
-class Result(Statement):  # result xxx
-    def __init__(self, value: Expression, begin, end):
+class Return(Statement):  # return xxx
+    def __init__(self, value: _Optional[Expression], begin, end):
         super().__init__(begin, end)
         self.value = value
 

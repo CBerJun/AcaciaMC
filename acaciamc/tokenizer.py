@@ -144,7 +144,7 @@ class TokenType(enum.Enum):
     and_ = 'and'
     or_ = 'or'
     not_ = 'not'
-    result = 'result'
+    return_ = 'return'
     import_ = 'import'
     as_ = 'as'
     from_ = 'from'
