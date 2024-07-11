@@ -87,18 +87,13 @@ class Module(AST):  # a module
     def __init__(self, body: _List[Statement]):
         self.body = body
 
-class FormalParam(AST):  # used by ArgumentTable
+class FormalParam(AST):
     def __init__(self, name: IdentifierDef, valpassing: "ValuePassing",
                  type_: _Optional["TypeSpec"], default: _Optional[Expression]):
         self.name = name
         self.valpassing = valpassing
         self.type = type_
         self.default = default
-
-class ArgumentTable(AST):  # arguments used in function definition
-    def __init__(self, params: _OrderedDict):
-        # In fact, `params` is _OrderedDict[str, FormalParam]
-        self.params = params
 
 class CallTable(AST):  # call table
     def __init__(self, args: _List[Expression],
@@ -230,10 +225,11 @@ class While(Statement):  # while statement
 
 class FuncData(AST):
     def __init__(
-        self, arg_table: ArgumentTable,
+        self, params: _OrderedDict,
         body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
-        self.arg_table = arg_table
+        # In fact `params` is `_OrderedDict[str, FormalParam]`
+        self.params = params
         self.returns = returns
         self.body = body
 
@@ -247,7 +243,7 @@ class NormalFuncData(FuncData):
     _fields_ignore = frozenset(("return_type",))
 
     def __init__(
-        self, arg_table: ArgumentTable,
+        self, arg_table: _OrderedDict,
         body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         super().__init__(arg_table, body, returns)
@@ -261,7 +257,7 @@ class InlineFuncData(FuncData):
 
 class ConstFuncData(FuncData):
     def __init__(
-        self, arg_table: ArgumentTable,
+        self, arg_table: _OrderedDict,
         body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         super().__init__(arg_table, body, returns)

@@ -228,10 +228,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         },
         "data": {
             "@type": ast.NormalFuncData,
-            "arg_table": {
-                "@type": ast.ArgumentTable,
-                "params": OrderedDict(),
-            },
+            "params": OrderedDict(),
             "returns": None,
             "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
         }
@@ -244,58 +241,55 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         },
         "data": {
             "@type": ast.InlineFuncData,
-            "arg_table": {
-                "@type": ast.ArgumentTable,
-                "params": OrderedDict((
-                    ("x", {
-                        "@type": ast.FormalParam,
-                        "name": {
-                            "@type": ast.IdentifierDef, "name": "x",
-                            "begin": (1, 14), "end": (1, 15)
-                        },
-                        "default": None,
-                        "type": None,
-                        "valpassing": {
-                            "@type": ast.PassByValue,
-                            "begin": (1, 14), "end": (1, 14)
+            "params": OrderedDict((
+                ("x", {
+                    "@type": ast.FormalParam,
+                    "name": {
+                        "@type": ast.IdentifierDef, "name": "x",
+                        "begin": (1, 14), "end": (1, 15)
+                    },
+                    "default": None,
+                    "type": None,
+                    "valpassing": {
+                        "@type": ast.PassByValue,
+                        "begin": (1, 14), "end": (1, 14)
+                    }
+                }),
+                ("y", {
+                    "@type": ast.FormalParam,
+                    "name": {
+                        "@type": ast.IdentifierDef, "name": "y",
+                        "begin": (1, 17), "end": (1, 18)
+                    },
+                    "default": None,
+                    "type": {
+                        "@type": ast.TypeSpec,
+                        "content": {
+                            "@type": ast.Identifier, "name": "int",
+                            "begin": (1, 20), "end": (1, 23)
                         }
-                    }),
-                    ("y", {
-                        "@type": ast.FormalParam,
-                        "name": {
-                            "@type": ast.IdentifierDef, "name": "y",
-                            "begin": (1, 17), "end": (1, 18)
-                        },
-                        "default": None,
-                        "type": {
-                            "@type": ast.TypeSpec,
-                            "content": {
-                                "@type": ast.Identifier, "name": "int",
-                                "begin": (1, 20), "end": (1, 23)
-                            }
-                        },
-                        "valpassing": {
-                            "@type": ast.PassByValue,
-                            "begin": (1, 17), "end": (1, 17)
-                        }
-                    }),
-                    ("z", {
-                        "name": {
-                            "@type": ast.IdentifierDef, "name": "z",
-                            "begin": (1, 31), "end": (1, 32)
-                        },
-                        "default": {
-                            "@type": ast.IntLiteral, "value": 10,
-                            "begin": (1, 33), "end": (1, 35)
-                        },
-                        "type": None,
-                        "valpassing": {
-                            "@type": ast.PassConst,
-                            "begin": (1, 25), "end": (1, 30)
-                        }
-                    })
-                ))
-            },
+                    },
+                    "valpassing": {
+                        "@type": ast.PassByValue,
+                        "begin": (1, 17), "end": (1, 17)
+                    }
+                }),
+                ("z", {
+                    "name": {
+                        "@type": ast.IdentifierDef, "name": "z",
+                        "begin": (1, 31), "end": (1, 32)
+                    },
+                    "default": {
+                        "@type": ast.IntLiteral, "value": 10,
+                        "begin": (1, 33), "end": (1, 35)
+                    },
+                    "type": None,
+                    "valpassing": {
+                        "@type": ast.PassConst,
+                        "begin": (1, 25), "end": (1, 30)
+                    }
+                })
+            )),
             "returns": {
                 "@type": ast.ReturnSpec,
                 "valpassing": {
@@ -321,33 +315,30 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         },
         "data": {
             "@type": ast.ConstFuncData,
-            "arg_table": {
-                "@type": ast.ArgumentTable,
-                "params": OrderedDict((
-                    ("x", {
-                        "@type": ast.FormalParam,
-                        "name": {
-                            "@type": ast.IdentifierDef, "name": "x",
-                            "begin": (1, 13), "end": (1, 14)
-                        },
-                        "type": {
-                            "@type": ast.TypeSpec,
-                            "content": {
-                                "@type": ast.Identifier, "name": "int",
-                                "begin": (1, 16), "end": (1, 19),
-                            }
-                        },
-                        "valpassing": {
-                            "@type": ast.PassByValue,
-                            "begin": (1, 13), "end": (1, 13)
-                        },
-                        "default": {
-                            "@type": ast.IntLiteral, "value": 20,
-                            "begin": (1, 22), "end": (1, 24)
+            "params": OrderedDict((
+                ("x", {
+                    "@type": ast.FormalParam,
+                    "name": {
+                        "@type": ast.IdentifierDef, "name": "x",
+                        "begin": (1, 13), "end": (1, 14)
+                    },
+                    "type": {
+                        "@type": ast.TypeSpec,
+                        "content": {
+                            "@type": ast.Identifier, "name": "int",
+                            "begin": (1, 16), "end": (1, 19),
                         }
-                    }),
-                ))
-            },
+                    },
+                    "valpassing": {
+                        "@type": ast.PassByValue,
+                        "begin": (1, 13), "end": (1, 13)
+                    },
+                    "default": {
+                        "@type": ast.IntLiteral, "value": 20,
+                        "begin": (1, 22), "end": (1, 24)
+                    }
+                }),
+            )),
             "returns": None,
             "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
         }
@@ -410,10 +401,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         "begin": (6, 2), "end": (7, 7),
                         "data": {
                             "@type": ast.NormalFuncData,
-                            "arg_table": {
-                                "@type": ast.ArgumentTable,
-                                "params": OrderedDict()
-                            },
+                            "params": OrderedDict(),
                             "returns": None,
                             "body": [{"@type": ast.Pass,
                                       "begin": (7, 3), "end": (7, 7)}]
@@ -426,10 +414,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                 "new_begin": (4, 2), "new_end": (4, 5),
                 "data": {
                     "@type": ast.NormalFuncData,
-                    "arg_table": {
-                        "@type": ast.ArgumentTable,
-                        "params": OrderedDict()
-                    },
+                    "params": OrderedDict(),
                     "returns": None,
                     "body": [
                         {"@type": ast.Pass, "begin": (5, 3), "end": (5, 7)}

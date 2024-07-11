@@ -1105,7 +1105,7 @@ class Parser:
             id_def = IdentifierDef(name, arg_token.pos1, arg_token.pos2)
             params[name] = FormalParam(id_def, qualifier, type_, default)
         self.paren_list_of(_arg_decl)
-        return ArgumentTable(params)
+        return params
 
     def type_spec(self):
         """type_spec := expr"""

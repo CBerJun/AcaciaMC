@@ -349,20 +349,18 @@ class PostASTVisitor(ast.ASTVisitor):
     def handle_func_data(self, node: ast.FuncData):
         self.child_visit(node.returns)
         with self.new_scope():
-            self.visit(node.arg_table)
+            params: ValuesView[ast.FormalParam] = node.params.values()
+            for param in params:
+                self.child_visit(param.type)
+                self.child_visit(param.default)
+            # Make sure parameter names are defined after parsing
+            # the signature
+            for param in params:
+                self.handle_id_def(param.name)
             self.child_visit(node.body)
 
     visit_NormalFuncData = visit_InlineFuncData = visit_ConstFuncData = \
         handle_func_data
-
-    def visit_ArgumentTable(self, node: ast.ArgumentTable):
-        params: ValuesView[ast.FormalParam] = node.params.values()
-        for param in params:
-            self.child_visit(param.type)
-            self.child_visit(param.default)
-        # Make sure names are defined afterwards
-        for param in params:
-            self.handle_id_def(param.name)
 
     def visit_InterfaceDef(self, node: ast.InterfaceDef):
         self.child_visit(node.path)
