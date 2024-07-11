@@ -22,13 +22,6 @@ class MethodQualifier(_DisplayableEnum):
     override = 2, "override"
     static = 3, "static"
 
-class FuncPortType(_DisplayableEnum):
-    """Function port types."""
-
-    by_value = 0, "(none)"
-    by_reference = 1, "&"
-    const = 2, "const"
-
 #################
 ### AST NODES ###
 #################
@@ -95,10 +88,11 @@ class Module(AST):  # a module
         self.body = body
 
 class FormalParam(AST):  # used by ArgumentTable
-    def __init__(self, name: IdentifierDef, port: "FunctionPort",
-                 default: _Optional[Expression]):
+    def __init__(self, name: IdentifierDef, valpassing: "ValuePassing",
+                 type_: _Optional["TypeSpec"], default: _Optional[Expression]):
         self.name = name
-        self.port = port
+        self.valpassing = valpassing
+        self.type = type_
         self.default = default
 
 class ArgumentTable(AST):  # arguments used in function definition
@@ -116,12 +110,10 @@ class TypeSpec(AST):  # specify type of value `int`
     def __init__(self, content: Expression):
         self.content = content
 
-class FunctionPort(HasSource):
-    def __init__(self, type_: _Optional[TypeSpec],
-                 port: FuncPortType, begin, end):
-        super().__init__(begin, end)
+class ReturnSpec(AST):
+    def __init__(self, type_: TypeSpec, valpassing: "ValuePassing"):
         self.type = type_
-        self.port = port
+        self.valpassing = valpassing
 
 class FormattedStr(AST):  # a literal string with ${formatted exprs}
     def __init__(self, content: _List[_Union[Expression, str]]):
@@ -143,7 +135,7 @@ class ModuleMeta(HasSource):
         """
         return ".".join(self.path)
 
-# --- Operators
+# --- Enumeration
 
 class UnaryOperator(HasSource):
     pass
@@ -156,6 +148,15 @@ class ComparisonOperator(HasSource):
 
 class BooleanOperator(AST):
     pass
+
+class ValuePassing(HasSource):
+    """
+    Different kinds of value passing (used by parameters and return
+    values).
+    """
+
+    _fields_ignore = frozenset(("display_name",))
+    display_name: str
 
 class UnaryAdd(UnaryOperator):
     pass
@@ -193,6 +194,13 @@ class And(BooleanOperator):
 class Or(BooleanOperator):
     pass
 
+class PassByValue(ValuePassing):
+    display_name = "(none)"
+class PassByReference(ValuePassing):
+    display_name = "&"
+class PassConst(ValuePassing):
+    display_name = "const"
+
 # --- Statements (and their relevant constructs)
 
 class ExprStatement(Statement):  # a bare expression used as a statement
@@ -223,7 +231,7 @@ class While(Statement):  # while statement
 class FuncData(AST):
     def __init__(
         self, arg_table: ArgumentTable,
-        body: _List[Statement], returns: _Optional[FunctionPort]
+        body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         self.arg_table = arg_table
         self.returns = returns
@@ -240,11 +248,11 @@ class NormalFuncData(FuncData):
 
     def __init__(
         self, arg_table: ArgumentTable,
-        body: _List[Statement], returns: _Optional[FunctionPort]
+        body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         super().__init__(arg_table, body, returns)
         if returns is not None:
-            assert returns.port is FuncPortType.by_value
+            assert isinstance(returns.valpassing, PassByValue)
             assert returns.type is not None
             self.return_type = returns.type
 
@@ -254,10 +262,10 @@ class InlineFuncData(FuncData):
 class ConstFuncData(FuncData):
     def __init__(
         self, arg_table: ArgumentTable,
-        body: _List[Statement], returns: _Optional[FunctionPort]
+        body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         super().__init__(arg_table, body, returns)
-        assert returns is None or returns.port is not FuncPortType.const
+        assert returns is None or not isinstance(returns.valpassing, PassConst)
 
 class InterfaceDef(Statement):  # define an interface
     def __init__(self, path: _Union[str, "StrLiteral"],

@@ -254,10 +254,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                             "begin": (1, 14), "end": (1, 15)
                         },
                         "default": None,
-                        "port": {
-                            "@type": ast.FunctionPort, "type": None,
-                            "port": ast.FuncPortType.by_value,
-                            "begin": (1, 14), "end": (1, 15)
+                        "type": None,
+                        "valpassing": {
+                            "@type": ast.PassByValue,
+                            "begin": (1, 14), "end": (1, 14)
                         }
                     }),
                     ("y", {
@@ -267,17 +267,16 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                             "begin": (1, 17), "end": (1, 18)
                         },
                         "default": None,
-                        "port": {
-                            "@type": ast.FunctionPort,
-                            "type": {
-                                "@type": ast.TypeSpec,
-                                "content": {
-                                    "@type": ast.Identifier, "name": "int",
-                                    "begin": (1, 20), "end": (1, 23)
-                                }
-                            },
-                            "port": ast.FuncPortType.by_value,
-                            "begin": (1, 17), "end": (1, 23)
+                        "type": {
+                            "@type": ast.TypeSpec,
+                            "content": {
+                                "@type": ast.Identifier, "name": "int",
+                                "begin": (1, 20), "end": (1, 23)
+                            }
+                        },
+                        "valpassing": {
+                            "@type": ast.PassByValue,
+                            "begin": (1, 17), "end": (1, 17)
                         }
                     }),
                     ("z", {
@@ -289,18 +288,20 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                             "@type": ast.IntLiteral, "value": 10,
                             "begin": (1, 33), "end": (1, 35)
                         },
-                        "port": {
-                            "@type": ast.FunctionPort, "type": None,
-                            "port": ast.FuncPortType.const,
-                            "begin": (1, 25), "end": (1, 32)
+                        "type": None,
+                        "valpassing": {
+                            "@type": ast.PassConst,
+                            "begin": (1, 25), "end": (1, 30)
                         }
                     })
                 ))
             },
             "returns": {
-                "@type": ast.FunctionPort,
-                "begin": (1, 40), "end": (1, 43),
-                "port": ast.FuncPortType.by_value,
+                "@type": ast.ReturnSpec,
+                "valpassing": {
+                    "@type": ast.PassByValue,
+                    "begin": (1, 40), "end": (1, 40)
+                },
                 "type": {
                     "@type": ast.TypeSpec,
                     "content": {
@@ -329,17 +330,16 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                             "@type": ast.IdentifierDef, "name": "x",
                             "begin": (1, 13), "end": (1, 14)
                         },
-                        "port": {
-                            "@type": ast.FunctionPort,
-                            "begin": (1, 13), "end": (1, 19),
-                            "port": ast.FuncPortType.by_value,
-                            "type": {
-                                "@type": ast.TypeSpec,
-                                "content": {
-                                    "@type": ast.Identifier, "name": "int",
-                                    "begin": (1, 16), "end": (1, 19),
-                                }
+                        "type": {
+                            "@type": ast.TypeSpec,
+                            "content": {
+                                "@type": ast.Identifier, "name": "int",
+                                "begin": (1, 16), "end": (1, 19),
                             }
+                        },
+                        "valpassing": {
+                            "@type": ast.PassByValue,
+                            "begin": (1, 13), "end": (1, 13)
                         },
                         "default": {
                             "@type": ast.IntLiteral, "value": 20,
@@ -860,23 +860,25 @@ class ParserTests(TestSuite):
         )):
             self.parse("foo(1, x=2, y=3, x=4)")
 
-    def test_err_invalid_func_port(self):
+    def test_err_invalid_valpassing(self):
         with self.assert_diag(DiagnosticRequirement(
-            id='invalid-func-port',
+            id='invalid-valpassing',
             source=((1, 7), (1, 8)),
-            args={'port': STArgReqSimpleValue(ast.FuncPortType.by_reference)}
+            args={'qualifier': STArgReqSimpleValue(
+                ast.PassByReference.display_name
+            )}
         )):
             self.parse("def f(&x):\n pass")
         with self.assert_diag(DiagnosticRequirement(
-            id='invalid-func-port',
+            id='invalid-valpassing',
             source=((1, 7), (1, 12)),
-            args={'port': STArgReqSimpleValue(ast.FuncPortType.const)}
+            args={'qualifier': STArgReqSimpleValue(ast.PassConst.display_name)}
         )):
             self.parse("def f(const x):\n pass")
         with self.assert_diag(DiagnosticRequirement(
-            id='invalid-func-port',
+            id='invalid-valpassing',
             source=((1, 13), (1, 18)),
-            args={'port': STArgReqSimpleValue(ast.FuncPortType.const)}
+            args={'qualifier': STArgReqSimpleValue(ast.PassConst.display_name)}
         )):
             self.parse("const def f(const x):\n pass")
 

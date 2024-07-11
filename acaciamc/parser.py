@@ -9,8 +9,7 @@ from collections import OrderedDict
 from acaciamc.tokenizer import TokenType, BRACKETS
 from acaciamc.ast import *
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
-from acaciamc.reader import SourceRange
-from acaciamc.utils.str_template import STArgument, STEnum, STInt, STStr
+from acaciamc.utils.str_template import STArgument, STInt, STStr
 
 if TYPE_CHECKING:
     from acaciamc.tokenizer import Tokenizer, Token
@@ -48,23 +47,22 @@ IntPair = Tuple[int, int]
 TwoIntPairs = Tuple[IntPair, IntPair]
 
 class FuncType(NamedTuple):
-    allowed_ports: Tuple[FuncPortType, ...]
+    allowed_valpassing: Tuple[Type[ValuePassing], ...]
     type_required: bool
     ast_class: Type[FuncData]
 
 FUNC_NORMAL = FuncType(
-    allowed_ports=(FuncPortType.by_value,),
+    allowed_valpassing=(PassByValue,),
     type_required=True,
     ast_class=NormalFuncData
 )
 FUNC_INLINE = FuncType(
-    allowed_ports=(FuncPortType.by_value, FuncPortType.by_reference,
-                   FuncPortType.const),
+    allowed_valpassing=(PassByValue, PassByReference, PassConst),
     type_required=False,
     ast_class=InlineFuncData
 )
 FUNC_CONST = FuncType(
-    allowed_ports=(FuncPortType.by_value,),
+    allowed_valpassing=(PassByValue,),
     type_required=False,
     ast_class=ConstFuncData
 )
@@ -568,25 +566,25 @@ class Parser:
         stmts = self.statement_block()
         return InterfaceDef(path, stmts, begin=pos1, end=stmts[-1].end)
 
-    def _func_port_qualifier(self, allowed_ports: Tuple[FuncPortType, ...]) \
-            -> FuncPortType:
-        """func_port_inline := (CONST | AMPERSAND)?"""
+    def _valpassing_qualifier(self, allows: Tuple[Type[ValuePassing], ...]) \
+            -> ValuePassing:
+        """valpassing_inline := (CONST | AMPERSAND)?"""
         pos1 = self.current_pos1
         if self.current_token.type is TokenType.const:
             self.eat()
-            res = FuncPortType.const
+            res = PassConst
         elif self.current_token.type is TokenType.ampersand:
             self.eat()
-            res = FuncPortType.by_reference
+            res = PassByReference
         else:
-            res = FuncPortType.by_value
-        if res not in allowed_ports:
-            pos2 = pos1 if res is FuncPortType.by_value else self.prev_pos2
+            res = PassByValue
+        pos2 = pos1 if res is PassByValue else self.prev_pos2
+        if res not in allows:
             self.error_range(
-                'invalid-func-port', pos1, pos2,
-                args={'port': STEnum(res)}
+                'invalid-valpassing', pos1, pos2,
+                args={'qualifier': STStr(res.display_name)}
             )
-        return res
+        return res(pos1, pos2)
 
     def _def_head(self) -> IdentifierDef:
         """def_head := DEF IDENTIFIER"""
@@ -594,15 +592,12 @@ class Parser:
         return self._id_def()
 
     def _function_def(self, t: FuncType) -> FuncData:
-        arg_table = self.argument_table(t.allowed_ports, t.type_required)
+        arg_table = self.argument_table(t.allowed_valpassing, t.type_required)
         if self.current_token.type is TokenType.arrow:
             self.eat()
-            port_pos1 = self.current_pos1
-            qualifier = self._func_port_qualifier(t.allowed_ports)
+            qualifier = self._valpassing_qualifier(t.allowed_valpassing)
             ret_type = self.type_spec()
-            returns = FunctionPort(
-                ret_type, qualifier, begin=port_pos1, end=self.prev_pos2
-            )
+            returns = ReturnSpec(ret_type, qualifier)
         else:
             returns = None
         self.eat(TokenType.colon)
@@ -624,7 +619,7 @@ class Parser:
     def inline_def_stmt(self):
         """
         funcdef_inline := argtable_inline
-            (ARROW func_port_inline type_spec)?
+            (ARROW valpassing_inline type_spec)?
             COLON statement_block
         inline_def_stmt := INLINE def_head funcdef_inline
         """
@@ -1059,14 +1054,16 @@ class Parser:
             stmts.append(self.statement())
         return Module(stmts)
 
-    def argument_table(self, allowed_ports: Tuple[FuncPortType, ...],
-                       type_required=True):
+    def argument_table(
+        self, allowed_valpassing: Tuple[Type[ValuePassing], ...],
+        type_required: bool = True
+    ):
         """
         type_decl := COLON type_spec
         default_decl := EQUAL expr
         arg_normal := IDENTIFIER
             ((type_decl | default_decl) | (type_decl default_decl))
-        arg_inline := func_port_inline IDENTIFIER type_decl?
+        arg_inline := valpassing_inline IDENTIFIER type_decl?
             default_decl?
         arg_const := IDENTIFIER type_decl? default_decl?
         argtable_normal := paren_list_of{LPAREN, arg_normal, RPAREN}
@@ -1077,9 +1074,8 @@ class Parser:
         params = OrderedDict()
         def _arg_decl():
             nonlocal got_default
-            pos1 = self.current_pos1
             # read qualifier
-            qualifier = self._func_port_qualifier(allowed_ports)
+            qualifier = self._valpassing_qualifier(allowed_valpassing)
             # read name
             arg_token = self.current_token
             name = self.current_token.value
@@ -1089,8 +1085,6 @@ class Parser:
             if self.current_token.type is TokenType.colon:
                 self.eat()
                 type_ = self.type_spec()
-            port = FunctionPort(type_, qualifier,
-                                begin=pos1, end=self.prev_pos2)
             # read default
             default = None
             if self.current_token.type is TokenType.equal:
@@ -1101,7 +1095,7 @@ class Parser:
                 self.error('non-default-arg-after-default',
                            arg_token, args={"arg": STStr(name)})
             # check
-            if (not (port.type or default)) and type_required:
+            if (not (type_ or default)) and type_required:
                 self.error('dont-know-arg-type',
                            arg_token, args={"arg": STStr(name)})
             if name in params:
@@ -1109,7 +1103,7 @@ class Parser:
                            arg_token, args={"arg": STStr(name)})
             # add arg
             id_def = IdentifierDef(name, arg_token.pos1, arg_token.pos2)
-            params[name] = FormalParam(id_def, port, default)
+            params[name] = FormalParam(id_def, qualifier, type_, default)
         self.paren_list_of(_arg_decl)
         return ArgumentTable(params)
 

@@ -358,7 +358,7 @@ class PostASTVisitor(ast.ASTVisitor):
     def visit_ArgumentTable(self, node: ast.ArgumentTable):
         params: ValuesView[ast.FormalParam] = node.params.values()
         for param in params:
-            self.visit(param.port)
+            self.child_visit(param.type)
             self.child_visit(param.default)
         # Make sure names are defined afterwards
         for param in params:
