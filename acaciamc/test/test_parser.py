@@ -227,7 +227,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "begin": (1, 5), "end": (1, 6)
         },
         "data": {
-            "@type": ast.NormalFuncData,
+            "@type": ast.FuncData,
+            "qualifier": ast.FuncQualifier.none,
             "params": OrderedDict(),
             "returns": None,
             "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
@@ -240,7 +241,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "begin": (1, 12), "end": (1, 13)
         },
         "data": {
-            "@type": ast.InlineFuncData,
+            "@type": ast.FuncData,
+            "qualifier": ast.FuncQualifier.inline,
             "params": OrderedDict((
                 ("x", {
                     "@type": ast.FormalParam,
@@ -314,7 +316,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "begin": (1, 11), "end": (1, 12)
         },
         "data": {
-            "@type": ast.ConstFuncData,
+            "@type": ast.FuncData,
+            "qualifier": ast.FuncQualifier.const,
             "params": OrderedDict((
                 ("x", {
                     "@type": ast.FormalParam,
@@ -400,7 +403,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         },
                         "begin": (6, 2), "end": (7, 7),
                         "data": {
-                            "@type": ast.NormalFuncData,
+                            "@type": ast.FuncData,
+                            "qualifier": ast.FuncQualifier.none,
                             "params": OrderedDict(),
                             "returns": None,
                             "body": [{"@type": ast.Pass,
@@ -413,7 +417,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                 "@type": ast.NewMethod, "begin": (4, 2), "end": (5, 7),
                 "new_begin": (4, 2), "new_end": (4, 5),
                 "data": {
-                    "@type": ast.NormalFuncData,
+                    "@type": ast.FuncData,
+                    "qualifier": ast.FuncQualifier.none,
                     "params": OrderedDict(),
                     "returns": None,
                     "body": [

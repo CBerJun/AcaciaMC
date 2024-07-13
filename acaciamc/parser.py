@@ -49,22 +49,22 @@ TwoIntPairs = Tuple[IntPair, IntPair]
 class FuncType(NamedTuple):
     allowed_valpassing: Tuple[Type[ValuePassing], ...]
     type_required: bool
-    ast_class: Type[FuncData]
+    qualifier: FuncQualifier
 
 FUNC_NORMAL = FuncType(
     allowed_valpassing=(PassByValue,),
     type_required=True,
-    ast_class=NormalFuncData
+    qualifier=FuncQualifier.none
 )
 FUNC_INLINE = FuncType(
     allowed_valpassing=(PassByValue, PassByReference, PassConst),
     type_required=False,
-    ast_class=InlineFuncData
+    qualifier=FuncQualifier.inline
 )
 FUNC_CONST = FuncType(
     allowed_valpassing=(PassByValue,),
     type_required=False,
-    ast_class=ConstFuncData
+    qualifier=FuncQualifier.const
 )
 
 class STToken(STArgument):
@@ -602,7 +602,7 @@ class Parser:
             returns = None
         self.eat(TokenType.colon)
         stmts = self.statement_block()
-        return t.ast_class(arg_table, stmts, returns)
+        return FuncData(t.qualifier, arg_table, stmts, returns)
 
     def const_def_stmt(self):
         """
@@ -680,7 +680,6 @@ class Parser:
                 new_range = self.current_range
                 self.eat(TokenType.new)
                 data = self._function_def(t)
-                assert isinstance(data, (NormalFuncData, InlineFuncData))
                 return NewMethod(
                     data, *new_range, begin=pos1, end=data.body[-1].end
                 )

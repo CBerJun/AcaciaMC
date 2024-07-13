@@ -346,7 +346,7 @@ class PostASTVisitor(ast.ASTVisitor):
         self.visit(node.condition)
         self.handle_body(node.body)
 
-    def handle_func_data(self, node: ast.FuncData):
+    def visit_FuncData(self, node: ast.FuncData):
         self.child_visit(node.returns)
         with self.new_scope():
             params: ValuesView[ast.FormalParam] = node.params.values()
@@ -358,9 +358,6 @@ class PostASTVisitor(ast.ASTVisitor):
             for param in params:
                 self.handle_id_def(param.name)
             self.child_visit(node.body)
-
-    visit_NormalFuncData = visit_InlineFuncData = visit_ConstFuncData = \
-        handle_func_data
 
     def visit_InterfaceDef(self, node: ast.InterfaceDef):
         self.child_visit(node.path)

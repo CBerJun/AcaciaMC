@@ -14,6 +14,13 @@ from acaciamc.utils.str_template import DisplayableEnum as _DisplayableEnum
 ### AST CONTENTS ###
 ####################
 
+class FuncQualifier(_DisplayableEnum):
+    """Function qualifiers."""
+
+    none = 0, "runtime function"
+    inline = 1, "inline function"
+    const = 2, "compile time function"
+
 class MethodQualifier(_DisplayableEnum):
     """Entity method qualifiers."""
 
@@ -225,45 +232,27 @@ class While(Statement):  # while statement
 
 class FuncData(AST):
     def __init__(
-        self, params: _OrderedDict,
+        self, qualifier: FuncQualifier, params: _OrderedDict,
+        # In fact `params` is `_OrderedDict[str, FormalParam]`
         body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
-        # In fact `params` is `_OrderedDict[str, FormalParam]`
+        self.qualifier = qualifier
         self.params = params
         self.returns = returns
         self.body = body
+        if __debug__:
+            if qualifier is FuncQualifier.none and returns is not None:
+                assert isinstance(returns.valpassing, PassByValue)
+                assert returns.type is not None
+            if qualifier is FuncQualifier.const:
+                assert (returns is None
+                        or not isinstance(returns.valpassing, PassConst))
 
 class FuncDef(Statement):  # function definition
     def __init__(self, name: IdentifierDef, data: FuncData, begin, end):
         super().__init__(begin, end)
         self.name = name
         self.data = data
-
-class NormalFuncData(FuncData):
-    _fields_ignore = frozenset(("return_type",))
-
-    def __init__(
-        self, arg_table: _OrderedDict,
-        body: _List[Statement], returns: _Optional[ReturnSpec]
-    ):
-        super().__init__(arg_table, body, returns)
-        if returns is None:
-            self.return_type = None
-        else:
-            assert isinstance(returns.valpassing, PassByValue)
-            assert returns.type is not None
-            self.return_type = returns.type
-
-class InlineFuncData(FuncData):
-    pass
-
-class ConstFuncData(FuncData):
-    def __init__(
-        self, arg_table: _OrderedDict,
-        body: _List[Statement], returns: _Optional[ReturnSpec]
-    ):
-        super().__init__(arg_table, body, returns)
-        assert returns is None or not isinstance(returns.valpassing, PassConst)
 
 class InterfaceDef(Statement):  # define an interface
     def __init__(self, path: _Union[str, "StrLiteral"],
@@ -284,17 +273,17 @@ class EntityMethod(HasSource):  # entity method definition
         super().__init__(begin, end)
         self.content = content
         self.qualifier = qualifier
-        assert (not isinstance(content.data, ConstFuncData)
+        assert (content.data.qualifier is not FuncQualifier.const
                 or qualifier is MethodQualifier.static)
 
 class NewMethod(HasSource):  # new method definition
-    def __init__(self, data: _Union[NormalFuncData, InlineFuncData],
-                 new_begin, new_end, begin, end):
+    def __init__(self, data: FuncData, new_begin, new_end, begin, end):
         super().__init__(begin, end)
         self.data = data
         # These two are for diagnostics:
         self.new_begin = new_begin
         self.new_end = new_end
+        assert data.qualifier is not FuncQualifier.const
 
 class EntityTemplateDef(Statement):  # entity statement
     def __init__(
