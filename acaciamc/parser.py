@@ -9,7 +9,7 @@ from collections import OrderedDict
 from acaciamc.tokenizer import TokenType, BRACKETS
 from acaciamc.ast import *
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
-from acaciamc.utils.str_template import STArgument, STInt, STStr
+from acaciamc.utils.str_template import STArgument, STInt, STStr, STEnum
 
 if TYPE_CHECKING:
     from acaciamc.tokenizer import Tokenizer, Token
@@ -566,8 +566,7 @@ class Parser:
         stmts = self.statement_block()
         return InterfaceDef(path, stmts, begin=pos1, end=stmts[-1].end)
 
-    def _valpassing_qualifier(self, allows: Tuple[Type[ValuePassing], ...]) \
-            -> ValuePassing:
+    def _valpassing_qualifier(self, func_type: FuncType) -> ValuePassing:
         """valpassing_inline := (CONST | AMPERSAND)?"""
         pos1 = self.current_pos1
         if self.current_token.type is TokenType.const:
@@ -579,10 +578,11 @@ class Parser:
         else:
             res = PassByValue
         pos2 = pos1 if res is PassByValue else self.prev_pos2
-        if res not in allows:
+        if res not in func_type.allowed_valpassing:
             self.error_range(
                 'invalid-valpassing', pos1, pos2,
-                args={'qualifier': STStr(res.display_name)}
+                args={'qualifier': STStr(res.display_name),
+                      'func-type': STEnum(func_type.qualifier)}
             )
         return res(pos1, pos2)
 
@@ -591,18 +591,18 @@ class Parser:
         self.eat(TokenType.def_)
         return self._id_def()
 
-    def _function_def(self, t: FuncType) -> FuncData:
-        arg_table = self.argument_table(t.allowed_valpassing, t.type_required)
+    def _function_def(self, func_type: FuncType) -> FuncData:
+        arg_table = self.argument_table(func_type)
         if self.current_token.type is TokenType.arrow:
             self.eat()
-            qualifier = self._valpassing_qualifier(t.allowed_valpassing)
+            qualifier = self._valpassing_qualifier(func_type)
             ret_type = self.type_spec()
             returns = ReturnSpec(ret_type, qualifier)
         else:
             returns = None
         self.eat(TokenType.colon)
         stmts = self.statement_block()
-        return FuncData(t.qualifier, arg_table, stmts, returns)
+        return FuncData(func_type.qualifier, arg_table, stmts, returns)
 
     def const_def_stmt(self):
         """
@@ -1053,10 +1053,7 @@ class Parser:
             stmts.append(self.statement())
         return Module(stmts)
 
-    def argument_table(
-        self, allowed_valpassing: Tuple[Type[ValuePassing], ...],
-        type_required: bool = True
-    ):
+    def argument_table(self, func_type: FuncType):
         """
         type_decl := COLON type_spec
         default_decl := EQUAL expr
@@ -1074,7 +1071,7 @@ class Parser:
         def _arg_decl():
             nonlocal got_default
             # read qualifier
-            qualifier = self._valpassing_qualifier(allowed_valpassing)
+            qualifier = self._valpassing_qualifier(func_type)
             # read name
             arg_token = self.current_token
             name = self.current_token.value
@@ -1094,7 +1091,7 @@ class Parser:
                 self.error('non-default-arg-after-default',
                            arg_token, args={"arg": STStr(name)})
             # check
-            if (not (type_ or default)) and type_required:
+            if (not (type_ or default)) and func_type.type_required:
                 self.error('dont-know-arg-type',
                            arg_token, args={"arg": STStr(name)})
             if name in params:

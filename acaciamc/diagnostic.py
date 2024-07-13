@@ -205,8 +205,8 @@ DiagnosticKind.ERROR.registry.update({
     'duplicate-arg': 'Duplicate argument ${arg} in function definition',
     'duplicate-keyword-args': 'Duplicate keyword argument ${arg} in function '
         'call',
-    'invalid-valpassing': 'This type of function cannot use qualifier '
-        '${qualifier}',
+    'invalid-valpassing': 'Qualifier ${qualifier} cannot be used in a '
+        '${func-type raw}',
     'const-new-method': "'new' methods cannot be compile time function",
     'non-static-const-method': 'Non-static method cannot be compile time '
         'function',

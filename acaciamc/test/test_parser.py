@@ -854,21 +854,30 @@ class ParserTests(TestSuite):
         with self.assert_diag(DiagnosticRequirement(
             id='invalid-valpassing',
             source=((1, 7), (1, 8)),
-            args={'qualifier': STArgReqSimpleValue(
-                ast.PassByReference.display_name
-            )}
+            args={
+                'qualifier': STArgReqSimpleValue(
+                    ast.PassByReference.display_name
+                ),
+                'func-type': STArgReqSimpleValue(ast.FuncQualifier.none)
+            }
         )):
             self.parse("def f(&x):\n pass")
         with self.assert_diag(DiagnosticRequirement(
             id='invalid-valpassing',
             source=((1, 7), (1, 12)),
-            args={'qualifier': STArgReqSimpleValue(ast.PassConst.display_name)}
+            args={
+                'qualifier': STArgReqSimpleValue(ast.PassConst.display_name),
+                'func-type': STArgReqSimpleValue(ast.FuncQualifier.none)
+            }
         )):
             self.parse("def f(const x):\n pass")
         with self.assert_diag(DiagnosticRequirement(
             id='invalid-valpassing',
             source=((1, 13), (1, 18)),
-            args={'qualifier': STArgReqSimpleValue(ast.PassConst.display_name)}
+            args={
+                'qualifier': STArgReqSimpleValue(ast.PassConst.display_name),
+                'func-type': STArgReqSimpleValue(ast.FuncQualifier.const)
+            }
         )):
             self.parse("const def f(const x):\n pass")
 
