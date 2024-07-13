@@ -69,9 +69,9 @@ class DiagnosticRequirement(NamedTuple):
 class TestFailure(Exception):
     pass
 
-class TestLog(NamedTuple):
+class FailureLog(NamedTuple):
     case_name: str
-    failure: Optional[TestFailure]
+    failure: TestFailure
 
 class TestSuite:
     """
@@ -90,7 +90,7 @@ class TestSuite:
 
     def __init__(self, owner: "TestManager"):
         self.owner = owner
-        self.logs: List[TestLog] = []
+        self.failures: List[FailureLog] = []
 
     def __init_subclass__(cls, **kwds):
         super().__init_subclass__(**kwds)
@@ -172,7 +172,9 @@ class TestManager:
     def register(self, suite_class: Type[TestSuite]):
         self.suites.append(suite_class(self))
 
-    def run(self):
+    def run(self) -> bool:
+        """Run all the tests. Return if all tests passed."""
+        all_passed = True
         for suite in self.suites:
             suite.setup()
             try:
@@ -181,23 +183,19 @@ class TestManager:
                     try:
                         func()
                     except TestFailure as err:
-                        failure = err
-                    else:
-                        failure = None
-                    suite.logs.append(TestLog(name, failure))
+                        all_passed = False
+                        suite.failures.append(FailureLog(name, err))
             finally:
                 suite.teardown()
+        return all_passed
 
     def print_log(self, file: TextIO = stdout):
         nsuites = len(self.suites)
         nsuite_passed = 0
         for suite in self.suites:
-            ncases = len(suite.logs)
-            npassed = 0
-            for log in suite.logs:
-                if log.failure is None:
-                    npassed += 1
-                    continue
+            ncases = len(suite.case_names)
+            npassed = ncases - len(suite.failures)
+            for log in suite.failures:
                 with ansi(file, AnsiStyle.UNDERLINE):
                     file.write(substitute(
                         test_log_messages["case-failed"],
@@ -221,7 +219,7 @@ class TestManager:
                  'nsuites': STInt(nsuites)}
             ))
 
-def main():
+def main() -> int:
     """Entry of Acacia unit tests."""
     import glob
     import os
@@ -251,6 +249,7 @@ def main():
                 manager.register(obj)
     t2 = perf_counter()
     my_print(f"Test discovery finished in {t2 - t1:.3g} seconds")
-    manager.run()
+    all_passed = manager.run()
     manager.print_log()
     my_print(f"Tests finished in {perf_counter() - t2:.3g} seconds")
+    return 0 if all_passed else 1
