@@ -426,6 +426,11 @@ class PostASTSymbolTests(TestSuite):
             scope_f = scope.format(b="x := 2\n x", x="some_name")
             self.parse(f"x := 1\n{scope_f}\n")
 
+    def test_non_scope(self):
+        self.parse("entity T:\n def f():\n  f := 30\n  f\nf := 10")
+        self.parse("entity T:\n f: None\nf := 20")
+        self.parse("struct T:\n x: None\nx := 0")
+
     def test_err_undefined_name(self):
         with self.assert_diag(DiagnosticRequirement(
             "undefined-name",

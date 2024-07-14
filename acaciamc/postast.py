@@ -372,7 +372,11 @@ class PostASTVisitor(ast.ASTVisitor):
     def visit_EntityTemplateDef(self, node: ast.EntityTemplateDef):
         self.child_visit(node.parents)
         self.child_visit(node.new_method)
-        self.child_visit(node.body)
+        self.child_visit(node.fields)
+        # Do not visit `FuncDef` directly because that will define a
+        # symbol in the enclosing scope.
+        for method in node.methods:
+            self.visit(method.content.data)
         self.handle_id_def(node.name)
 
     def visit_VarDef(self, node: ast.VarDef):
@@ -446,5 +450,5 @@ class PostASTVisitor(ast.ASTVisitor):
 
     def visit_StructDef(self, node: ast.StructDef):
         self.child_visit(node.bases)
-        self.handle_body(node.body)
+        self.child_visit(node.fields)
         self.handle_id_def(node.name)
