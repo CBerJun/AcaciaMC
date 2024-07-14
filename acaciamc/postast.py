@@ -239,10 +239,13 @@ class PostASTVisitor(ast.ASTVisitor):
       represents an item that gets imported. First `Symbol` is the
       symbol that gets defined in this file; second is the symbol that
       represents the imported item in the file that gets imported.
-    * `IdentifierDef`: A `Optional[Symbol]`. Currently this is None iff
-      it is the `name` child of an `ImportItem`. Otherwise, this node
-      represents a definition of an identifier and its annotation will
-      be the `Symbol` this defines.
+    * `IdentifierDef`: An `Optional[Symbol]`. Currently this is None iff
+      one of these is true:
+      - This node is the `name` child of an `ImportItem`.
+      - This node is the `name` child of a `StructField` or
+        `EntityField`.
+      Otherwise, this node represents a definition of an identifier and
+      its annotation will be the `Symbol` this defines.
     """
 
     def __init__(self, file_entry: "FileEntry", root_scope: Scope,
