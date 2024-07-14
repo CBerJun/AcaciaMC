@@ -5,8 +5,6 @@ from typing import (
     Iterable as _Iterable, Tuple as _Tuple, Any as _Any,
     FrozenSet as _FrozenSet
 )
-# Unfortunately typing.OrderedDict is not available in Python 3.6
-from collections import OrderedDict as _OrderedDict
 
 from acaciamc.utils.str_template import DisplayableEnum as _DisplayableEnum
 
@@ -232,8 +230,7 @@ class While(Statement):  # while statement
 
 class FuncData(AST):
     def __init__(
-        self, qualifier: FuncQualifier, params: _OrderedDict,
-        # In fact `params` is `_OrderedDict[str, FormalParam]`
+        self, qualifier: FuncQualifier, params: _List[FormalParam],
         body: _List[Statement], returns: _Optional[ReturnSpec]
     ):
         self.qualifier = qualifier

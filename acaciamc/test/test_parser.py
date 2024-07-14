@@ -2,7 +2,6 @@
 
 from typing import Dict, Any, Tuple, Optional
 from functools import partialmethod
-from collections import OrderedDict
 
 import acaciamc.ast as ast
 from acaciamc.test import (
@@ -229,7 +228,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "data": {
             "@type": ast.FuncData,
             "qualifier": ast.FuncQualifier.none,
-            "params": OrderedDict(),
+            "params": [],
             "returns": None,
             "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
         }
@@ -243,8 +242,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "data": {
             "@type": ast.FuncData,
             "qualifier": ast.FuncQualifier.inline,
-            "params": OrderedDict((
-                ("x", {
+            "params": [
+                {
                     "@type": ast.FormalParam,
                     "name": {
                         "@type": ast.IdentifierDef, "name": "x",
@@ -256,8 +255,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         "@type": ast.PassByValue,
                         "begin": (1, 14), "end": (1, 14)
                     }
-                }),
-                ("y", {
+                },
+                {
                     "@type": ast.FormalParam,
                     "name": {
                         "@type": ast.IdentifierDef, "name": "y",
@@ -275,8 +274,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         "@type": ast.PassByValue,
                         "begin": (1, 17), "end": (1, 17)
                     }
-                }),
-                ("z", {
+                },
+                {
                     "name": {
                         "@type": ast.IdentifierDef, "name": "z",
                         "begin": (1, 31), "end": (1, 32)
@@ -290,8 +289,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         "@type": ast.PassConst,
                         "begin": (1, 25), "end": (1, 30)
                     }
-                })
-            )),
+                }
+            ],
             "returns": {
                 "@type": ast.ReturnSpec,
                 "valpassing": {
@@ -318,8 +317,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "data": {
             "@type": ast.FuncData,
             "qualifier": ast.FuncQualifier.const,
-            "params": OrderedDict((
-                ("x", {
+            "params": [
+                {
                     "@type": ast.FormalParam,
                     "name": {
                         "@type": ast.IdentifierDef, "name": "x",
@@ -340,8 +339,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         "@type": ast.IntLiteral, "value": 20,
                         "begin": (1, 22), "end": (1, 24)
                     }
-                }),
-            )),
+                }
+            ],
             "returns": None,
             "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
         }
@@ -406,7 +405,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         "data": {
                             "@type": ast.FuncData,
                             "qualifier": ast.FuncQualifier.none,
-                            "params": OrderedDict(),
+                            "params": [],
                             "returns": None,
                             "body": [{"@type": ast.Pass,
                                       "begin": (7, 3), "end": (7, 7)}]
@@ -420,7 +419,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                 "data": {
                     "@type": ast.FuncData,
                     "qualifier": ast.FuncQualifier.none,
-                    "params": OrderedDict(),
+                    "params": [],
                     "returns": None,
                     "body": [
                         {"@type": ast.Pass, "begin": (5, 3), "end": (5, 7)}

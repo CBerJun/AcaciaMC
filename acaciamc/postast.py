@@ -5,7 +5,7 @@ resolving imports and generating symbol tables.
 
 from typing import (
     Dict, List, Optional, NamedTuple, Set, Tuple, Union, Iterable,
-    ValuesView, TYPE_CHECKING
+    TYPE_CHECKING
 )
 from itertools import accumulate
 from contextlib import contextmanager
@@ -349,13 +349,12 @@ class PostASTVisitor(ast.ASTVisitor):
     def visit_FuncData(self, node: ast.FuncData):
         self.child_visit(node.returns)
         with self.new_scope():
-            params: ValuesView[ast.FormalParam] = node.params.values()
-            for param in params:
+            for param in node.params:
                 self.child_visit(param.type)
                 self.child_visit(param.default)
             # Make sure parameter names are defined after parsing
             # the signature
-            for param in params:
+            for param in node.params:
                 self.handle_id_def(param.name)
             self.child_visit(node.body)
 

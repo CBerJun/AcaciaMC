@@ -1109,7 +1109,7 @@ class Parser:
             stmts.append(self.statement())
         return Module(stmts)
 
-    def argument_table(self, func_type: FuncType):
+    def argument_table(self, func_type: FuncType) -> List[FormalParam]:
         """
         type_decl := COLON type_spec
         default_decl := EQUAL expr
@@ -1157,7 +1157,7 @@ class Parser:
             id_def = IdentifierDef(name, arg_token.pos1, arg_token.pos2)
             params[name] = FormalParam(id_def, qualifier, type_, default)
         self.paren_list_of(_arg_decl)
-        return params
+        return list(params.values())
 
     def type_spec(self):
         """type_spec := expr"""
