@@ -1,15 +1,15 @@
 """Parser for Acacia."""
 
 from typing import (
-    Callable, Optional, List, Tuple, NamedTuple, Type, Mapping, Union,
-    TypeVar, TYPE_CHECKING
+    Callable, Optional, List, Tuple, NamedTuple, Type, Mapping, Union, Dict,
+    Generator, TYPE_CHECKING
 )
 from collections import OrderedDict
 
 from acaciamc.tokenizer import TokenType, BRACKETS
 from acaciamc.ast import *
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
-from acaciamc.utils.str_template import STArgument, STInt, STStr, STEnum
+from acaciamc.utils.str_template import STArgument, STStr, STEnum
 
 if TYPE_CHECKING:
     from acaciamc.tokenizer import Tokenizer, Token
@@ -76,8 +76,6 @@ class STToken(STArgument):
     def process(self, metadata: str) -> str:
         assert not metadata
         return self.token.display_string()
-
-T = TypeVar('T')
 
 class Parser:
     """
@@ -180,16 +178,21 @@ class Parser:
             # only generate when not generated yet
             self.next_token = self.tokenizer.get_next_token()
 
-    def block_of(self, func: Callable[[], T]) -> List[T]:
+    def indented_block(self) -> Generator[None, None, None]:
         """
-        Read an indented block of structures.
-        `func` reads the structure and should return the result, which
-        will be accumulated in a list and returned. It is guaranteed
-        that the returned list in not empty due to the grammar
-        definition.
+        Read structures in an indented block.
+
+        Usage::
+
+            for _ in self.indented_block():
+                read_structure()
+
+        `read_structure` will be invoked repeatedly while we are still
+        in this indented block. `read_structure` will be invoked at
+        least once. An error is raised if there is no indented block.
+
         block_of{n} := NEW_LINE INDENT n+ DEDENT
         """
-        stmts = []
         self.eat(TokenType.new_line)
         newline_token = self.prev_token
         if self.current_token.type is not TokenType.indent:
@@ -203,9 +206,8 @@ class Parser:
             #        # yep, a backslash followed by an empty line
             self.error('empty-block', newline_token)
         while self.current_token.type is not TokenType.dedent:
-            stmts.append(func())
+            yield
         self.eat()  # DEDENT
-        return stmts
 
     def list_of(self, content: Callable[[], None]):
         """list_of{g} := g (COMMA g)*"""
@@ -232,7 +234,10 @@ class Parser:
         Read a block of statements.
         statement_block := block_of{statement}
         """
-        return self.block_of(self.statement)
+        res: List[Statement] = []
+        for _ in self.indented_block():
+            res.append(self.statement())
+        return res
 
     # Following are different AST generators
     ## Expression generator
@@ -730,43 +735,69 @@ class Parser:
         entity_body := (method_decl | new_method_decl)
             | ((entity_field_decl | pass_stmt) NEW_LINE)
         """
-        # Parsing...
+        # Header
         pos1 = self.current_pos1
         self.eat(TokenType.entity)
         id_def = self._id_def()
         parents = self._extends_clause()
         self.eat(TokenType.colon)
-        body = self.block_of(self._entity_body)
-        # Figure out new method
-        new_methods = [v for v in body if isinstance(v, NewMethod)]
-        num_news = len(new_methods)
-        if num_news > 1:
-            # Create fancy diagnostic if there are more than 1 new
-            # methods
-            new_method1 = new_methods.pop()
+        # Body
+        new_method: Optional[NewMethod] = None
+        methods: Dict[str, EntityMethod] = {}
+        fields: Dict[str, EntityField] = {}
+        last_pos2: Optional[IntPair] = None
+        def duplication_check(item_name: IdentifierDef):
+            # This is shared by methods and fields
+            name = item_name.name
+            if name in fields:
+                prev_name = fields[name].name
+            elif name in methods:
+                prev_name = methods[name].content.name
+            else:
+                return
+            # Error: this name has already been defined
             err = DiagnosticError(self.diag_obj(
-                'multiple-new-methods',
-                new_method1.new_begin, new_method1.new_end,
-                args={'nnews': STInt(num_news)}
+                'duplicate-entity-attr',
+                item_name.begin, item_name.end,
+                {"name": STStr(name)}
             ))
-            for new_methodx in new_methods:
+            err.add_note(self.diag_obj(
+                'duplicate-entity-attr-note',
+                prev_name.begin, prev_name.end
+            ))
+            raise err
+        for _ in self.indented_block():
+            item = self._entity_body()
+            last_pos2 = item.end
+            if isinstance(item, Pass):
+                continue
+            if isinstance(item, NewMethod):
+                if new_method is None:
+                    new_method = item
+                    continue
+                # Error: multiple new methods
+                err = DiagnosticError(self.diag_obj(
+                    'multiple-new-methods',
+                    item.new_begin, item.new_end
+                ))
                 err.add_note(self.diag_obj(
                     'multiple-new-methods-note',
-                    new_methodx.new_begin, new_methodx.new_end
+                    new_method.new_begin, new_method.new_end
                 ))
-            raise err
-        elif new_methods:
-            new_method = new_methods[0]
-            body.remove(new_method)
-        else:
-            new_method = None
+                raise err
+            if isinstance(item, EntityField):
+                duplication_check(item.name)
+                fields[item.name.name] = item
+            else:
+                assert isinstance(item, EntityMethod)
+                duplication_check(item.content.name)
+                methods[item.content.name.name] = item
+        assert last_pos2 is not None
         return EntityTemplateDef(
             id_def, parents,
-            # Type checker does not know that we've removed `NewMethod`s
-            # from `body`:
-            body,  # type: ignore
+            list(fields.values()), list(methods.values()),
             new_method,
-            begin=pos1, end=body[-1].end
+            begin=pos1, end=last_pos2
         )
 
     def formatted_str(self):
@@ -894,8 +925,33 @@ class Parser:
         id_def = self._id_def()
         bases = self._extends_clause()
         self.eat(TokenType.colon)
-        body = self.block_of(self._struct_body)
-        return StructDef(id_def, bases, body, begin=pos1, end=body[-1].end)
+        last_pos2: Optional[IntPair] = None
+        fields: Dict[str, StructField] = {}
+        for _ in self.indented_block():
+            item = self._struct_body()
+            last_pos2 = item.end
+            if isinstance(item, Pass):
+                continue
+            name = item.name.name
+            if name not in fields:
+                fields[name] = item
+                continue
+            # Error: multiple fields of the same name
+            prev_item = fields[name]
+            err = DiagnosticError(self.diag_obj(
+                'duplicate-struct-attr',
+                item.name.begin, item.name.end,
+                {"name": STStr(name)}
+            ))
+            err.add_note(self.diag_obj(
+                'duplicate-struct-attr-note',
+                prev_item.name.begin, prev_item.name.end
+            ))
+            raise err
+        assert last_pos2 is not None
+        return StructDef(
+            id_def, bases, list(fields.values()), begin=pos1, end=last_pos2
+        )
 
     def _constant_decl(self) -> CompileTimeAssign:
         """constant_decl := IDENTIFIER (COLON type_spec)? EQUAL expr"""

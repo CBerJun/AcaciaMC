@@ -213,8 +213,12 @@ DiagnosticKind.ERROR.registry.update({
     'invalid-var-def': 'Variable declaration target must be an identifier',
     'positional-arg-after-keyword': 'Positional argument follows keyword '
         'argument',
-    'multiple-new-methods': "Found ${nnews} 'new' methods in the same "
+    'multiple-new-methods': "Found multiple 'new' methods in the same "
         "template; at most 1 expected",
+    'duplicate-entity-attr': "Found multiple entity attributes of name "
+        "${name} in the same template",
+    'duplicate-struct-attr': "Found multiple fields of name ${name} in the "
+        "same struct",
     # From post AST visitor
     'module-not-found': "Module ${module} is not found",
     'undefined-name': "Name ${name} is not defined",
@@ -231,7 +235,9 @@ DiagnosticKind.WARNING.registry.update({
 })
 DiagnosticKind.NOTE.registry.update({
     # From parser
-    'multiple-new-methods-note': "Another 'new' method definition",
+    'multiple-new-methods-note': "Previous 'new' method definition here",
+    'duplicate-entity-attr-note': "Previous definition here",
+    'duplicate-struct-attr-note': "Previous definition here",
     # From post AST visitor
     'imported-here': "Imported here",
     'name-redefinition-note': "Previous definition here",

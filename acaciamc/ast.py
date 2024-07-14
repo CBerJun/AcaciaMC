@@ -288,14 +288,15 @@ class NewMethod(HasSource):  # new method definition
 class EntityTemplateDef(Statement):  # entity statement
     def __init__(
         self, name: IdentifierDef, parents: _List[Expression],
-        body: _List[_Union[EntityMethod, EntityField, Pass]],
+        fields: _List[EntityField], methods: _List[EntityMethod],
         new_method: _Optional[NewMethod],
         begin, end
     ):
         super().__init__(begin, end)
         self.name = name
         self.parents = parents
-        self.body = body
+        self.fields = fields
+        self.methods = methods
         self.new_method = new_method
 
 class VarDef(Statement):  # x: y [= z] variable declaration
@@ -391,11 +392,11 @@ class StructField(HasSource):  # a struct's field
 
 class StructDef(Statement):  # struct definition
     def __init__(self, name: IdentifierDef, bases: _List[Expression],
-                 body: _List[_Union[StructField, Pass]], begin, end):
+                 fields: _List[StructField], begin, end):
         super().__init__(begin, end)
         self.name = name
         self.bases = bases
-        self.body = body
+        self.fields = fields
 
 class Return(Statement):  # return xxx
     def __init__(self, value: _Optional[Expression], begin, end):

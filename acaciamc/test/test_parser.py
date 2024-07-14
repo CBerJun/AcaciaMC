@@ -375,7 +375,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                 "@type": ast.Identifier, "begin": (1, 18), "end": (1, 19),
                 "name": "Y"
             }],
-            "body": [
+            "fields": [
                 {
                     "@type": ast.EntityField, "begin": (2, 2), "end": (2, 8),
                     "name": {
@@ -390,7 +390,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                         }
                     }
                 },
-                {"@type": ast.Pass, "begin": (3, 2), "end": (3, 6)},
+            ],
+            "methods": [
                 {
                     "@type": ast.EntityMethod,
                     "qualifier": ast.MethodQualifier.none,
@@ -637,7 +638,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "begin": (1, 8), "end": (1, 9)
         },
         "bases": [],
-        "body": [
+        "fields": [
             {
                 "@type": ast.StructField, "begin": (2, 2), "end": (2, 8),
                 "name": {
@@ -652,7 +653,6 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
                     }
                 }
             },
-            {"@type": ast.Pass, "begin": (3, 2), "end": (3, 6)},
             {
                 "@type": ast.StructField, "begin": (4, 2), "end": (4, 9),
                 "name": {
@@ -923,7 +923,7 @@ class ParserTests(TestSuite):
         with self.assert_diag(DiagnosticRequirement(
             id='multiple-new-methods',
             source=((5, 9), (5, 12)),
-            args={'nnews': STArgReqSimpleValue(2)}
+            args={}
         )), \
             self.assert_diag(DiagnosticRequirement(
             id='multiple-new-methods-note',
@@ -932,3 +932,62 @@ class ParserTests(TestSuite):
         )):
             self.parse("entity X:\n new():\n  pass\n x: int\n"
                        " inline new():\n  pass")
+
+    def test_err_duplicate_entity_attr(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr',
+            source=((4, 2), (4, 3)),
+            args={"name": STArgReqSimpleValue('f')}
+        )), \
+            self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr-note',
+            source=((2, 2), (2, 3)),
+            args={}
+        )):
+            self.parse("entity X:\n f: None\n ff: None\n f: None")
+        with self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr',
+            source=((5, 2), (5, 3)),
+            args={"name": STArgReqSimpleValue('f')}
+        )), \
+            self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr-note',
+            source=((2, 6), (2, 7)),
+            args={}
+        )):
+            self.parse("entity X:\n def f():\n  pass\n ff: None\n f: None")
+        with self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr',
+            source=((4, 6), (4, 7)),
+            args={"name": STArgReqSimpleValue('f')}
+        )), \
+            self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr-note',
+            source=((2, 2), (2, 3)),
+            args={}
+        )):
+            self.parse("entity X:\n f: None\n ff: None\n def f():\n  pass")
+        with self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr',
+            source=((4, 6), (4, 7)),
+            args={"name": STArgReqSimpleValue('f')}
+        )), \
+            self.assert_diag(DiagnosticRequirement(
+            id='duplicate-entity-attr-note',
+            source=((2, 6), (2, 7)),
+            args={}
+        )):
+            self.parse("entity X:\n def f():\n  pass\n def f():\n  pass")
+
+    def test_err_duplicate_struct_attr(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id='duplicate-struct-attr',
+            source=((5, 2), (5, 3)),
+            args={"name": STArgReqSimpleValue('f')}
+        )), \
+            self.assert_diag(DiagnosticRequirement(
+            id='duplicate-struct-attr-note',
+            source=((2, 2), (2, 3)),
+            args={}
+        )):
+            self.parse("struct X:\n f: None\n pass\n y: None\n f: None")
