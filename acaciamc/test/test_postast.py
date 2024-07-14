@@ -431,6 +431,15 @@ class PostASTSymbolTests(TestSuite):
         self.parse("entity T:\n f: None\nf := 20")
         self.parse("struct T:\n x: None\nx := 0")
 
+    def test_const_order(self):
+        self.parse("const x = 1, y = x")
+        with self.assert_diag(DiagnosticRequirement(
+            "undefined-name",
+            ((1, 11), (1, 12)),
+            args={"name": STArgReqSimpleValue("y")}
+        )):
+            self.parse("const x = y, y = 2")
+
     def test_err_undefined_name(self):
         with self.assert_diag(DiagnosticRequirement(
             "undefined-name",
