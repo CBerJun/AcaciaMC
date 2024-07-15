@@ -1022,3 +1022,14 @@ class ParserTests(TestSuite):
         # These returns are valid:
         self.parse("def f():\n  def b():\n    return bar")
         self.parse("interface x:\n  if y:\n    return")
+
+    def test_err_interface_return_value(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id='interface-return-value',
+            source=((3, 12), (3, 13)),
+            args={}
+        )):
+            self.parse("interface x:\n  if y:\n    return y")
+        # These are valid:
+        self.parse("interface x:\n  def y():\n    return foo")
+        self.parse("interface x:\n  pass\ndef f():\n  return y")

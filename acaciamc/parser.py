@@ -1024,6 +1024,10 @@ class Parser:
             expr = None
         else:
             expr = self.expr()
+            if self.scopes[-1] is Scope.INTERFACE:
+                self.error_range(
+                    "interface-return-value", expr.begin, expr.end
+                )
         return Return(expr, begin=pos1, end=self.prev_pos2)
 
     def simple_new_stmt(self):
