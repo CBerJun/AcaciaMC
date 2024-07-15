@@ -5,6 +5,7 @@ from typing import (
     Generator, TYPE_CHECKING
 )
 from collections import OrderedDict
+from enum import Enum
 
 from acaciamc.tokenizer import TokenType, BRACKETS
 from acaciamc.ast import *
@@ -77,6 +78,16 @@ class STToken(STArgument):
         assert not metadata
         return self.token.display_string()
 
+class Scope(Enum):
+    """
+    To implement some of the checking, the parser has to keep track when
+    it enters a function or an interface.
+    """
+
+    TOPLEVEL = 0
+    FUNCTION = 1
+    INTERFACE = 2
+
 class Parser:
     """
     The parser takes in a stream of tokens and converts them to an AST.
@@ -87,6 +98,7 @@ class Parser:
         self.current_token = self.tokenizer.get_next_token()
         self.next_token: Optional["Token"] = None
         self.prev_token: Optional["Token"] = None
+        self.scopes: List[Scope] = [Scope.TOPLEVEL]
         # These are statements that start with special token:
         self.token_to_complex_stmt = {
             TokenType.if_: self.if_stmt,
@@ -568,7 +580,9 @@ class Parser:
         else:
             path = self.str_literal()
         self.eat(TokenType.colon)
+        self.scopes.append(Scope.INTERFACE)
         stmts = self.statement_block()
+        self.scopes.pop()
         return InterfaceDef(path, stmts, begin=pos1, end=stmts[-1].end)
 
     def _valpassing_qualifier(self, func_type: FuncType) -> ValuePassing:
@@ -606,7 +620,9 @@ class Parser:
         else:
             returns = None
         self.eat(TokenType.colon)
+        self.scopes.append(Scope.FUNCTION)
         stmts = self.statement_block()
+        self.scopes.pop()
         return FuncData(func_type.qualifier, arg_table, stmts, returns)
 
     def const_def_stmt(self):
@@ -1000,6 +1016,9 @@ class Parser:
         """return_stmt := RETURN expr?"""
         pos1 = self.current_pos1
         self.eat(TokenType.return_)
+        # Check if this "return" is inside function or interface
+        if self.scopes[-1] not in (Scope.FUNCTION, Scope.INTERFACE):
+            self.error_range("return-scope", pos1, self.prev_pos2)
         # Expects an expression iff we are not at end of line:
         if self.current_token.type is TokenType.new_line:
             expr = None

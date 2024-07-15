@@ -668,16 +668,31 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             }
         ]
     }),
-    ("return foo", {
-        "@type": ast.Return, "begin": (1, 1), "end": (1, 11),
-        "value": {
-            "@type": ast.Identifier, "name": "foo",
-            "begin": (1, 8), "end": (1, 11)
+    ("def f():\n  return foo", {
+        "@type": ast.FuncDef, "begin": (1, 1), "end": (2, 13),
+        "name": {
+            "@type": ast.IdentifierDef, "name": "f",
+            "begin": (1, 5), "end": (1, 6)
+        },
+        "data": {
+            "@type": ast.FuncData, "qualifier": ast.FuncQualifier.none,
+            "params": [], "returns": None,
+            "body": [{
+                "@type": ast.Return, "begin": (2, 3), "end": (2, 13),
+                "value": {
+                    "@type": ast.Identifier, "name": "foo",
+                    "begin": (2, 10), "end": (2, 13)
+                }
+            }]
         }
     }),
-    ("return", {
-        "@type": ast.Return, "begin": (1, 1), "end": (1, 7),
-        "value": None
+    ("interface x:\n  return", {
+        "@type": ast.InterfaceDef, "begin": (1, 1), "end": (2, 9),
+        "path": "x",
+        "body": [{
+            "@type": ast.Return, "begin": (2, 3), "end": (2, 9),
+            "value": None
+        }]
     }),
     ("new()", {
         "@type": ast.NewCall, "begin": (1, 1), "end": (1, 6),
@@ -990,3 +1005,20 @@ class ParserTests(TestSuite):
             args={}
         )):
             self.parse("struct X:\n f: None\n pass\n y: None\n f: None")
+
+    def test_err_return_scope(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id='return-scope',
+            source=((3, 1), (3, 7)),
+            args={}
+        )):
+            self.parse("def f():\n  pass\nreturn")
+        with self.assert_diag(DiagnosticRequirement(
+            id='return-scope',
+            source=((1, 1), (1, 7)),
+            args={}
+        )):
+            self.parse("return None")
+        # These returns are valid:
+        self.parse("def f():\n  def b():\n    return bar")
+        self.parse("interface x:\n  if y:\n    return")

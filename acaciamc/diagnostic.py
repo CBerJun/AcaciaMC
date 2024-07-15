@@ -219,6 +219,7 @@ DiagnosticKind.ERROR.registry.update({
         "${name} in the same template",
     'duplicate-struct-attr': "Found multiple fields of name ${name} in the "
         "same struct",
+    'return-scope': "'return' outside function or interface",
     # From post AST visitor
     'module-not-found': "Module ${module} is not found",
     'undefined-name': "Name ${name} is not defined",
