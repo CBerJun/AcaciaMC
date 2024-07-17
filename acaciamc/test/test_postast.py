@@ -365,6 +365,19 @@ class PostASTSymbolTests(TestSuite):
                 "_z\n"
             )
 
+    def test_wildcard_import_annotation(self):
+        mod = self.parse("from _test_dummy import *")
+        assert mod  # Test should fail immediately if a diag is issued
+        wc_import = mod.body[0]
+        assert isinstance(wc_import, ast.FromImportAll)
+        items = wc_import.annotation
+        self.assert_true(isinstance(items, list),
+                         "FromImportAll annotation should be list")
+        self.assert_true(len(items) == 2,
+                         "Expect 2 symbols exported from _test_dummy")
+        self.assert_true(isinstance(items[0], tuple) and len(items[0]) == 2,
+                         "Wrong FromImportAll annotation item format")
+
     def test_from_import(self):
         with self.assert_diag(DiagnosticRequirement(
             "undefined-name",

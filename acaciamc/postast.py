@@ -235,7 +235,7 @@ class PostASTVisitor(ast.ASTVisitor):
     This class puts `annotation`s on these AST nodes:
     * `Identifier`: A `Symbol` that this node references.
     * `ImportItem`: A `Symbol` that this import item imports.
-    * `FromImportAll`: A `Dict[str, Tuple[Symbol, Symbol]]`. Each entry
+    * `FromImportAll`: A `List[Tuple[Symbol, Symbol]]`. Each element
       represents an item that gets imported. First `Symbol` is the
       symbol that gets defined in this file; second is the symbol that
       represents the imported item in the file that gets imported.
@@ -421,8 +421,8 @@ class PostASTVisitor(ast.ASTVisitor):
         namespace = module.namespace
         # Toplevel namespace does not have outer
         assert namespace.outer is None
-        node.annotation = {
-            name: (
+        node.annotation = [
+            (
                 # The symbol that is created (the alias) for this file:
                 # Use the position of "*" (in "from x import *") as
                 # source range of all the aliases:
@@ -434,7 +434,7 @@ class PostASTVisitor(ast.ASTVisitor):
             for name, symbol in namespace.names.items()
             # Do not import names starting with an underscore:
             if not name.startswith("_")
-        }
+        ]
         # Lastly, warn if the module that we import is partially
         # initialized
         if isinstance(module, LoadingModule):
