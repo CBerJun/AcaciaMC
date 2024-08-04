@@ -1220,5 +1220,6 @@ class Parser:
                         pos1=expr.begin, pos2=expr.end
                     )
                 args.append(expr)
+        pos1 = self.current_pos1
         self.paren_list_of(_arg)
-        return CallTable(args, keywords)
+        return CallTable(args, keywords, pos1, self.prev_pos2)

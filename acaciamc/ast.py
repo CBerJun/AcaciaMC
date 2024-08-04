@@ -100,9 +100,10 @@ class FormalParam(AST):
         self.type = type_
         self.default = default
 
-class CallTable(AST):  # call table
+class CallTable(HasSource):  # call table
     def __init__(self, args: _List[Expression],
-                 keywords: _Dict[str, Expression]):
+                 keywords: _Dict[str, Expression], begin, end):
+        super().__init__(begin, end)
         self.args = args
         self.keywords = keywords
 

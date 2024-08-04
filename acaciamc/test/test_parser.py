@@ -75,7 +75,8 @@ EXPR_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     ("f()", {"@type": ast.Call, "begin": (1, 1), "end": (1, 4),
              "func": {"@type": ast.Identifier, "name": "f",
                       "begin": (1, 1), "end": (1, 2)},
-             "table": {"@type": ast.CallTable, "args": [], "keywords": {}}}),
+             "table": {"@type": ast.CallTable, "args": [], "keywords": {},
+                       "begin": (1, 2), "end": (1, 4)}}),
     ("f(2, x=1)", {
         "@type": ast.Call, "begin": (1, 1), "end": (1, 10),
         "func": {"@type": ast.Identifier, "name": "f",
@@ -87,7 +88,8 @@ EXPR_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "keywords": {"x": {
                 "@type": ast.IntLiteral, "value": 1,
                 "begin": (1, 8), "end": (1, 9)
-            }}
+            }},
+            "begin": (1, 2), "end": (1, 10)
         }
     }),
     ("x.y.z", {
@@ -697,7 +699,8 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     ("new()", {
         "@type": ast.NewCall, "begin": (1, 1), "end": (1, 6),
         "primary": None,
-        "call_table": {"@type": ast.CallTable, "args": [], "keywords": {}}
+        "call_table": {"@type": ast.CallTable, "args": [], "keywords": {},
+                       "begin": (1, 4), "end": (1, 6)}
     }),
     ("T.new()", {
         "@type": ast.NewCall, "begin": (1, 1), "end": (1, 8),
@@ -705,7 +708,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
             "@type": ast.Identifier, "name": "T",
             "begin": (1, 1), "end": (1, 2)
         },
-        "call_table": {"@type": ast.CallTable, "args": [], "keywords": {}}
+        "call_table": {
+            "@type": ast.CallTable, "args": [], "keywords": {},
+            "begin": (1, 6), "end": (1, 8)
+        }
     }),
 )
 
