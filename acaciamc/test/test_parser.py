@@ -349,7 +349,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("interface foo/bar:\n pass", {
         "@type": ast.InterfaceDef, "begin": (1, 1), "end": (2, 6),
-        "path": "foo/bar",
+        "path": {
+            "@type": ast.SimpleInterfacePath, "value": "foo/bar",
+            "begin": (1, 11), "end": (1, 18)
+        },
         "body": [{"@type": ast.Pass, "begin": (2, 2), "end": (2, 6)}]
     }),
     ('interface "spam":\n pass', {
@@ -690,7 +693,10 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
     }),
     ("interface x:\n  return", {
         "@type": ast.InterfaceDef, "begin": (1, 1), "end": (2, 9),
-        "path": "x",
+        "path": {
+            "@type": ast.SimpleInterfacePath, "value": "x",
+            "begin": (1, 11), "end": (1, 12)
+        },
         "body": [{
             "@type": ast.Return, "begin": (2, 3), "end": (2, 9),
             "value": None

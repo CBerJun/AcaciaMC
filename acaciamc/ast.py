@@ -252,8 +252,13 @@ class FuncDef(Statement):  # function definition
         self.name = name
         self.data = data
 
+class SimpleInterfacePath(HasSource):
+    def __init__(self, value: str, begin, end):
+        super().__init__(begin, end)
+        self.value = value
+
 class InterfaceDef(Statement):  # define an interface
-    def __init__(self, path: _Union[str, "StrLiteral"],
+    def __init__(self, path: _Union[SimpleInterfacePath, "StrLiteral"],
                  body: _List[Statement], begin, end):
         super().__init__(begin, end)
         self.path = path
@@ -516,7 +521,7 @@ class ASTVisitor:
     defined, `generic_visit` will be used.
     """
 
-    def visit(self, node: AST, **kwargs):
+    def visit(self, node: AST, **kwargs) -> _Any:
         visitor = getattr(
             self,
             'visit_%s' % node.__class__.__name__,

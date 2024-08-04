@@ -575,7 +575,9 @@ class Parser:
         pos1 = self.current_pos1
         self.eat(TokenType.interface)
         if self.current_token.type is TokenType.interface_path:
-            path = self.current_token.value
+            path = SimpleInterfacePath(
+                self.current_token.value, *self.current_range
+            )
             self.eat()
         else:
             path = self.str_literal()
