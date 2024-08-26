@@ -28,9 +28,6 @@ acacia = "acaciamc.cli:main"
 [tool.setuptools]
 include-package-data = true
 
-[tool.setuptools.packages.find]
-include = ["acaciamc"]
-
 [tool.setuptools.dynamic]
 version = {attr = "acaciamc.__version__"}
 
