@@ -14,6 +14,7 @@ from acaciamc.constants import COLORS, COLORS_NEW, FUNCTION_PATH_CHARS
 if TYPE_CHECKING:
     from acaciamc.tools.versionlib import VERSION_T
 
+HEXDIGITS = frozenset(string.hexdigits)
 UNICODE_ESCAPES = {'x': 2, 'u': 4, 'U': 8}
 FONTS = {
     "reset": "r",
@@ -585,7 +586,10 @@ class Tokenizer:
         """Read a keyword or an IDENTIFIER token."""
         chars = []
         ln, col = self.current_lineno, self.current_col
-        while is_idcontinue(self.current_char):
+        while (
+            self.current_char is not None
+            and is_idcontinue(self.current_char)
+        ):
             chars.append(self.current_char)
             self.forward()
         name = ''.join(chars)
@@ -655,7 +659,7 @@ class Tokenizer:
             code = []
             length = UNICODE_ESCAPES[second]
             for _ in range(length):
-                if self.current_char not in string.hexdigits:
+                if self.current_char not in HEXDIGITS:
                     _err()
                 code.append(self.current_char)
                 self.forward()
