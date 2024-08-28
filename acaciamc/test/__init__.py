@@ -127,13 +127,11 @@ class TestSuite:
 
     @contextmanager
     def assert_diag(self, req: DiagnosticRequirement):
-        self.owner.diag_reqs.insert(0, req)
-        self.owner.diag_received.insert(0, False)
+        self.owner.diag_asserts.append(_DiagnosticAssertion(req))
         yield
-        received = self.owner.diag_received.pop(0)
+        received = self.owner.diag_asserts.pop()
         if not received:
             raise TestFailure(f'did not receive diagnostic {req!r}')
-        self.owner.diag_reqs.pop(0)
 
     def assert_true(self, v: object, message: str):
         if not v:
@@ -150,21 +148,24 @@ test_log_messages: Dict[str, str] = {
     'overall-result': "${npassed}/${nsuites} suite${npassed plural} passed\n",
 }
 
+class _DiagnosticAssertion:
+    def __init__(self, req: DiagnosticRequirement):
+        self.req = req
+        self.received = False
+
 class TestManager:
     def __init__(self):
         self.reader = Reader()
         self.diag = TrackedDiagnosticsManager(self)
-        self.diag_reqs: List[DiagnosticRequirement] = []
-        self.diag_received: List[bool] = []
+        self.diag_asserts: List[_DiagnosticAssertion] = []
         self.suites: List[TestSuite] = []
 
     def note_diag(self, diag: Diagnostic):
-        it = enumerate(zip(self.diag_reqs, self.diag_received))
-        for i, (req, received) in it:
-            if received:
+        for diag_assert in reversed(self.diag_asserts):
+            if diag_assert.received:
                 continue
-            if req.matches(diag):
-                self.diag_received[i] = True
+            if diag_assert.req.matches(diag):
+                diag_assert.received = True
                 break
         else:
             raise TestFailure(f'unexpected diagnostic {diag!r}')
