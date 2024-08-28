@@ -8,64 +8,64 @@ from collections import OrderedDict
 from enum import Enum
 
 from acaciamc.tokenizer import TokenType, BRACKETS
-from acaciamc.ast import *
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
 from acaciamc.utils.str_template import STArgument, STStr, STEnum
+import acaciamc.ast as ast
 
 if TYPE_CHECKING:
     from acaciamc.tokenizer import Tokenizer, Token
 
-COMPARE_OP_TOKENS: Mapping[TokenType, Type[ComparisonOperator]] = {
-    TokenType.equal_to: Equal,
-    TokenType.unequal_to: NotEqual,
-    TokenType.greater: Greater,
-    TokenType.less: Less,
-    TokenType.greater_equal: GreaterEqual,
-    TokenType.less_equal: LessEqual,
+COMPARE_OP_TOKENS: Mapping[TokenType, Type[ast.ComparisonOperator]] = {
+    TokenType.equal_to: ast.Equal,
+    TokenType.unequal_to: ast.NotEqual,
+    TokenType.greater: ast.Greater,
+    TokenType.less: ast.Less,
+    TokenType.greater_equal: ast.GreaterEqual,
+    TokenType.less_equal: ast.LessEqual,
 }
-UNARY_OP_TOKENS: Mapping[TokenType, Type[UnaryOperator]] = {
-    TokenType.plus: UnaryAdd,
-    TokenType.minus: UnarySub,
+UNARY_OP_TOKENS: Mapping[TokenType, Type[ast.UnaryOperator]] = {
+    TokenType.plus: ast.UnaryAdd,
+    TokenType.minus: ast.UnarySub,
 }
-BIN_OP_TOKENS1: Mapping[TokenType, Type[BinaryOperator]] = {
-    TokenType.star: Mul,
-    TokenType.slash: Div,
-    TokenType.mod: Mod,
+BIN_OP_TOKENS1: Mapping[TokenType, Type[ast.BinaryOperator]] = {
+    TokenType.star: ast.Mul,
+    TokenType.slash: ast.Div,
+    TokenType.mod: ast.Mod,
 }
-BIN_OP_TOKENS2: Mapping[TokenType, Type[BinaryOperator]] = {
-    TokenType.plus: Add,
-    TokenType.minus: Sub,
+BIN_OP_TOKENS2: Mapping[TokenType, Type[ast.BinaryOperator]] = {
+    TokenType.plus: ast.Add,
+    TokenType.minus: ast.Sub,
 }
-AUG_ASSIGN_TOKENS: Mapping[TokenType, Type[BinaryOperator]] = {
-    TokenType.plus_equal: Add,
-    TokenType.minus_equal: Sub,
-    TokenType.times_equal: Mul,
-    TokenType.divide_equal: Div,
-    TokenType.mod_equal: Mod,
+AUG_ASSIGN_TOKENS: Mapping[TokenType, Type[ast.BinaryOperator]] = {
+    TokenType.plus_equal: ast.Add,
+    TokenType.minus_equal: ast.Sub,
+    TokenType.times_equal: ast.Mul,
+    TokenType.divide_equal: ast.Div,
+    TokenType.mod_equal: ast.Mod,
 }
 
 IntPair = Tuple[int, int]
 TwoIntPairs = Tuple[IntPair, IntPair]
 
 class FuncType(NamedTuple):
-    allowed_valpassing: Tuple[Type[ValuePassing], ...]
+    allowed_valpassing: Tuple[Type[ast.ValuePassing], ...]
     type_required: bool
-    qualifier: FuncQualifier
+    qualifier: ast.FuncQualifier
 
 FUNC_NORMAL = FuncType(
-    allowed_valpassing=(PassByValue,),
+    allowed_valpassing=(ast.PassByValue,),
     type_required=True,
-    qualifier=FuncQualifier.none
+    qualifier=ast.FuncQualifier.none
 )
 FUNC_INLINE = FuncType(
-    allowed_valpassing=(PassByValue, PassByReference, PassConst),
+    allowed_valpassing=(ast.PassByValue, ast.PassByReference, ast.PassConst),
     type_required=False,
-    qualifier=FuncQualifier.inline
+    qualifier=ast.FuncQualifier.inline
 )
 FUNC_CONST = FuncType(
-    allowed_valpassing=(PassByValue,),
+    allowed_valpassing=(ast.PassByValue,),
     type_required=False,
-    qualifier=FuncQualifier.const
+    qualifier=ast.FuncQualifier.const
 )
 
 class STToken(STArgument):
@@ -156,7 +156,7 @@ class Parser:
         raise DiagnosticError(self.diag_obj(diag_id, pos1, pos2, args))
 
     def diag_obj(self, diag_id: str, pos1: IntPair, pos2: IntPair,
-                        args: Optional[Mapping[str, STArgument]] = None):
+                 args: Optional[Mapping[str, STArgument]] = None):
         """Helper to create a `Diagnostic`."""
         if args is None:
             args = {}
@@ -241,12 +241,12 @@ class Parser:
                 break
         self.eat(rp)
 
-    def statement_block(self) -> List[Statement]:
+    def statement_block(self) -> List[ast.Statement]:
         """
         Read a block of statements.
         statement_block := block_of{statement}
         """
-        res: List[Statement] = []
+        res: List[ast.Statement] = []
         for _ in self.indented_block():
             res.append(self.statement())
         return res
@@ -256,14 +256,15 @@ class Parser:
 
     def str_literal(self):
         """str_literal := (STRING_BEGIN formatted_str STRING_END)+"""
-        content: List[Union[str, Expression]] = []
+        content: List[Union[str, ast.Expression]] = []
         pos1 = self.current_pos1
         while self.current_token.type is TokenType.string_begin:
             self.eat()  # eat STRING_BEGIN
             content.extend(self.formatted_str().content)
             self.eat(TokenType.string_end)
-        return StrLiteral(FormattedStr(content),
-                          begin=pos1, end=self.prev_pos2)
+        return ast.StrLiteral(
+            ast.FormattedStr(content), begin=pos1, end=self.prev_pos2
+        )
 
     def list_or_map(self):
         """
@@ -277,12 +278,13 @@ class Parser:
         # Check for empty list or map
         if self.current_token.type is TokenType.rbrace:
             self.eat()
-            return ListDef(items=[], begin=pos1, end=self.prev_pos2)
+            return ast.ListDef(items=[], begin=pos1, end=self.prev_pos2)
         elif self.current_token.type is TokenType.colon:
             self.eat()
             self.eat(TokenType.rbrace)
-            return MapDef(keys=[], values=[],
-                          begin=pos1, end=self.prev_pos2)
+            return ast.MapDef(
+                keys=[], values=[], begin=pos1, end=self.prev_pos2
+            )
         first = self.expr()
         if self.current_token.type is TokenType.colon:
             # Map
@@ -300,7 +302,7 @@ class Parser:
                     else:
                         break
             self.eat(TokenType.rbrace)
-            return MapDef(keys, values, begin=pos1, end=self.prev_pos2)
+            return ast.MapDef(keys, values, begin=pos1, end=self.prev_pos2)
         else:
             # List
             items = [first]
@@ -313,9 +315,9 @@ class Parser:
                     else:
                         break
             self.eat(TokenType.rbrace)
-            return ListDef(items, begin=pos1, end=self.prev_pos2)
+            return ast.ListDef(items, begin=pos1, end=self.prev_pos2)
 
-    def expr_l0(self) -> Expression:
+    def expr_l0(self) -> ast.Expression:
         """
         expr_l0 := (LPAREN expr RPAREN)
             | IDENTIFIER
@@ -333,22 +335,22 @@ class Parser:
         if self.current_token.type is TokenType.integer:
             value = self.current_token.value
             self.eat()
-            return IntLiteral(value, begin=pos1, end=self.prev_pos2)
+            return ast.IntLiteral(value, begin=pos1, end=self.prev_pos2)
         elif self.current_token.type in (TokenType.true, TokenType.false):
             value = self.current_token.type is TokenType.true
             self.eat()
-            return BoolLiteral(value, begin=pos1, end=self.prev_pos2)
+            return ast.BoolLiteral(value, begin=pos1, end=self.prev_pos2)
         elif self.current_token.type is TokenType.none:
             self.eat()
-            return NoneLiteral(begin=pos1, end=self.prev_pos2)
+            return ast.NoneLiteral(begin=pos1, end=self.prev_pos2)
         elif self.current_token.type is TokenType.float:
             value = self.current_token.value
             self.eat()
-            return FloatLiteral(value, begin=pos1, end=self.prev_pos2)
+            return ast.FloatLiteral(value, begin=pos1, end=self.prev_pos2)
         elif self.current_token.type is TokenType.identifier:
             value = self.current_token.value
             self.eat()
-            return Identifier(value, begin=pos1, end=self.prev_pos2)
+            return ast.Identifier(value, begin=pos1, end=self.prev_pos2)
         elif self.current_token.type is TokenType.string_begin:
             return self.str_literal()
         elif self.current_token.type is TokenType.lparen:
@@ -358,14 +360,14 @@ class Parser:
             return node
         elif self.current_token.type is TokenType.self:
             self.eat()
-            return Self(begin=pos1, end=self.prev_pos2)
+            return ast.Self(begin=pos1, end=self.prev_pos2)
         elif self.current_token.type is TokenType.lbrace:
             return self.list_or_map()
         else:
             self.unexpected_token()
             assert False
 
-    def expr_l1(self) -> Expression:
+    def expr_l1(self) -> ast.Expression:
         """
         expr_l1 := expr_l0 (
             (POINT IDENTIFIER)
@@ -386,26 +388,28 @@ class Parser:
                 self.eat(TokenType.point)
                 attr = self.current_token.value
                 self.eat(TokenType.identifier)
-                node = Attribute(node, attr, begin=pos1, end=self.prev_pos2)
+                node = ast.Attribute(
+                    node, attr, begin=pos1, end=self.prev_pos2
+                )
             elif self.current_token.type is TokenType.lparen:
                 table = self.call_table()
-                node = Call(node, table, begin=pos1, end=self.prev_pos2)
+                node = ast.Call(node, table, begin=pos1, end=self.prev_pos2)
             elif self.current_token.type is TokenType.lbracket:
                 subscripts = []
                 self.paren_list_of(
                     lambda: subscripts.append(self.expr()),
                     lparen=TokenType.lbracket
                 )
-                node = Subscript(
+                node = ast.Subscript(
                     node, subscripts, begin=pos1, end=self.prev_pos2
                 )
             else:
                 break
         return node
 
-    def expr_l2(self) -> Expression:
+    def expr_l2(self) -> ast.Expression:
         """expr_l2 := (PLUS | MINUS)* expr_l1"""
-        ops: List[UnaryOperator] = []
+        ops: List[ast.UnaryOperator] = []
         while self.current_token.type in UNARY_OP_TOKENS:
             op_cls = UNARY_OP_TOKENS[self.current_token.type]
             ops.append(op_cls(*self.current_range))
@@ -414,10 +418,10 @@ class Parser:
         node = self.expr_l1()
         pos2 = node.end
         for op in ops:
-            node = UnaryOp(op, node, begin=op.begin, end=pos2)
+            node = ast.UnaryOp(op, node, begin=op.begin, end=pos2)
         return node
 
-    def expr_l3(self) -> Expression:
+    def expr_l3(self) -> ast.Expression:
         """expr_l3 := expr_l2 ((STAR | SLASH | MOD) expr_l2)*"""
         node = self.expr_l2()
         pos1 = node.begin
@@ -426,10 +430,10 @@ class Parser:
             op = op_cls(*self.current_range)
             self.eat()  # eat operator
             operand = self.expr_l2()
-            node = BinOp(node, op, operand, begin=pos1, end=self.prev_pos2)
+            node = ast.BinOp(node, op, operand, begin=pos1, end=self.prev_pos2)
         return node
 
-    def expr_l4(self) -> Expression:
+    def expr_l4(self) -> ast.Expression:
         """expr_l4 := expr_l3 ((PLUS | MINUS) expr_l3)*"""
         node = self.expr_l3()
         pos1 = node.begin
@@ -438,10 +442,10 @@ class Parser:
             op = op_cls(*self.current_range)
             self.eat()  # eat operator
             operand = self.expr_l3()
-            node = BinOp(node, op, operand, begin=pos1, end=self.prev_pos2)
+            node = ast.BinOp(node, op, operand, begin=pos1, end=self.prev_pos2)
         return node
 
-    def expr_l5(self) -> Expression:
+    def expr_l5(self) -> ast.Expression:
         """
         expr_l5 := expr_l4 ((EQUAL_TO | UNEQUAL_TO | GREATER | LESS
             | GREATER_EQUAL | LESS_EQUAL) expr_l4)*
@@ -455,24 +459,26 @@ class Parser:
             self.eat()
             operands.append(self.expr_l4())
         if operators:
-            return CompareOp(left, operators, operands,
-                             begin=pos1, end=self.prev_pos2)
+            return ast.CompareOp(
+                left, operators, operands,
+                begin=pos1, end=self.prev_pos2
+            )
         return left
 
-    def expr_l6(self) -> Expression:
+    def expr_l6(self) -> ast.Expression:
         """expr_l6 := NOT* expr_l5"""
-        ops: List[UnaryNot] = []
+        ops: List[ast.UnaryNot] = []
         while self.current_token.type is TokenType.not_:
-            ops.append(UnaryNot(*self.current_range))
+            ops.append(ast.UnaryNot(*self.current_range))
             self.eat()
         ops.reverse()
         node = self.expr_l5()
         pos2 = node.end
         for op in ops:
-            node = UnaryOp(op, node, begin=op.begin, end=pos2)
+            node = ast.UnaryOp(op, node, begin=op.begin, end=pos2)
         return node
 
-    def expr_l7(self) -> Expression:
+    def expr_l7(self) -> ast.Expression:
         """expr_l7 := expr_l6 (AND expr_l6)*"""
         pos1 = self.current_pos1
         left = self.expr_l6()
@@ -482,10 +488,12 @@ class Parser:
             operands.append(self.expr_l6())
         if operands:
             operands.insert(0, left)
-            return BoolOp(And(), operands, begin=pos1, end=self.prev_pos2)
+            return ast.BoolOp(
+                ast.And(), operands, begin=pos1, end=self.prev_pos2
+            )
         return left
 
-    def expr_l8(self) -> Expression:
+    def expr_l8(self) -> ast.Expression:
         """expr_l8 := expr_l7 (OR expr_l7)*"""
         pos1 = self.current_pos1
         left = self.expr_l7()
@@ -495,7 +503,9 @@ class Parser:
             operands.append(self.expr_l7())
         if operands:
             operands.insert(0, left)
-            return BoolOp(Or(), operands, begin=pos1, end=self.prev_pos2)
+            return ast.BoolOp(
+                ast.Or(), operands, begin=pos1, end=self.prev_pos2
+            )
         return left
 
     # Toplevel entry to parse an expression; always set to the highest
@@ -504,12 +514,12 @@ class Parser:
 
     ## Statement generator
 
-    def _id_def(self) -> IdentifierDef:
+    def _id_def(self) -> ast.IdentifierDef:
         """Simply eats an IDENTIFIER and returns it as an `IdentifierDef`."""
         name = self.current_token.value
         id_range = self.current_range
         self.eat(TokenType.identifier)
-        return IdentifierDef(name, *id_range)
+        return ast.IdentifierDef(name, *id_range)
 
     def if_stmt(self):
         """
@@ -531,7 +541,7 @@ class Parser:
             self.eat(TokenType.colon)
             elif_stmts = self.statement_block()
             elifs.append((elif_pos, elif_condition, elif_stmts))
-        else_stmts: List[Statement] = []
+        else_stmts: List[ast.Statement] = []
         if self.current_token.type is TokenType.else_:
             self.eat()  # eat ELSE
             self.eat(TokenType.colon)
@@ -548,9 +558,11 @@ class Parser:
         # Assembling AST...
         elifs.reverse()
         for elif_pos, elif_condition, elif_stmts in elifs:
-            else_stmts = [If(elif_condition, elif_stmts, else_stmts,
-                             begin=elif_pos, end=pos2)]
-        return If(condition, stmts, else_stmts, begin=if_pos1, end=pos2)
+            else_stmts = [ast.If(
+                elif_condition, elif_stmts, else_stmts,
+                begin=elif_pos, end=pos2
+            )]
+        return ast.If(condition, stmts, else_stmts, begin=if_pos1, end=pos2)
 
     def while_stmt(self):
         """while_stmt := WHILE expr COLON statement_block"""
@@ -559,11 +571,11 @@ class Parser:
         condition = self.expr()
         self.eat(TokenType.colon)
         body = self.statement_block()
-        return While(condition, body, begin=pos1, end=body[-1].end)
+        return ast.While(condition, body, begin=pos1, end=body[-1].end)
 
     def pass_stmt(self):
         """pass_stmt := PASS"""
-        node = Pass(*self.current_range)
+        node = ast.Pass(*self.current_range)
         self.eat(TokenType.pass_)
         return node
 
@@ -575,7 +587,7 @@ class Parser:
         pos1 = self.current_pos1
         self.eat(TokenType.interface)
         if self.current_token.type is TokenType.interface_path:
-            path = SimpleInterfacePath(
+            path = ast.SimpleInterfacePath(
                 self.current_token.value, *self.current_range
             )
             self.eat()
@@ -585,20 +597,20 @@ class Parser:
         self.scopes.append(Scope.INTERFACE)
         stmts = self.statement_block()
         self.scopes.pop()
-        return InterfaceDef(path, stmts, begin=pos1, end=stmts[-1].end)
+        return ast.InterfaceDef(path, stmts, begin=pos1, end=stmts[-1].end)
 
-    def _valpassing_qualifier(self, func_type: FuncType) -> ValuePassing:
+    def _valpassing_qualifier(self, func_type: FuncType) -> ast.ValuePassing:
         """valpassing_inline := (CONST | AMPERSAND)?"""
         pos1 = self.current_pos1
         if self.current_token.type is TokenType.const:
             self.eat()
-            res = PassConst
+            res = ast.PassConst
         elif self.current_token.type is TokenType.ampersand:
             self.eat()
-            res = PassByReference
+            res = ast.PassByReference
         else:
-            res = PassByValue
-        pos2 = pos1 if res is PassByValue else self.prev_pos2
+            res = ast.PassByValue
+        pos2 = pos1 if res is ast.PassByValue else self.prev_pos2
         if res not in func_type.allowed_valpassing:
             self.error_range(
                 'invalid-valpassing', pos1, pos2,
@@ -607,25 +619,25 @@ class Parser:
             )
         return res(pos1, pos2)
 
-    def _def_head(self) -> IdentifierDef:
+    def _def_head(self) -> ast.IdentifierDef:
         """def_head := DEF IDENTIFIER"""
         self.eat(TokenType.def_)
         return self._id_def()
 
-    def _function_def(self, func_type: FuncType) -> FuncData:
+    def _function_def(self, func_type: FuncType) -> ast.FuncData:
         arg_table = self.argument_table(func_type)
         if self.current_token.type is TokenType.arrow:
             self.eat()
             qualifier = self._valpassing_qualifier(func_type)
             ret_type = self.type_spec()
-            returns = ReturnSpec(ret_type, qualifier)
+            returns = ast.ReturnSpec(ret_type, qualifier)
         else:
             returns = None
         self.eat(TokenType.colon)
         self.scopes.append(Scope.FUNCTION)
         stmts = self.statement_block()
         self.scopes.pop()
-        return FuncData(func_type.qualifier, arg_table, stmts, returns)
+        return ast.FuncData(func_type.qualifier, arg_table, stmts, returns)
 
     def const_def_stmt(self):
         """
@@ -637,7 +649,9 @@ class Parser:
         self.eat(TokenType.const)
         name = self._def_head()
         func_data = self._function_def(FUNC_CONST)
-        return FuncDef(name, func_data, begin=pos1, end=func_data.body[-1].end)
+        return ast.FuncDef(
+            name, func_data, begin=pos1, end=func_data.body[-1].end
+        )
 
     def inline_def_stmt(self):
         """
@@ -650,7 +664,9 @@ class Parser:
         self.eat(TokenType.inline)
         name = self._def_head()
         func_data = self._function_def(FUNC_INLINE)
-        return FuncDef(name, func_data, begin=pos1, end=func_data.body[-1].end)
+        return ast.FuncDef(
+            name, func_data, begin=pos1, end=func_data.body[-1].end
+        )
 
     def def_stmt(self):
         """
@@ -661,7 +677,9 @@ class Parser:
         pos1 = self.current_pos1
         name = self._def_head()
         func_data = self._function_def(FUNC_NORMAL)
-        return FuncDef(name, func_data, begin=pos1, end=func_data.body[-1].end)
+        return ast.FuncDef(
+            name, func_data, begin=pos1, end=func_data.body[-1].end
+        )
 
     def _entity_body(self):
         pos1 = self.current_pos1
@@ -672,7 +690,7 @@ class Parser:
             type_ = self.type_spec()
             pos2 = self.prev_pos2
             self.eat(TokenType.new_line)
-            return EntityField(id_def, type_, begin=pos1, end=pos2)
+            return ast.EntityField(id_def, type_, begin=pos1, end=pos2)
         elif self.current_token.type is TokenType.pass_:
             res = self.pass_stmt()
             self.eat(TokenType.new_line)
@@ -703,35 +721,36 @@ class Parser:
                 new_range = self.current_range
                 self.eat(TokenType.new)
                 data = self._function_def(t)
-                return NewMethod(
+                return ast.NewMethod(
                     data, *new_range, begin=pos1, end=data.body[-1].end
                 )
             # It is not new method, normal method then...
-            qualifier = MethodQualifier.none
+            qualifier = ast.MethodQualifier.none
             if self.current_token.type is TokenType.virtual:
                 self.eat()  # eat "virtual"
-                qualifier = MethodQualifier.virtual
+                qualifier = ast.MethodQualifier.virtual
             elif self.current_token.type is TokenType.override:
                 self.eat()  # eat "override"
-                qualifier = MethodQualifier.override
+                qualifier = ast.MethodQualifier.override
             elif self.current_token.type is TokenType.static:
                 self.eat()  # eat "static"
-                qualifier = MethodQualifier.static
+                qualifier = ast.MethodQualifier.static
             if self.current_token.type is TokenType.inline:
                 content = self.inline_def_stmt()
             elif self.current_token.type is TokenType.const:
                 content = self.const_def_stmt()
-                if qualifier is not MethodQualifier.static:
+                if qualifier is not ast.MethodQualifier.static:
                     self.error_range(
                         'non-static-const-method',
                         content.name.begin, content.name.end
                     )
             else:
                 content = self.def_stmt()
-            return EntityMethod(content, qualifier, begin=pos1,
-                                end=self.prev_pos2)
+            return ast.EntityMethod(
+                content, qualifier, begin=pos1, end=self.prev_pos2
+            )
 
-    def _extends_clause(self) -> List[Expression]:
+    def _extends_clause(self) -> List[ast.Expression]:
         """extends_clause := (EXTENDS list_of{expr})?"""
         bases = []
         if self.current_token.type is TokenType.extends:
@@ -760,11 +779,11 @@ class Parser:
         parents = self._extends_clause()
         self.eat(TokenType.colon)
         # Body
-        new_method: Optional[NewMethod] = None
-        methods: Dict[str, EntityMethod] = {}
-        fields: Dict[str, EntityField] = {}
+        new_method: Optional[ast.NewMethod] = None
+        methods: Dict[str, ast.EntityMethod] = {}
+        fields: Dict[str, ast.EntityField] = {}
         last_pos2: Optional[IntPair] = None
-        def duplication_check(item_name: IdentifierDef):
+        def duplication_check(item_name: ast.IdentifierDef):
             # This is shared by methods and fields
             name = item_name.name
             if name in fields:
@@ -787,9 +806,9 @@ class Parser:
         for _ in self.indented_block():
             item = self._entity_body()
             last_pos2 = item.end
-            if isinstance(item, Pass):
+            if isinstance(item, ast.Pass):
                 continue
-            if isinstance(item, NewMethod):
+            if isinstance(item, ast.NewMethod):
                 if new_method is None:
                     new_method = item
                     continue
@@ -803,15 +822,15 @@ class Parser:
                     new_method.new_begin, new_method.new_end
                 ))
                 raise err
-            if isinstance(item, EntityField):
+            if isinstance(item, ast.EntityField):
                 duplication_check(item.name)
                 fields[item.name.name] = item
             else:
-                assert isinstance(item, EntityMethod)
+                assert isinstance(item, ast.EntityMethod)
                 duplication_check(item.content.name)
                 methods[item.content.name.name] = item
         assert last_pos2 is not None
-        return EntityTemplateDef(
+        return ast.EntityTemplateDef(
             id_def, parents,
             list(fields.values()), list(methods.values()),
             new_method,
@@ -831,7 +850,7 @@ class Parser:
                 self.eat(TokenType.dollar_lbrace)
                 res.append(self.expr())
                 self.eat(TokenType.rbrace)
-        return FormattedStr(res)
+        return ast.FormattedStr(res)
 
     def command_stmt(self):
         """command_stmt := COMMAND_BEGIN formatted_str COMMAND_END"""
@@ -839,9 +858,9 @@ class Parser:
         self.eat(TokenType.command_begin)
         content = self.formatted_str()
         self.eat(TokenType.command_end)
-        return Command(content, begin=pos1, end=self.prev_pos2)
+        return ast.Command(content, begin=pos1, end=self.prev_pos2)
 
-    def module_meta(self) -> Tuple[ModuleMeta, TwoIntPairs]:
+    def module_meta(self) -> Tuple[ast.ModuleMeta, TwoIntPairs]:
         """module_meta := IDENTIFIER (POINT IDENTIFIER)*"""
         # at least one name should be given
         pos1 = self.current_pos1
@@ -854,10 +873,10 @@ class Parser:
             names.append(self.current_token.value)
             last_range = self.current_range
             self.eat(TokenType.identifier)
-        meta = ModuleMeta(names, begin=pos1, end=self.prev_pos2)
+        meta = ast.ModuleMeta(names, begin=pos1, end=self.prev_pos2)
         return meta, last_range
 
-    def alias(self) -> Optional[IdentifierDef]:
+    def alias(self) -> Optional[ast.IdentifierDef]:
         """alias := (AS IDENTIFIER)?"""
         if self.current_token.type is TokenType.as_:
             self.eat()
@@ -871,8 +890,8 @@ class Parser:
         meta, last_range = self.module_meta()
         alias = self.alias()
         if alias is None:
-            alias = IdentifierDef(meta.path[-1], *last_range)
-        return Import(meta, alias, begin=pos1, end=self.prev_pos2)
+            alias = ast.IdentifierDef(meta.path[-1], *last_range)
+        return ast.Import(meta, alias, begin=pos1, end=self.prev_pos2)
 
     def from_import_stmt(self):
         """
@@ -890,21 +909,21 @@ class Parser:
         if self.current_token.type is TokenType.star:
             star_range = self.current_range
             self.eat()
-            return FromImportAll(
+            return ast.FromImportAll(
                 meta, *star_range, begin=pos1, end=self.prev_pos2
             )
-        items: List[ImportItem] = []
+        items: List[ast.ImportItem] = []
         def _id_alias():
             name = self._id_def()
             alias = self.alias()
             if alias is None:
-                alias = IdentifierDef(name.name, name.begin, name.end)
-            items.append(ImportItem(name, alias))
+                alias = ast.IdentifierDef(name.name, name.begin, name.end)
+            items.append(ast.ImportItem(name, alias))
         if self.current_token.type is TokenType.lparen:
             self.paren_list_of(_id_alias)
         else:
             self.list_of(_id_alias)
-        return FromImport(meta, items, begin=pos1, end=self.prev_pos2)
+        return ast.FromImport(meta, items, begin=pos1, end=self.prev_pos2)
 
     def for_stmt(self):
         """
@@ -917,7 +936,7 @@ class Parser:
         expr = self.expr()
         self.eat(TokenType.colon)
         body = self.statement_block()
-        return For(id_def, expr, body, begin=pos1, end=body[-1].end)
+        return ast.For(id_def, expr, body, begin=pos1, end=body[-1].end)
 
     def _struct_body(self):
         pos1 = self.current_pos1
@@ -925,7 +944,9 @@ class Parser:
             id_def = self._id_def()
             self.eat(TokenType.colon)
             type_ = self.type_spec()
-            res = StructField(id_def, type_, begin=pos1, end=self.prev_pos2)
+            res = ast.StructField(
+                id_def, type_, begin=pos1, end=self.prev_pos2
+            )
         else:
             res = self.pass_stmt()
         self.eat(TokenType.new_line)
@@ -944,11 +965,11 @@ class Parser:
         bases = self._extends_clause()
         self.eat(TokenType.colon)
         last_pos2: Optional[IntPair] = None
-        fields: Dict[str, StructField] = {}
+        fields: Dict[str, ast.StructField] = {}
         for _ in self.indented_block():
             item = self._struct_body()
             last_pos2 = item.end
-            if isinstance(item, Pass):
+            if isinstance(item, ast.Pass):
                 continue
             name = item.name.name
             if name not in fields:
@@ -967,11 +988,11 @@ class Parser:
             ))
             raise err
         assert last_pos2 is not None
-        return StructDef(
+        return ast.StructDef(
             id_def, bases, list(fields.values()), begin=pos1, end=last_pos2
         )
 
-    def _constant_decl(self) -> CompileTimeAssign:
+    def _constant_decl(self) -> ast.CompileTimeAssign:
         """constant_decl := IDENTIFIER (COLON type_spec)? EQUAL expr"""
         id_def = self._id_def()
         if self.current_token.type is TokenType.colon:
@@ -981,7 +1002,7 @@ class Parser:
             type_ = None
         self.eat(TokenType.equal)
         value = self.expr()
-        return CompileTimeAssign(id_def, type_, value)
+        return ast.CompileTimeAssign(id_def, type_, value)
 
     def _handle_const(self):
         """
@@ -1005,14 +1026,14 @@ class Parser:
             self.list_of(_add_const_decl)
         pos2 = self.prev_pos2
         self.eat(TokenType.new_line)
-        return ConstDef(contents, begin=pos1, end=pos2)
+        return ast.ConstDef(contents, begin=pos1, end=pos2)
 
     def reference_def_stmt(self):
         """reference_def_stmt := AMPERSAND constant_decl"""
         pos1 = self.current_pos1
         self.eat(TokenType.ampersand)
         decl = self._constant_decl()
-        return ReferenceDef(decl, begin=pos1, end=self.prev_pos2)
+        return ast.ReferenceDef(decl, begin=pos1, end=self.prev_pos2)
 
     def return_stmt(self):
         """return_stmt := RETURN expr?"""
@@ -1030,14 +1051,14 @@ class Parser:
                 self.error_range(
                     "interface-return-value", expr.begin, expr.end
                 )
-        return Return(expr, begin=pos1, end=self.prev_pos2)
+        return ast.Return(expr, begin=pos1, end=self.prev_pos2)
 
     def simple_new_stmt(self):
         """simple_new_stmt := NEW call_table"""
         pos1 = self.current_pos1
         self.eat(TokenType.new)
         table = self.call_table()
-        return NewCall(None, table, begin=pos1, end=self.prev_pos2)
+        return ast.NewCall(None, table, begin=pos1, end=self.prev_pos2)
 
     def statement(self):
         """
@@ -1075,7 +1096,7 @@ class Parser:
             # assign_stmt := expr EQUAL expr
             self.eat()  # eat equal
             rhs = self.expr()
-            node = Assign(expr, rhs, begin=pos1, end=self.prev_pos2)
+            node = ast.Assign(expr, rhs, begin=pos1, end=self.prev_pos2)
         elif self.current_token.type in AUG_ASSIGN_TOKENS:
             # aug_assign_stmt := expr (PLUS_EQUAL | MINUS_EQUAL
             #     | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
@@ -1083,31 +1104,34 @@ class Parser:
             operator = operator_cls(*self.current_range)
             self.eat()  # eat operator
             rhs = self.expr()
-            node = AugmentedAssign(expr, operator, rhs,
-                                   begin=pos1, end=self.prev_pos2)
+            node = ast.AugmentedAssign(
+                expr, operator, rhs, begin=pos1, end=self.prev_pos2
+            )
         elif self.current_token.type is TokenType.colon:
             # var_def_stmt := IDENTIFIER COLON type_spec (EQUAL expr)?
             self.eat()  # eat colon
-            if not isinstance(expr, Identifier):
+            if not isinstance(expr, ast.Identifier):
                 self.error_range('invalid-var-def', expr.begin, expr.end)
-            assert isinstance(expr, Identifier)
+                assert False
             type_ = self.type_spec()
             if self.current_token.type is TokenType.equal:
                 self.eat()  # eat equal
                 rhs = self.expr()
             else:
                 rhs = None
-            id_def = IdentifierDef(expr.name, expr.begin, expr.end)
-            node = VarDef(id_def, type_, rhs, begin=pos1, end=self.prev_pos2)
+            node = ast.VarDef(
+                ast.IdentifierDef(expr.name, expr.begin, expr.end),
+                type_, rhs, begin=pos1, end=self.prev_pos2
+            )
         elif self.current_token.type is TokenType.walrus:
             # auto_var_def_stmt := IDENTIFIER WALRUS expr
             self.eat()  # eat walrus
-            if not isinstance(expr, Identifier):
+            if not isinstance(expr, ast.Identifier):
                 self.error_range('invalid-var-def', expr.begin, expr.end)
-            assert isinstance(expr, Identifier)
-            id_def = IdentifierDef(expr.name, expr.begin, expr.end)
+                assert False
+            id_def = ast.IdentifierDef(expr.name, expr.begin, expr.end)
             rhs = self.expr()
-            node = AutoVarDef(id_def, rhs, begin=pos1, end=self.prev_pos2)
+            node = ast.AutoVarDef(id_def, rhs, begin=pos1, end=self.prev_pos2)
         else:  # just an expr, or a new statement
             # expr_stmt := expr
             # expr_new_stmt := expr POINT NEW call_table
@@ -1119,22 +1143,24 @@ class Parser:
                     self.eat()
                     self.eat()
                     table = self.call_table()
-                    node = NewCall(expr, table, begin=pos1, end=self.prev_pos2)
+                    node = ast.NewCall(
+                        expr, table, begin=pos1, end=self.prev_pos2
+                    )
             if node is None:
-                node = ExprStatement(expr)
+                node = ast.ExprStatement(expr)
         self.eat(TokenType.new_line)
         return node
 
     ## Other generators
 
-    def module(self):
+    def module(self) -> ast.Module:
         """module := statement* END_MARKER"""
         stmts = []
         while self.current_token.type is not TokenType.end_marker:
             stmts.append(self.statement())
-        return Module(stmts)
+        return ast.Module(stmts)
 
-    def argument_table(self, func_type: FuncType) -> List[FormalParam]:
+    def argument_table(self, func_type: FuncType) -> List[ast.FormalParam]:
         """
         type_decl := COLON type_spec
         default_decl := EQUAL expr
@@ -1179,16 +1205,16 @@ class Parser:
                 self.error('duplicate-arg',
                            arg_token, args={"arg": STStr(name)})
             # add arg
-            id_def = IdentifierDef(name, arg_token.pos1, arg_token.pos2)
-            params[name] = FormalParam(id_def, qualifier, type_, default)
+            id_def = ast.IdentifierDef(name, arg_token.pos1, arg_token.pos2)
+            params[name] = ast.FormalParam(id_def, qualifier, type_, default)
         self.paren_list_of(_arg_decl)
         return list(params.values())
 
-    def type_spec(self):
+    def type_spec(self) -> ast.TypeSpec:
         """type_spec := expr"""
-        return TypeSpec(self.expr())
+        return ast.TypeSpec(self.expr())
 
-    def call_table(self):
+    def call_table(self) -> ast.CallTable:
         """
         arg := (IDENTIFIER EQUAL)? expr
         call_table := paren_list_of{LPAREN, arg, RPAREN}
@@ -1224,4 +1250,4 @@ class Parser:
                 args.append(expr)
         pos1 = self.current_pos1
         self.paren_list_of(_arg)
-        return CallTable(args, keywords, pos1, self.prev_pos2)
+        return ast.CallTable(args, keywords, pos1, self.prev_pos2)
