@@ -1,25 +1,21 @@
 """Abstract Syntax Tree definitions for Acacia."""
 
 from typing import (
-    Union as _Union, List as _List, Optional as _Optional, Dict as _Dict,
-    Iterable as _Iterable, Tuple as _Tuple, Any as _Any,
-    FrozenSet as _FrozenSet
+    Union, List, Optional, Dict, Iterable, Tuple, Any, FrozenSet
 )
 
-from acaciamc.utils.str_template import DisplayableEnum as _DisplayableEnum
+from acaciamc.utils.str_template import DisplayableEnum
 
-####################
-### AST CONTENTS ###
-####################
+# --- AST components
 
-class FuncQualifier(_DisplayableEnum):
+class FuncQualifier(DisplayableEnum):
     """Function qualifiers."""
 
     none = 0, "runtime function"
     inline = 1, "inline function"
     const = 2, "compile time function"
 
-class MethodQualifier(_DisplayableEnum):
+class MethodQualifier(DisplayableEnum):
     """Entity method qualifiers."""
 
     none = 0, "(none)"
@@ -27,9 +23,7 @@ class MethodQualifier(_DisplayableEnum):
     override = 2, "override"
     static = 3, "static"
 
-#################
-### AST NODES ###
-#################
+# --- AST node superclasses
 
 # These fields are not considered a "children" of an AST:
 RESERVED_FIELDS = frozenset((
@@ -45,12 +39,12 @@ class AST:
     """Base class for Acacia's AST."""
 
     # See `get_fields`:
-    _fields: _Optional[_Tuple[str, ...]] = None
-    _fields_ignore: _FrozenSet[str] = frozenset()
+    _fields: Optional[Tuple[str, ...]] = None
+    _fields_ignore: FrozenSet[str] = frozenset()
     # Extra information on this node (used by post AST visitor):
-    annotation: _Any = None
+    annotation: Any = None
 
-    def get_fields(self) -> _Tuple[str, ...]:
+    def get_fields(self) -> Tuple[str, ...]:
         """Get the names of fields of a node."""
         cls = type(self)
         if cls._fields is None:
@@ -69,7 +63,7 @@ class HasSource(AST):
     code.
     """
 
-    def __init__(self, begin: _Tuple[int, int], end: _Tuple[int, int]):
+    def __init__(self, begin: Tuple[int, int], end: Tuple[int, int]):
         self.begin = begin
         self.end = end
 
@@ -81,33 +75,44 @@ class Statement(HasSource):
 class Expression(HasSource):
     pass
 
-# --- Special Constructs
+# --- Special constructs
 
-class IdentifierDef(HasSource):  # an identifier with source info
+class IdentifierDef(HasSource):
+    """
+    An identifier with source info. Typically this is used to indicate
+    this name is defined here (e.g. `VarDef` uses this).
+    """
+
     def __init__(self, name: str, begin, end):
         super().__init__(begin, end)
         self.name = name
 
-class Module(AST):  # a module
-    def __init__(self, body: _List[Statement]):
+class Module(AST):
+    """A module -- toplevel node."""
+
+    def __init__(self, body: List[Statement]):
         self.body = body
 
 class FormalParam(AST):
     def __init__(self, name: IdentifierDef, valpassing: "ValuePassing",
-                 type_: _Optional["TypeSpec"], default: _Optional[Expression]):
+                 type_: Optional["TypeSpec"], default: Optional[Expression]):
         self.name = name
         self.valpassing = valpassing
         self.type = type_
         self.default = default
 
-class CallTable(HasSource):  # call table
-    def __init__(self, args: _List[Expression],
-                 keywords: _Dict[str, Expression], begin, end):
+class CallTable(HasSource):
+    """A collection of arguments when calling a function."""
+
+    def __init__(self, args: List[Expression],
+                 keywords: Dict[str, Expression], begin, end):
         super().__init__(begin, end)
         self.args = args
         self.keywords = keywords
 
-class TypeSpec(AST):  # specify type of value `int`
+class TypeSpec(AST):
+    """Wraps an expression to indicate it is used as a type."""
+
     def __init__(self, content: Expression):
         self.content = content
 
@@ -116,24 +121,24 @@ class ReturnSpec(AST):
         self.type = type_
         self.valpassing = valpassing
 
-class FormattedStr(AST):  # a literal string with ${formatted exprs}
-    def __init__(self, content: _List[_Union[Expression, str]]):
+class FormattedStr(AST):
+    """A literal string with formatted expressions like ${this}."""
+
+    def __init__(self, content: List[Union[Expression, str]]):
         self.content = content
 
 class ModuleMeta(HasSource):
-    """Specifies a module."""
+    """A name of the module/package like "math" or "foo.bar"."""
 
     _fields_ignore = frozenset(("unparse",))
 
-    def __init__(self, path: _Iterable[str], begin, end):
+    def __init__(self, path: Iterable[str], begin, end):
         super().__init__(begin, end)
         self.path = list(path)
         assert self.path
 
     def unparse(self) -> str:
-        """
-        Return a normalized string that represents this module meta.
-        """
+        """Return the normalized module name."""
         return ".".join(self.path)
 
 # --- Enumeration
@@ -204,35 +209,45 @@ class PassConst(ValuePassing):
 
 # --- Statements (and their relevant constructs)
 
-class ExprStatement(Statement):  # a bare expression used as a statement
+class ExprStatement(Statement):
+    """A statement that contains just an unused expression."""
+
     def __init__(self, value: Expression):
         super().__init__(value.begin, value.end)
         self.value = value
 
-class Pass(Statement):  # does nothing
+class Pass(Statement):
+    """No-op. Corresponds to the "pass" statement."""
+
     pass
 
-class If(Statement):  # if statement
+class If(Statement):
     def __init__(
         self, condition: Expression,
-        body: _List[Statement], else_body: _List[Statement], begin, end
+        body: List[Statement], else_body: List[Statement], begin, end
     ):
         super().__init__(begin, end)
         self.condition = condition
         self.body = body
         self.else_body = else_body
 
-class While(Statement):  # while statement
+class While(Statement):
     def __init__(self, condition: Expression,
-                 body: _List[Statement], begin, end):
+                 body: List[Statement], begin, end):
         super().__init__(begin, end)
         self.condition = condition
         self.body = body
 
 class FuncData(AST):
+    """
+    A function definition that only contains information about the
+    function itself, and not the name bound to the function (like
+    `FuncDef`).
+    """
+
     def __init__(
-        self, qualifier: FuncQualifier, params: _List[FormalParam],
-        body: _List[Statement], returns: _Optional[ReturnSpec]
+        self, qualifier: FuncQualifier, params: List[FormalParam],
+        body: List[Statement], returns: Optional[ReturnSpec]
     ):
         self.qualifier = qualifier
         self.params = params
@@ -246,7 +261,7 @@ class FuncData(AST):
                 assert (returns is None
                         or not isinstance(returns.valpassing, PassConst))
 
-class FuncDef(Statement):  # function definition
+class FuncDef(Statement):
     def __init__(self, name: IdentifierDef, data: FuncData, begin, end):
         super().__init__(begin, end)
         self.name = name
@@ -257,20 +272,20 @@ class SimpleInterfacePath(HasSource):
         super().__init__(begin, end)
         self.value = value
 
-class InterfaceDef(Statement):  # define an interface
-    def __init__(self, path: _Union[SimpleInterfacePath, "StrLiteral"],
-                 body: _List[Statement], begin, end):
+class InterfaceDef(Statement):
+    def __init__(self, path: Union[SimpleInterfacePath, "StrLiteral"],
+                 body: List[Statement], begin, end):
         super().__init__(begin, end)
         self.path = path
         self.body = body
 
-class EntityField(HasSource):  # entity field definition
+class EntityField(HasSource):
     def __init__(self, name: IdentifierDef, type_: TypeSpec, begin, end):
         super().__init__(begin, end)
         self.name = name
         self.type = type_
 
-class EntityMethod(HasSource):  # entity method definition
+class EntityMethod(HasSource):
     def __init__(self, content: FuncDef,
                  qualifier: MethodQualifier, begin, end):
         super().__init__(begin, end)
@@ -279,7 +294,9 @@ class EntityMethod(HasSource):  # entity method definition
         assert (content.data.qualifier is not FuncQualifier.const
                 or qualifier is MethodQualifier.static)
 
-class NewMethod(HasSource):  # new method definition
+class NewMethod(HasSource):
+    """The "new" method in an entity template."""
+
     def __init__(self, data: FuncData, new_begin, new_end, begin, end):
         super().__init__(begin, end)
         self.data = data
@@ -288,11 +305,11 @@ class NewMethod(HasSource):  # new method definition
         self.new_end = new_end
         assert data.qualifier is not FuncQualifier.const
 
-class EntityTemplateDef(Statement):  # entity statement
+class EntityTemplateDef(Statement):
     def __init__(
-        self, name: IdentifierDef, parents: _List[Expression],
-        fields: _List[EntityField], methods: _List[EntityMethod],
-        new_method: _Optional[NewMethod],
+        self, name: IdentifierDef, parents: List[Expression],
+        fields: List[EntityField], methods: List[EntityMethod],
+        new_method: Optional[NewMethod],
         begin, end
     ):
         super().__init__(begin, end)
@@ -302,49 +319,57 @@ class EntityTemplateDef(Statement):  # entity statement
         self.methods = methods
         self.new_method = new_method
 
-class VarDef(Statement):  # x: y [= z] variable declaration
+class VarDef(Statement):
+    """Variable definition using ":" and "="."""
+
     def __init__(self, target: IdentifierDef, type_: TypeSpec,
-                 value: _Optional[Expression], begin, end):
+                 value: Optional[Expression], begin, end):
         super().__init__(begin, end)
         self.target = target
         self.type = type_
         self.value = value
 
-class AutoVarDef(Statement):  # := short variable declaration
+class AutoVarDef(Statement):
+    """Variable definition using ":=" (inferred type)."""
+
     def __init__(self, target: IdentifierDef, value: Expression, begin, end):
         super().__init__(begin, end)
         self.target = target
         self.value = value
 
-class Assign(Statement):  # normal assign
+class Assign(Statement):
     def __init__(self, target: Expression, value: Expression, begin, end):
         super().__init__(begin, end)
         self.target = target
         self.value = value
 
 class CompileTimeAssign(AST):
-    def __init__(self, name: IdentifierDef, type_: _Optional[TypeSpec],
+    """Child node of `ConstDef` and `ReferenceDef`."""
+
+    def __init__(self, name: IdentifierDef, type_: Optional[TypeSpec],
                  value: Expression):
         self.name = name
         self.type = type_
         self.value = value
 
-class ConstDef(Statement):  # constant definition
-    def __init__(self, contents: _List[CompileTimeAssign], begin, end):
+class ConstDef(Statement):
+    """A bunch of (not just a single) constant definitions."""
+
+    def __init__(self, contents: List[CompileTimeAssign], begin, end):
         super().__init__(begin, end)
         self.contents = contents
 
-class ReferenceDef(Statement):  # reference definition
+class ReferenceDef(Statement):
     def __init__(self, content: CompileTimeAssign, begin, end):
         super().__init__(begin, end)
         self.content = content
 
-class Command(Statement):  # raw command
+class Command(Statement):
     def __init__(self, content: FormattedStr, begin, end):
         super().__init__(begin, end)
         self.content = content
 
-class AugmentedAssign(Statement):  # augmented assign
+class AugmentedAssign(Statement):
     def __init__(
         self, target: Expression, operator: BinaryOperator,
         value: Expression, begin, end
@@ -354,24 +379,26 @@ class AugmentedAssign(Statement):  # augmented assign
         self.operator = operator
         self.value = value
 
-class Import(Statement):  # import a module
+class Import(Statement):
     def __init__(self, meta: ModuleMeta, alias: IdentifierDef, begin, end):
         super().__init__(begin, end)
         self.meta = meta
         self.name = alias
 
-class ImportItem(AST):  # used by FromImport
+class ImportItem(AST):
+    """Child node of `FromImport`."""
+
     def __init__(self, name: IdentifierDef, alias: IdentifierDef):
         self.name = name
         self.alias = alias
 
-class FromImport(Statement):  # import specific things from a module
-    def __init__(self, meta: ModuleMeta, items: _List[ImportItem], begin, end):
+class FromImport(Statement):
+    def __init__(self, meta: ModuleMeta, items: List[ImportItem], begin, end):
         super().__init__(begin, end)
         self.meta = meta
         self.items = items
 
-class FromImportAll(Statement):  # import everything in a module
+class FromImportAll(Statement):
     def __init__(self, meta: ModuleMeta, star_begin, star_end, begin, end):
         super().__init__(begin, end)
         self.meta = meta
@@ -379,35 +406,39 @@ class FromImportAll(Statement):  # import everything in a module
         self.star_begin = star_begin
         self.star_end = star_end
 
-class For(Statement):  # for-in iteration
+class For(Statement):
     def __init__(self, name: IdentifierDef, expr: Expression,
-                 body: _List[Statement], begin, end):
+                 body: List[Statement], begin, end):
         super().__init__(begin, end)
         self.name = name
         self.expr = expr
         self.body = body
 
-class StructField(HasSource):  # a struct's field
+class StructField(HasSource):
     def __init__(self, name: IdentifierDef, type_: TypeSpec, begin, end):
         super().__init__(begin, end)
         self.name = name
         self.type = type_
 
-class StructDef(Statement):  # struct definition
-    def __init__(self, name: IdentifierDef, bases: _List[Expression],
-                 fields: _List[StructField], begin, end):
+class StructDef(Statement):
+    def __init__(self, name: IdentifierDef, bases: List[Expression],
+                 fields: List[StructField], begin, end):
         super().__init__(begin, end)
         self.name = name
         self.bases = bases
         self.fields = fields
 
-class Return(Statement):  # return xxx
-    def __init__(self, value: _Optional[Expression], begin, end):
+class Return(Statement):
+    def __init__(self, value: Optional[Expression], begin, end):
         super().__init__(begin, end)
         self.value = value
 
-class NewCall(Statement):  # Template.new() or new()
-    def __init__(self, primary: _Optional[Expression],
+class NewCall(Statement):
+    """
+    "Template.new()" or "new()" call inside a "new" entity method.
+    """
+
+    def __init__(self, primary: Optional[Expression],
                  call_table: CallTable, begin, end):
         super().__init__(begin, end)
         self.primary = primary
@@ -415,45 +446,49 @@ class NewCall(Statement):  # Template.new() or new()
 
 # --- Expressions
 
-class IntLiteral(Expression):  # integer literal like 10
+class IntLiteral(Expression):
     def __init__(self, value: int, begin, end):
         super().__init__(begin, end)
         self.value = value
 
-class BoolLiteral(Expression):  # True, False
+class BoolLiteral(Expression):
     def __init__(self, value: bool, begin, end):
         super().__init__(begin, end)
         self.value = value
 
-class NoneLiteral(Expression):  # None
+class NoneLiteral(Expression):
     pass
 
-class FloatLiteral(Expression):  # float literals like 1.2
+class FloatLiteral(Expression):
     def __init__(self, value: float, begin, end):
         super().__init__(begin, end)
         self.value = value
 
-class StrLiteral(Expression):  # a string literal
+class StrLiteral(Expression):
     def __init__(self, content: FormattedStr, begin, end):
         super().__init__(begin, end)
         self.content = content
 
-class Self(Expression):  # "self" keyword
+class Self(Expression):
+    """The "self" keyword."""
+
     pass
 
-class Identifier(Expression):  # an identifier
+class Identifier(Expression):
+    """A reference to an identifier."""
+
     def __init__(self, name: str, begin, end):
         super().__init__(begin, end)
         self.name = name
 
-class UnaryOp(Expression):  # +x, -x, not x
+class UnaryOp(Expression):
     def __init__(self, operator: UnaryOperator,
                  operand: Expression, begin, end):
         super().__init__(begin, end)
         self.operator = operator
         self.operand = operand
 
-class BinOp(Expression):  # an expr with binary operator (+, %, etc)
+class BinOp(Expression):
     def __init__(self, left: Expression, operator: BinaryOperator,
                  right: Expression, begin, end):
         super().__init__(begin, end)
@@ -461,57 +496,61 @@ class BinOp(Expression):  # an expr with binary operator (+, %, etc)
         self.operator = operator
         self.right = right
 
-class Call(Expression):  # call an expression
+class Call(Expression):
     def __init__(self, func: Expression, table: CallTable, begin, end):
         super().__init__(begin, end)
         self.func = func
         self.table = table
 
-class Attribute(Expression):  # attr of an expression
+class Attribute(Expression):
     def __init__(self, object_: Expression, attr: str, begin, end):
         super().__init__(begin, end)
         self.object = object_
         self.attr = attr
 
-class Subscript(Expression):  # value[v1, v2]
+class Subscript(Expression):
     def __init__(self, object_: Expression,
-                 subscripts: _List[Expression], begin, end):
+                 subscripts: List[Expression], begin, end):
         super().__init__(begin, end)
         self.object = object_
         self.subscripts = subscripts
 
-class CompareOp(Expression):  # ==, !=, >, <, >=, <=
+class CompareOp(Expression):
     def __init__(
-        self, left: Expression, operators: _List[ComparisonOperator],
-        operands: _List[Expression], begin, end
+        self, left: Expression, operators: List[ComparisonOperator],
+        operands: List[Expression], begin, end
     ):
         super().__init__(begin, end)
         self.left = left
         self.operators = operators
         self.operands = operands
 
-class BoolOp(Expression):  # and, or
+class BoolOp(Expression):
+    """The "and" and "or" operators."""
+
     def __init__(self, operator: BooleanOperator,
-                 operands: _List[Expression], begin, end):
+                 operands: List[Expression], begin, end):
         super().__init__(begin, end)
         self.operator = operator
         self.operands = operands
 
-class ListDef(Expression):  # a literal compile time list
-    def __init__(self, items: _List[Expression], begin, end):
+class ListDef(Expression):
+    """A literal compile time list."""
+
+    def __init__(self, items: List[Expression], begin, end):
         super().__init__(begin, end)
         self.items = items
 
-class MapDef(Expression):  # a literal compile time map
-    def __init__(self, keys: _List[Expression],
-                 values: _List[Expression], begin, end):
+class MapDef(Expression):
+    """A literal compile time map."""
+
+    def __init__(self, keys: List[Expression],
+                 values: List[Expression], begin, end):
         super().__init__(begin, end)
         self.keys = keys
         self.values = values
 
-#############
-### UTILS ###
-#############
+# --- AST-related utilities
 
 class ASTVisitor:
     """
@@ -521,7 +560,7 @@ class ASTVisitor:
     defined, `generic_visit` will be used.
     """
 
-    def visit(self, node: AST, **kwargs) -> _Any:
+    def visit(self, node: AST, **kwargs) -> Any:
         visitor = getattr(
             self,
             'visit_%s' % node.__class__.__name__,
@@ -567,7 +606,7 @@ class ASTVisualizer:
         self.indent = indent
 
     def _convert(self, value, indent: int) -> str:
-        res: _List[str] = []
+        res: List[str] = []
         indent_next = indent + self.indent
         if isinstance(value, AST):
             if isinstance(value, HasSource):
