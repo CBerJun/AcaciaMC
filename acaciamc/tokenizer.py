@@ -67,7 +67,7 @@ FONTS = {
 class TokenType(enum.Enum):
     """
     Token types.
-    Value convension:
+    Value convention:
     1. If length of value is 1 or 2 and the first character is not an
     identifier character ([a-zA-Z0-9_]) or anything special (like '#'),
     then a token is registered automatically. (e.g. '=' or '->')
@@ -312,7 +312,7 @@ class Tokenizer:
         return self.current_lineno, self.current_col
 
     @property
-    def currnet_location(self) -> SourceLocation:
+    def current_location(self) -> SourceLocation:
         return self.file_entry.get_location(self.current_pos)
 
     def error(self, diag_id: str, pos: Optional[Tuple[int, int]] = None,
@@ -472,7 +472,7 @@ class Tokenizer:
             except ValueError:
                 # We've run out of possibilities.
                 self.error_range(
-                    'invalid-char', self.currnet_location.to_range(1),
+                    'invalid-char', self.current_location.to_range(1),
                     args={'char': STStr(self.current_char)}
                 )
             else:
@@ -484,7 +484,7 @@ class Tokenizer:
                     if not self.bracket_stack:
                         self.error_range(
                             'unmatched-bracket',
-                            self.currnet_location.to_range(1),
+                            self.current_location.to_range(1),
                             args={'char': STStr(self.current_char)}
                         )
                     expect = RB2LB[token_type]
@@ -493,7 +493,7 @@ class Tokenizer:
                     if got is not expect:
                         self.error_range(
                             'unmatched-bracket-pair',
-                            self.currnet_location.to_range(1),
+                            self.current_location.to_range(1),
                             args={
                                 'open': STStr(got.value),
                                 'close': STStr(token_type.value),
@@ -572,7 +572,7 @@ class Tokenizer:
                 self.error('eof-after-continuation')
             if self.current_char != '\n':
                 self.error_range('char-after-continuation',
-                                 self.currnet_location.to_range(1))
+                                 self.current_location.to_range(1))
             backslash = self.last_line_continued = True
         # Count indent: if this physical line is not a continued line,
         # and (this physical line has content or ends with backslash)
@@ -704,7 +704,7 @@ class Tokenizer:
             if self.current_char.upper() not in valid_chars:
                 self.error_range(
                     "invalid-number-char",
-                    self.currnet_location.to_range(1),
+                    self.current_location.to_range(1),
                     args={"char": STStr(self.current_char),
                           "base": STInt(base)}
                 )
@@ -821,7 +821,7 @@ class Tokenizer:
                     else:
                         diag_id = 'invalid-font'
                     if diag_id is not None:
-                        # An diagnostic occured ('new-font' or
+                        # A diagnostic occurred ('new-font' or
                         # 'invalid-font')
                         # Work out source range of this font specifier
                         # with spaces stripped.
