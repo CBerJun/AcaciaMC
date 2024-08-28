@@ -1,4 +1,4 @@
-"""Abstarct Syntax Tree definitions for Acacia."""
+"""Abstract Syntax Tree definitions for Acacia."""
 
 from typing import (
     Union as _Union, List as _List, Optional as _Optional, Dict as _Dict,
