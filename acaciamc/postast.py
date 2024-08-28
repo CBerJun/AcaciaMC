@@ -56,7 +56,7 @@ class ASTForest:
         parsed. The results are in `self.modules`, which stores the
         annotated AST of all the modules loaded. The main file's AST is
         accessible as the "__main__" module. `self.succeeded` tells if
-        the compilation succeeded (i.e. no ERROR diagnostic occured).
+        the compilation succeeded (i.e. no ERROR diagnostic occurred).
         """
         self.reader = reader
         self.diag_mgr = diag_mgr
@@ -75,7 +75,7 @@ class ASTForest:
         with self.diag_mgr.capture_errors():
             self.process(main_file, "__main__")
         # If `process` failed to add "__main__" to `self.modules` then
-        # we know that an error has occured.
+        # we know that an error has occurred.
         self.succeeded = "__main__" in self.modules
 
     def process(self, file_entry: "FileEntry", module_name: str) -> None:
