@@ -178,11 +178,20 @@ class Symbol:
     `Identifier` node will be resolved to a `Symbol`.
     """
 
-    def __init__(self, name: str, pos1: Tuple[int, int],
-                 pos2: Tuple[int, int]):
-        self.name = name
+    def __init__(self, pos1: Tuple[int, int], pos2: Tuple[int, int]):
         self.pos1 = pos1
         self.pos2 = pos2
+
+class GlobalSymbol(Symbol):
+    """
+    Module-level symbols. Their names are important because they might
+    become attributes of a module object.
+    """
+
+    def __init__(self, name: str, pos1: Tuple[int, int],
+                 pos2: Tuple[int, int]):
+        super().__init__(pos1, pos2)
+        self.name = name
 
 class Scope:
     """Container of `Symbol`s; represents a scope."""
@@ -224,6 +233,10 @@ class Scope:
                 return None
             scope = scope.outer
 
+    def is_toplevel(self) -> bool:
+        """Return if this scope is the module toplevel."""
+        return self.outer is None
+
 class PostASTVisitor(ast.ASTVisitor):
     """
     Implements the "post AST" pass of compilation process.
@@ -234,11 +247,10 @@ class PostASTVisitor(ast.ASTVisitor):
 
     This class puts `annotation`s on these AST nodes:
     * `Identifier`: A `Symbol` that this node references.
-    * `ImportItem`: A `Symbol` that this import item imports.
-    * `FromImportAll`: A `List[Tuple[Symbol, Symbol]]`. Each element
+    * `FromImportAll`: A `List[Tuple[Symbol, str]]`. Each element
       represents an item that gets imported. First `Symbol` is the
-      symbol that gets defined in this file; second is the symbol that
-      represents the imported item in the file that gets imported.
+      symbol that gets defined in this file; second is the name of the
+      imported item.
     * `IdentifierDef`: An `Optional[Symbol]`. Currently this is None iff
       one of these is true:
       - This node is the `name` child of an `ImportItem`.
@@ -302,7 +314,10 @@ class PostASTVisitor(ast.ASTVisitor):
                 "name-redefinition-note", prev_id_range, args={}
             ))
             raise err
-        new_symbol = Symbol(name, pos1, pos2)
+        if self.scope.is_toplevel():
+            new_symbol = GlobalSymbol(name, pos1, pos2)
+        else:
+            new_symbol = Symbol(pos1, pos2)
         self.scope.add_symbol(name, new_symbol)
         return new_symbol
 
@@ -404,15 +419,13 @@ class PostASTVisitor(ast.ASTVisitor):
         module = self.visit_ModuleMeta(node.meta)
         for item in node.items:
             name: str = item.name.name
-            symbol = module.namespace.lookup_symbol(name)
-            if symbol is None:
+            if module.namespace.lookup_symbol(name) is None:
                 raise DiagnosticError(Diagnostic(
                     "cannot-import-name",
                     self.file_entry.get_range(item.name.begin, item.name.end),
                     args={"name": STStr(name),
                           "module": STStr(node.meta.unparse())}
                 ))
-            item.annotation = symbol
             self.handle_id_def(item.alias)
 
     def visit_FromImportAll(self, node: ast.FromImportAll):
@@ -427,11 +440,10 @@ class PostASTVisitor(ast.ASTVisitor):
                 # Use the position of "*" (in "from x import *") as
                 # source range of all the aliases:
                 self.define_id(name, node.star_begin, node.star_end),
-                # The symbol which defines the imported item in the file
-                # that is imported:
-                symbol
+                # The name that gets imported:
+                name
             )
-            for name, symbol in namespace.names.items()
+            for name in namespace.names
             # Do not import names starting with an underscore:
             if not name.startswith("_")
         ]
