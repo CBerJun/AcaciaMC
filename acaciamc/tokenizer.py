@@ -5,9 +5,8 @@ from typing import (
     Generator, Mapping, TYPE_CHECKING
 )
 from contextlib import contextmanager
-from string import ascii_letters, digits
+from string import ascii_letters, digits, hexdigits
 import enum
-import string
 
 from acaciamc.reader import SourceRange, SourceLocation
 from acaciamc.utils.str_template import STInt, STStr, STArgument
@@ -186,7 +185,7 @@ def is_idstart(c: str) -> bool:
 
 def is_idcontinue(c: str) -> bool:
     """Return if given character is valid in an Acacia identifier."""
-    return is_idstart(c) or c in string.digits
+    return is_idstart(c) or c in digits
 
 class Token(NamedTuple):
     """
@@ -424,7 +423,7 @@ class Tokenizer:
                 continue
             ## special tokens
             ok = True
-            if self.current_char in string.digits:
+            if self.current_char in digits:
                 res.append(self.handle_number())
             elif is_idstart(self.current_char):
                 id_token = self.handle_name()
@@ -687,7 +686,7 @@ class Tokenizer:
 
     @staticmethod
     def _isdecimal(char: Union[str, None]):
-        return char is not None and char in string.digits
+        return char is not None and char in digits
 
     def _handle_integer(self, base: int) -> str:
         """
@@ -885,8 +884,10 @@ class Tokenizer:
             code = []
             length = UNICODE_ESCAPES[second]
             for _ in range(length):
-                if (self.current_char is None
-                        or self.current_char not in string.hexdigits):
+                if (
+                    self.current_char is None
+                    or self.current_char not in hexdigits
+                ):
                     _err()
                 code.append(self.current_char)
                 self.forward()
