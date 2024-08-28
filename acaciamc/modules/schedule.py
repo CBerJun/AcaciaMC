@@ -44,21 +44,24 @@ result:
 
 from typing import TYPE_CHECKING
 
-from acaciamc.objects import *
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.ast import Operator
-from acaciamc.tools import axe, resultlib, method_of
 import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.ast import Operator
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.objects import *
+from acaciamc.tools import axe, resultlib, method_of
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
 
+
 class TaskDataType(DefaultDataType):
     name = "Task"
 
+
 ctdt_task = CTDataType("Task")
+
 
 class TaskType(Type):
     """
@@ -66,6 +69,7 @@ class TaskType(Type):
     A task manager that calls the given function after a period of time.
     The `args` and `kwds` are passed to the function.
     """
+
     def do_init(self):
         @method_of(self, "__new__")
         @axe.chop
@@ -81,6 +85,7 @@ class TaskType(Type):
 
     def cdatatype_hook(self):
         return ctdt_task
+
 
 class Task(ConstExprCombined):
     cdata_type = ctdt_task
@@ -110,11 +115,13 @@ class Task(ConstExprCombined):
             """.after(delay: int): Run the target after `delay`"""
             commands = delay.export(self.timer, compiler)
             return resultlib.commands(commands)
+
         @method_of(self, "cancel")
         @axe.chop
         def _cancel(compiler):
             """.cancel(): Cancel the schedule created by `after`."""
             return resultlib.commands(self.timer_reset())
+
         @method_of(self, "has_schedule")
         @axe.chop
         def _has_schedule(compiler):
@@ -126,6 +133,7 @@ class Task(ConstExprCombined):
             return self.timer.compare(
                 Operator.greater_equal, IntLiteral(0), compiler
             )
+
         @method_of(self, "on_area_loaded")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -141,6 +149,7 @@ class Task(ConstExprCombined):
                     self.target_file, "on_area_loaded add ~ ~ ~ %s" % offset
                 ),
             )])
+
         @method_of(self, "on_circle_loaded")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -158,6 +167,7 @@ class Task(ConstExprCombined):
                     "on_area_loaded add circle ~ ~ ~ %d" % radius
                 )
             )])
+
         @method_of(self, "on_tickingarea")
         @axe.chop
         @axe.arg("name", axe.LiteralString())
@@ -172,6 +182,7 @@ class Task(ConstExprCombined):
                     "on_area_loaded add tickingarea %s" % name
                 ),
             ])
+
         self.attribute_table.set("_timer", self.timer)
         # Write tick.mcfunction
         compiler.file_tick.write_debug("# schedule.Task")
@@ -189,6 +200,7 @@ class Task(ConstExprCombined):
 
     def timer_reset(self) -> CMDLIST_T:
         return [cmds.ScbSetConst(self.timer.slot, -1)]
+
 
 @axe.chop
 @axe.arg("target", axe.Callable())
@@ -228,6 +240,7 @@ def register_loop(compiler: "Compiler", target: AcaciaCallable,
     compiler.file_tick.write(cmds.ScbRemoveConst(timer.slot, 1))
     # Result
     return resultlib.commands(init_cmds)
+
 
 def acacia_build(compiler):
     return {

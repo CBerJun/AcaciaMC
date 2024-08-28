@@ -3,6 +3,7 @@
 # Add `acaciamc` directory to path
 import os
 import sys
+
 sys.path.append(os.path.realpath(
     os.path.join(__file__, os.pardir, os.pardir)
 ))
@@ -17,6 +18,7 @@ from acaciamc.error import *
 from acaciamc.ast import AST
 
 MC_VERSION = (1, 19, 80)
+
 
 class ASTVisualizer:
     _fields_cache: Dict[PyType[AST], List[str]] = {}
@@ -34,10 +36,10 @@ class ASTVisualizer:
             cls._fields_cache[tp] = [
                 name for name in dir(node)
                 if (
-                    not name.startswith('_')
-                    and name != 'lineno'
-                    and name != 'col'
-                    and name != 'show_debug'
+                        not name.startswith('_')
+                        and name != 'lineno'
+                        and name != 'col'
+                        and name != 'show_debug'
                 )
             ]
         return cls._fields_cache[tp]
@@ -80,6 +82,7 @@ class ASTVisualizer:
     def get_string(self) -> str:
         return self._convert(self.node)
 
+
 def test_tokenize(src: str):
     print('===TOKENIZER===')
     tk = Tokenizer(io.StringIO(src), MC_VERSION)
@@ -89,15 +92,18 @@ def test_tokenize(src: str):
         if token.type is TokenType.end_marker:
             break
 
+
 def test_parser(src: str):
     print('===PARSER===')
     parser = Parser(Tokenizer(io.StringIO(src), MC_VERSION))
     visualizer = ASTVisualizer(parser.module())
     print(visualizer.get_string())
 
+
 def test(src: str):
     test_tokenize(src)
     test_parser(src)
+
 
 definition_test = '''
 interface x:

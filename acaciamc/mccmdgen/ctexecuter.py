@@ -1,7 +1,7 @@
 __all__ = ['CTExecuter']
 
-from typing import TYPE_CHECKING, Optional, List, Dict
 from contextlib import contextmanager
+from typing import TYPE_CHECKING, Optional, List, Dict
 
 from acaciamc.ast import *
 from acaciamc.error import Error, ErrorType, SourceLocation
@@ -29,6 +29,7 @@ RBINOPS = {
     Operator.divide: 'crdiv',
     Operator.mod: 'crmod'
 }
+
 
 class CTExecuter(ASTVisitor):
     def __init__(self, scope: SymbolTable, generator: "Generator",
@@ -324,6 +325,7 @@ class CTExecuter(ASTVisitor):
                     got=condition.cdata_type.name
                 )
             return condition.value
+
         while _while_cond():
             for stmt in node.body:
                 self.visit(stmt)

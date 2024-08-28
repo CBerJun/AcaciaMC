@@ -4,6 +4,7 @@ NOTE Python package `mido` is required.
 """
 
 from typing import Dict, TYPE_CHECKING
+
 try:
     from itertools import pairwise
 except ImportError:
@@ -178,10 +179,13 @@ ID2INSTRUMENT = {
     127: 'note.snare'
 }
 
+
 class MusicDataType(DefaultDataType):
     name = "Music"
 
+
 ctdt_music = CTDataType("music")
+
 
 class MusicType(Type):
     """
@@ -216,6 +220,7 @@ class MusicType(Type):
     instrument (0-127). The default mapping is in `ID2INSTRUMENT`. An
     example: {127: "note.hat"}.
     """
+
     def do_init(self):
         @cmethod_of(self, "__new__")
         @axe.chop
@@ -243,7 +248,7 @@ class MusicType(Type):
                 raise Error(
                     ErrorType.IO,
                     message=localize("modules.music.doinit.midiparser")
-                        % err.strerror
+                            % err.strerror
                 )
             if speed <= 0:
                 raise axe.ArgumentError(
@@ -274,6 +279,7 @@ class MusicType(Type):
     def cdatatype_hook(self):
         return ctdt_music
 
+
 class Music(ConstExprCombined):
     # NOTE We are using `MT` to refer to 1 MIDI tick and `GT` for 1 MC game
     # tick.
@@ -296,7 +302,7 @@ class Music(ConstExprCombined):
             raise Error(
                 ErrorType.ANY,
                 message=localize("modules.music.music.init.unsupported")
-                    % midi.type
+                        % midi.type
             )
         # Speed settings
         self.bpm = 120
@@ -374,6 +380,7 @@ class Music(ConstExprCombined):
         # Create attributes
         self.attribute_table.set("_timer", self.timer)
         self.attribute_table.set("LENGTH", IntLiteral(GT_LEN))
+
         @method_of(self, "play")
         @axe.chop
         @axe.arg("timer", IntDataType, default=IntLiteral(0))
@@ -387,6 +394,7 @@ class Music(ConstExprCombined):
             """
             commands = timer.export(self.timer, compiler)
             return resultlib.commands(commands)
+
         @method_of(self, "stop")
         @axe.chop
         def _stop(compiler):
@@ -471,6 +479,7 @@ class Music(ConstExprCombined):
             )
         ))
         self.cur_chunk_size += 1
+
 
 def acacia_build(compiler: "Compiler"):
     global mido

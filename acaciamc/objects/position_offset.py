@@ -7,25 +7,29 @@ For instance, "~ ~5 ~" is a position offset, while
 
 __all__ = ["PosOffsetType", "PosOffsetDataType", "PosOffset", "CoordinateType"]
 
-from typing import List
 from enum import Enum
+from typing import List
 
 from acaciamc.error import *
-from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
-from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.expr import *
+from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
 from .types import Type
+
 
 class CoordinateType(Enum):
     ABSOLUTE = ""
     RELATIVE = "~"
     LOCAL = "^"
 
+
 class PosOffsetDataType(DefaultDataType):
     name = "Offset"
 
+
 ctdt_posoffset = CTDataType("Offset")
+
 
 class PosOffsetType(Type):
     def do_init(self):
@@ -68,6 +72,7 @@ class PosOffsetType(Type):
             res._set(CoordinateType.RELATIVE, x, y, z)
             res._set(CoordinateType.ABSOLUTE, x_abs, y_abs, z_abs)
             return res
+
         @cmethod_of(self, "local")
         @axe.chop
         @axe.arg("left", axe.LiteralFloat(), default=0.0)
@@ -85,6 +90,7 @@ class PosOffsetType(Type):
     def cdatatype_hook(self):
         return ctdt_posoffset
 
+
 class PosOffset(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_posoffset
 
@@ -93,6 +99,7 @@ class PosOffset(ConstExprCombined, ImmutableMixin):
         self.values: List[float] = [0.0, 0.0, 0.0]
         self.value_types: List[CoordinateType] = \
             [CoordinateType.RELATIVE for _ in range(3)]
+
         @cmethod_of(self, "abs")
         @axe.chop
         @axe.arg("x", axe.Nullable(axe.PosXZ()), default=None)
@@ -102,6 +109,7 @@ class PosOffset(ConstExprCombined, ImmutableMixin):
         def _abs(self: PosOffset, compiler, x, y, z):
             self._set(CoordinateType.ABSOLUTE, x, y, z)
             return self
+
         @cmethod_of(self, "offset")
         @axe.chop
         @axe.arg("x", axe.Nullable(axe.LiteralFloat()), default=None)
@@ -111,6 +119,7 @@ class PosOffset(ConstExprCombined, ImmutableMixin):
         def _offset(self: PosOffset, compiler, x, y, z):
             self._set(CoordinateType.RELATIVE, x, y, z)
             return self
+
         """
         .offset(x, y, z) .abs(x, y, z)
         "x", "y" and "z" are either "None" or int literal or float.

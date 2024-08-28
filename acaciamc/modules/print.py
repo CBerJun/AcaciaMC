@@ -1,27 +1,29 @@
 """print - String formatting and printing module."""
 
-from typing import List, Optional, Tuple, TYPE_CHECKING
 from string import digits as DIGITS
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
-from acaciamc.objects import *
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.mccmdgen.utils import InvalidOpError
-from acaciamc.error import *
-from acaciamc.tools import axe, resultlib
-from acaciamc.constants import COLORS, COLORS_NEW
-from acaciamc.localization import localize
 import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.constants import COLORS, COLORS_NEW
+from acaciamc.error import *
+from acaciamc.localization import localize
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.utils import InvalidOpError
+from acaciamc.objects import *
+from acaciamc.tools import axe, resultlib
 
 if TYPE_CHECKING:
     from acaciamc.compiler import Compiler
     from acaciamc.mccmdgen.mcselector import MCSelector
 
+
 class ArgFString(axe.Multityped):
     """Accepts an fstring as argument. A string is also accepted and
     converted to an fstring.
     """
+
     def __init__(self):
         super().__init__((StringDataType, FStringDataType))
 
@@ -34,9 +36,11 @@ class ArgFString(axe.Multityped):
             fstr = origin
         return fstr
 
+
 class _FStrError(Exception):
     def __str__(self):
         return self.args[0]
+
 
 class _FStrParser:
     def __init__(self, pattern: str, args, keywords, compiler: "Compiler"):
@@ -136,10 +140,13 @@ class _FStrParser:
             self.add_expr(expr)
         return self.dependencies, self.rawtext
 
+
 class FStringDataType(DefaultDataType):
     name = 'fstring'
 
+
 ctdt_fstring = CTDataType("fstring")
+
 
 class FString(ConstExprCombined):
     """A formatted string in JSON format."""
@@ -182,6 +189,7 @@ class FString(ConstExprCombined):
             raise InvalidOpError
         return res
 
+
 ### Functions ###
 
 ## For creating strings
@@ -212,6 +220,7 @@ def _format(compiler, pattern: str, args, kwds):
         raise Error(ErrorType.ANY, message=str(err))
     return FString(dependencies, rawtext)
 
+
 @axe.chop
 @axe.arg("key", axe.LiteralString())
 def _translate(compiler, key: str):
@@ -221,6 +230,7 @@ def _translate(compiler, key: str):
     """
     return FString([], [cmds.RawtextTranslate(key)])
 
+
 class _FontComponent(cmds.RawtextText):
     """A utility component used by `with_font`."""
 
@@ -228,7 +238,9 @@ class _FontComponent(cmds.RawtextText):
         super().__init__(text)
         self.label = label
 
+
 COLOR_DEFAULT = "default"
+
 
 @axe.chop
 @axe.arg("text", ArgFString())
@@ -302,6 +314,7 @@ def _with_font(compiler: "Compiler", text: FString, color: str,
         res.rawtext.insert(start_i, _FontComponent(fmt_code, "start"))
     return res
 
+
 ## For printing
 
 @axe.chop
@@ -320,6 +333,7 @@ def _tell(compiler, text: FString, target: Optional["MCSelector"]):
     commands.append(cmds.RawtextOutput(f"tellraw {target_str}", text.rawtext))
     return resultlib.commands(commands)
 
+
 # Title modes
 _TITLE = 'title'
 _SUBTITLE = 'subtitle'
@@ -329,6 +343,7 @@ _FADE_IN = 10
 _STAY_TIME = 70
 _FADE_OUT = 20
 _DEF_TITLE_CONFIG = (_FADE_IN, _STAY_TIME, _FADE_OUT)
+
 
 @axe.chop
 @axe.arg("text", ArgFString())
@@ -374,6 +389,7 @@ def _title(compiler, text: FString, target: Optional["MCSelector"], mode: str,
     ## return
     return resultlib.commands(commands)
 
+
 @axe.chop
 @axe.arg("target", axe.PlayerSelector(), default=None)
 def _title_clear(compiler, target: Optional["MCSelector"]):
@@ -385,6 +401,7 @@ def _title_clear(compiler, target: Optional["MCSelector"]):
     else:
         target_str = target.to_str()
     return resultlib.commands([cmds.TitlerawClear(target_str)])
+
 
 def acacia_build(compiler: "Compiler"):
     return {

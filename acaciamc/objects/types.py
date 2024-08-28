@@ -4,21 +4,24 @@ e.g. "int" is a "type".
 
 __all__ = ['TypeDataType', 'Type']
 
-from typing import TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING
 
 from acaciamc.error import *
-from acaciamc.mccmdgen.expr import *
-from acaciamc.mccmdgen.datatype import DefaultDataType
 from acaciamc.mccmdgen.ctexpr import CTDataType, CTCallable
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
 
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.datatype import DataType
 
+
 class TypeDataType(DefaultDataType):
     name = "type"
 
+
 ctdt_type = CTDataType("type")
+
 
 class Type(ConstExprCombined, AcaciaCallable, CTCallable, metaclass=ABCMeta):
     """Base class for type of a variable that represents a type.

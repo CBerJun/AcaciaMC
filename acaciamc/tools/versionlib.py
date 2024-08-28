@@ -10,8 +10,8 @@ __all__ = [
     "VERSION_T"
 ]
 
-from typing import Callable, Tuple, Optional, TYPE_CHECKING
 from abc import ABCMeta, abstractmethod
+from typing import Callable, Tuple, Optional, TYPE_CHECKING
 
 from acaciamc.error import Error as AcaciaError, ErrorType
 from acaciamc.localization import localize
@@ -21,8 +21,10 @@ if TYPE_CHECKING:
 
 VERSION_T = Tuple[int, ...]
 
+
 def format_version(version: VERSION_T):
     return ".".join(map(str, version))
+
 
 class VersionRequirement(metaclass=ABCMeta):
     @abstractmethod
@@ -32,6 +34,7 @@ class VersionRequirement(metaclass=ABCMeta):
     @abstractmethod
     def validate(self, version: VERSION_T) -> bool:
         pass
+
 
 class VersionRanged(VersionRequirement):
     def __init__(self, min_: Optional[VERSION_T], max_: Optional[VERSION_T]):
@@ -58,6 +61,7 @@ class VersionRanged(VersionRequirement):
         assert self.max
         return version <= self.max
 
+
 class VersionLower(VersionRequirement):
     def __init__(self, version: VERSION_T) -> None:
         super().__init__()
@@ -69,26 +73,32 @@ class VersionLower(VersionRequirement):
     def validate(self, version: VERSION_T) -> bool:
         return self.version < version
 
+
 def at_least(version: VERSION_T) -> VersionRequirement:
     """Requires >= the given version."""
     return VersionRanged(version, None)
+
 
 def at_most(version: VERSION_T) -> VersionRequirement:
     """Requires <= the given version."""
     return VersionRanged(None, version)
 
+
 def between(min_: VERSION_T, max_: VERSION_T) -> VersionRequirement:
     """Requires between the given versions (inclusive)."""
     return VersionRanged(min_, max_)
+
 
 def older(version: VERSION_T):
     """Requires < the given version."""
     return VersionLower(version)
 
+
 def only(version: VersionRequirement):
     """Return a decorator that makes the decorated binary function only
     available when given version requirement is satisfied.
     """
+
     def _decorator(func: Callable):
         def _decorated(compiler: "Compiler", args, kwds):
             if version.validate(compiler.cfg.mc_version):
@@ -99,14 +109,18 @@ def only(version: VersionRequirement):
                         expected=version.to_str())
             )
             raise AcaciaError(ErrorType.ANY, message=msg)
+
         return _decorated
+
     return _decorator
+
 
 def edu_only(func: Callable):
     """
     Decorator that makes a binary function only available when
     Education Edition features are enabled.
     """
+
     def _decorated(compiler: "Compiler", args, kwds):
         if not compiler.cfg.education_edition:
             raise AcaciaError(
@@ -114,4 +128,5 @@ def edu_only(func: Callable):
                 message=localize("tools.versionlib.eduonly.error")
             )
         return func(compiler, args, kwds)
+
     return _decorated

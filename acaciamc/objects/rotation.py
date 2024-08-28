@@ -9,24 +9,27 @@ __all__ = ["RotType", "RotDataType", "Rotation"]
 
 from typing import List, TYPE_CHECKING
 
-from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
-from acaciamc.constants import DEFAULT_ANCHOR
-from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.mccmdgen.expr import *
 import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.constants import DEFAULT_ANCHOR
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.tools import axe, cmethod_of, ImmutableMixin, transform_immutable
 from . import entity as entity_module
-from .types import Type
 from .functions import BinaryCTFunction
+from .types import Type
 
 if TYPE_CHECKING:
     from .entity import _EntityBase
     from acaciamc.mccmdgen.cmds import _ExecuteSubcmd
 
+
 class RotDataType(DefaultDataType):
     name = "Rot"
 
+
 ctdt_rotation = CTDataType("Rot")
+
 
 class RotType(Type):
     def do_init(self):
@@ -36,6 +39,7 @@ class RotType(Type):
             Rot(entity): rotation of an entity.
             Rot(int-literal, int-literal): absolute rotation
             """
+
             @axe.overload
             @axe.arg("entity", entity_module.EntityDataType)
             def from_entity(cls, compiler, entity: "_EntityBase"):
@@ -54,6 +58,7 @@ class RotType(Type):
                     "rotated", "%s %s" % (vertical, horizontal)
                 ))
                 return inst
+
         @cmethod_of(self, "face_entity")
         @axe.chop
         @axe.arg("target", entity_module.EntityDataType)
@@ -70,6 +75,7 @@ class RotType(Type):
 
     def cdatatype_hook(self):
         return ctdt_rotation
+
 
 class Rotation(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_rotation
@@ -107,4 +113,5 @@ class Rotation(ConstExprCombined, ImmutableMixin):
                     vh.append(type_prefix + str(arg))
             self.context.append(cmds.ExecuteEnv("rotated", " ".join(vh)))
             return self
+
         return _setter

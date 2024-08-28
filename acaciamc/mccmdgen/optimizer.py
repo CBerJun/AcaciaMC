@@ -2,11 +2,12 @@
 
 __all__ = ["Optimizer"]
 
-from typing import Iterable, Dict, Set, List, Tuple
 from abc import ABCMeta, abstractmethod
+from typing import Iterable, Dict, Set, List, Tuple
 
 import acaciamc.mccmdgen.cmds as cmds
 from acaciamc.mccmdgen.utils import unreachable
+
 
 class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
     def optimize(self):
@@ -33,12 +34,14 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                 refs.remove(None)
             ref_map[file] = refs
         visited = set()
+
         def _visit(file: cmds.MCFunctionFile):
             if file in visited:
                 return
             visited.add(file)
             for ref in ref_map[file]:
                 _visit(ref)
+
         for file in self.entry_files():
             _visit(file)
         self.files = list(visited)
@@ -66,7 +69,7 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
         """Expand mcfunctions that only have 1 reference."""
         # Locating optimizable
         todo: Dict[cmds.MCFunctionFile,
-                   Tuple[cmds.MCFunctionFile, int, bool]] = {}
+        Tuple[cmds.MCFunctionFile, int, bool]] = {}
         called: Set[cmds.MCFunctionFile] = set()
         for file in self.files:
             allow_execute = not self.dont_inline_execute_call(file)
@@ -85,15 +88,15 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                     # Not a direct /function call
                     continue
                 passed_test = (
-                    (not subcmds)
-                    or (
-                        # If there is /execute...
-                        # Caller allows inlining calls with execute
-                        allow_execute
-                        # Environments other than if/unless may change
-                        # during execution of commands, so we can't
-                        # inline it.
-                        and (all([
+                        (not subcmds)
+                        or (
+                            # If there is /execute...
+                            # Caller allows inlining calls with execute
+                                allow_execute
+                                # Environments other than if/unless may change
+                                # during execution of commands, so we can't
+                                # inline it.
+                                and (all([
                             isinstance(
                                 subcmd, (
                                     cmds.ExecuteScoreComp,
@@ -103,7 +106,7 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                             )
                             for subcmd in subcmds
                         ]))
-                    )
+                        )
                 )
                 if passed_test or callee.cmd_length() == 1:
                     todo[callee] = (file, i, not passed_test)
@@ -113,6 +116,7 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
         #         callee.get_path(), caller.get_path(), caller_index
         #     ))
         merged: Set[cmds.MCFunctionFile] = set()
+
         def _need_tmp(subcmds, commands: List[cmds.Command]) -> bool:
             slots = set()
             for subcmd in subcmds:
@@ -130,6 +134,7 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                     if command.scb_did_assign(slot):
                         return True
             return False
+
         def _merge(caller: cmds.MCFunctionFile):
             if caller in merged:
                 return
@@ -177,8 +182,9 @@ class Optimizer(cmds.FunctionsManager, metaclass=ABCMeta):
                     "## Function call to %s inlined by optimizer" % fp
                 ))
                 inserts.append(cmds.Comment("## Inline of %s ended" % fp))
-                caller.commands[index : index+1] = inserts
+                caller.commands[index: index + 1] = inserts
                 self.files.remove(callee)
+
         for caller, _, _ in todo.values():
             if caller not in todo:
                 _merge(caller)

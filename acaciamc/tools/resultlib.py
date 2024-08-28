@@ -12,13 +12,16 @@ from acaciamc.mccmdgen.utils import unreachable
 if TYPE_CHECKING:
     from acaciamc.mccmdgen.expr import AcaciaExpr, CMDLIST_T
 
+
 class Result(NamedTuple):
     """Return value of a binary function implementation."""
     value: "AcaciaExpr"
     commands: "CMDLIST_T"
 
+
 def commands(cmds: "CMDLIST_T") -> Result:
     return Result(objects.NoneLiteral(), cmds)
+
 
 def literal(value: Union[bool, int, str, float, None]) -> "AcaciaExpr":
     if isinstance(value, bool):  # `bool` in front of `int`

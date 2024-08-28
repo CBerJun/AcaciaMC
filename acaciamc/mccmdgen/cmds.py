@@ -1,11 +1,12 @@
 """Abstraction of Minecraft commands."""
 
+import json
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 from typing import List, NamedTuple, Optional, Union, Iterable, Callable, Dict
-import json
 
 from acaciamc.constants import TERMINATOR_CHARS
+
 
 def mc_str(s: str) -> str:
     if not s:
@@ -20,17 +21,20 @@ def mc_str(s: str) -> str:
     else:
         return s
 
+
 def mc_selector(s: str) -> str:
     if s.startswith("@"):
         return s
     else:
         return mc_str(s)
 
+
 def mc_wc_selector(s: str) -> str:
     if s == "*":
         return s
     else:
         return mc_selector(s)
+
 
 class ScbSlot(NamedTuple):
     target: str
@@ -42,8 +46,8 @@ class ScbSlot(NamedTuple):
             mc_str(self.objective)
         )
 
-class Command(metaclass=ABCMeta):
 
+class Command(metaclass=ABCMeta):
     is_debug = False  # only write when -d is set
 
     @abstractmethod
@@ -64,6 +68,7 @@ class Command(metaclass=ABCMeta):
     def __repr__(self) -> str:
         return "<%s %r>" % (type(self).__name__, self.resolve())
 
+
 class Cmd(Command):
     def __init__(self, cmd: str, suppress_special_cmd=False):
         self.value = cmd
@@ -82,6 +87,7 @@ class Cmd(Command):
     def resolve(self) -> str:
         return self.value
 
+
 class ScbSetConst(Command):
     def __init__(self, target: ScbSlot, value: int):
         self.target = target
@@ -94,6 +100,7 @@ class ScbSetConst(Command):
 
     def scb_did_assign(self, slot: ScbSlot) -> bool:
         return slot == self.target
+
 
 class ScbAddConst(Command):
     def __init__(self, target: ScbSlot, value: int):
@@ -108,6 +115,7 @@ class ScbAddConst(Command):
     def scb_did_assign(self, slot: ScbSlot) -> bool:
         return slot == self.target
 
+
 class ScbRemoveConst(Command):
     def __init__(self, target: ScbSlot, value: int):
         self.target = target
@@ -121,6 +129,7 @@ class ScbRemoveConst(Command):
     def scb_did_assign(self, slot: ScbSlot) -> bool:
         return slot == self.target
 
+
 class ScbOp(Enum):
     ADD_EQ = "+="
     SUB_EQ = "-="
@@ -131,6 +140,7 @@ class ScbOp(Enum):
     MIN = "<"
     MAX = ">"
     ASSIGN = "="
+
 
 class ScbOperation(Command):
     def __init__(self, op: ScbOp, operand1: ScbSlot, operand2: ScbSlot):
@@ -157,6 +167,7 @@ class ScbOperation(Command):
         else:
             return slot == self.operand2
 
+
 class ScbRandom(Command):
     def __init__(self, target: ScbSlot, min_: int, max_: int):
         super().__init__()
@@ -171,6 +182,7 @@ class ScbRandom(Command):
 
     def scb_did_assign(self, slot: ScbSlot) -> bool:
         return slot == self.target
+
 
 class ScbObjAdd(Command):
     def __init__(self, name: str, display_name: Optional[str] = None):
@@ -187,6 +199,7 @@ class ScbObjAdd(Command):
             mc_str(self.name), suffix
         )
 
+
 class ScbObjRemove(Command):
     def __init__(self, name: str):
         super().__init__()
@@ -194,6 +207,7 @@ class ScbObjRemove(Command):
 
     def resolve(self) -> str:
         return "scoreboard objectives remove %s" % mc_str(self.name)
+
 
 class ScbObjDisplay(Command):
     def __init__(self, location: str, name: Optional[str],
@@ -216,8 +230,10 @@ class ScbObjDisplay(Command):
             mc_str(self.location), scb, order
         )
 
+
 class MCFunctionFile:
     """Represents a .mcfunction file."""
+
     def __init__(self, path: Optional[str] = None):
         """path: full path to file."""
         self.commands: List[Command] = []
@@ -274,6 +290,7 @@ class MCFunctionFile:
             else:
                 self.commands.append(Cmd(command))
 
+
 class Comment(Command):
     def __init__(self, comment: str, debug=True):
         if not comment.startswith("#"):
@@ -284,6 +301,7 @@ class Comment(Command):
     def resolve(self) -> str:
         return self.comment
 
+
 def _scb_check_for_invoke(func: Callable[["_InvokeFunction", ScbSlot], bool]):
     # Decorator for `_InvokeFunction`.
     def _wrapped(self: "_InvokeFunction", slot: ScbSlot) -> bool:
@@ -293,7 +311,9 @@ def _scb_check_for_invoke(func: Callable[["_InvokeFunction", ScbSlot], bool]):
         result = func(self, slot)
         self._inside_scb_check.pop()
         return result
+
     return _wrapped
+
 
 class _InvokeFunction(Command):
     def __init__(self, file: "MCFunctionFile"):
@@ -316,9 +336,11 @@ class _InvokeFunction(Command):
                 return True
         return False
 
+
 class InvokeFunction(_InvokeFunction):
     def resolve(self) -> str:
         return "function %s" % self.file.get_path()
+
 
 class ScheduleFunction(_InvokeFunction):
     def __init__(self, file: "MCFunctionFile", args: str):
@@ -328,12 +350,14 @@ class ScheduleFunction(_InvokeFunction):
     def resolve(self) -> str:
         return "schedule %s %s" % (self.args, self.file.get_path())
 
+
 class ScbCompareOp(Enum):
     EQ = "="
     LT = "<"
     GT = ">"
     LTE = "<="
     GTE = ">="
+
 
 class _ExecuteSubcmd(metaclass=ABCMeta):
     @abstractmethod
@@ -342,6 +366,7 @@ class _ExecuteSubcmd(metaclass=ABCMeta):
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
         return False
+
 
 class ExecuteEnv(_ExecuteSubcmd):
     def __init__(self, cmd: str, args: str):
@@ -353,6 +378,7 @@ class ExecuteEnv(_ExecuteSubcmd):
 
     def resolve(self) -> str:
         return "%s %s" % (self.cmd, self.args)
+
 
 class ExecuteCond(_ExecuteSubcmd):
     def __init__(self, cond: str, args: str, invert=False):
@@ -366,6 +392,7 @@ class ExecuteCond(_ExecuteSubcmd):
         return " ".join(
             ("unless" if self.invert else "if", self.cond, self.args)
         )
+
 
 class ExecuteScoreComp(_ExecuteSubcmd):
     def __init__(self, operand1: ScbSlot, operand2: ScbSlot,
@@ -387,6 +414,7 @@ class ExecuteScoreComp(_ExecuteSubcmd):
             self.operand2.to_str()
         )
 
+
 class ExecuteScoreMatch(_ExecuteSubcmd):
     def __init__(self, operand: ScbSlot, range_: str, invert=False):
         super().__init__()
@@ -403,6 +431,7 @@ class ExecuteScoreMatch(_ExecuteSubcmd):
             self.operand.to_str(),
             self.range
         )
+
 
 class Execute(Command):
     def __init__(self, subcmds: List[_ExecuteSubcmd],
@@ -447,6 +476,7 @@ class Execute(Command):
     def func_ref(self) -> Optional["MCFunctionFile"]:
         return self.runs.func_ref()
 
+
 def execute(subcmds: List[_ExecuteSubcmd], runs: Union[Command, str]):
     """`Execute` factory. This prevents /execute being added when
     `runs` is a comment.
@@ -457,6 +487,7 @@ def execute(subcmds: List[_ExecuteSubcmd], runs: Union[Command, str]):
         if runs.lstrip().startswith("#"):
             return Comment(runs)
     return Execute(subcmds, runs)
+
 
 class RawtextComponent(metaclass=ABCMeta):
     """
@@ -469,12 +500,14 @@ class RawtextComponent(metaclass=ABCMeta):
     def resolve(self) -> dict:
         pass
 
+
 class RawtextText(RawtextComponent):
     def __init__(self, text: str):
         self.text = text
 
     def resolve(self) -> dict:
         return {"text": self.text}
+
 
 class RawtextTranslate(RawtextComponent):
     def __init__(self, value: str,
@@ -490,6 +523,7 @@ class RawtextTranslate(RawtextComponent):
             res["with"] = self.args
         return res
 
+
 class RawtextScore(RawtextComponent):
     def __init__(self, slot: ScbSlot):
         self.slot = slot
@@ -498,12 +532,14 @@ class RawtextScore(RawtextComponent):
         return {"score": {"name": self.slot.target,
                           "objective": self.slot.objective}}
 
+
 class RawtextSelector(RawtextComponent):
     def __init__(self, selector: str):
         self.selector = selector
 
     def resolve(self) -> dict:
         return {"selector": self.selector}
+
 
 class Rawtext(List[RawtextComponent]):
     """An list subclass that represents a JSON rawtext."""
@@ -513,12 +549,14 @@ class Rawtext(List[RawtextComponent]):
         # Optimize: Merge adjacent text components.
         res = []
         texts = []
+
         def _dump():
             if texts:
                 s = "".join(texts)
                 if s:
                     res.append(RawtextText(s).resolve())
                 texts.clear()
+
         for c in self:
             if isinstance(c, RawtextText):
                 texts.append(c.text)
@@ -528,19 +566,22 @@ class Rawtext(List[RawtextComponent]):
         _dump()
         return {"rawtext": res}
 
+
 class RawtextOutput(Command):
     def __init__(self, prefix: str, rawtext: Rawtext):
         self.prefix = prefix
         self.rawtext = rawtext
         # Check what score slots are used in the rawtext.
         self.score_slots: List[ScbSlot] = []
+
         def _visit(rawtext: Rawtext):
             for c in rawtext:
                 if isinstance(c, RawtextScore):
                     self.score_slots.append(c.slot)
                 elif (isinstance(c, RawtextTranslate)
-                        and isinstance(c.args, Rawtext)):
+                      and isinstance(c.args, Rawtext)):
                     _visit(c.args)
+
         _visit(self.rawtext)
 
     def resolve(self) -> str:
@@ -550,6 +591,7 @@ class RawtextOutput(Command):
 
     def scb_did_read(self, slot: ScbSlot) -> bool:
         return slot in self.score_slots
+
 
 class TitlerawTimes(Command):
     def __init__(self, player: str, fade_in: int, stay: int, fade_out: int):
@@ -563,6 +605,7 @@ class TitlerawTimes(Command):
             self.player, self.fade_in, self.stay, self.fade_out
         )
 
+
 class TitlerawResetTimes(Command):
     def __init__(self, player: str):
         self.player = player
@@ -570,12 +613,14 @@ class TitlerawResetTimes(Command):
     def resolve(self) -> str:
         return "titleraw %s reset" % self.player
 
+
 class TitlerawClear(Command):
     def __init__(self, player: str):
         self.player = player
 
     def resolve(self) -> str:
         return "titleraw %s clear" % self.player
+
 
 class FunctionsManager:
     EXTRA_OBJ = "%s{id}"
@@ -590,9 +635,8 @@ class FunctionsManager:
         self.default_scb = self.add_scoreboard()
 
     def generate_init(self) -> List[Command]:
-        res = []
+        res = [Comment('# Register scoreboard(s)')]
         # Scoreboards
-        res.append(Comment('# Register scoreboard(s)'))
         res.extend([
             ScbObjAdd(self._extra_obj.format(id=i))
             for i in range(1, self._scb_id + 1)

@@ -1,23 +1,22 @@
-"""Entity filter -- builtin support for selectors."""
+"""Entity entity_filter -- builtin support for selectors."""
 
 __all__ = ["EFilterType", "EFilterDataType", "EntityFilter"]
 
-from typing import List, Union, Optional, TYPE_CHECKING
 import re
+from typing import List, Union, Optional, TYPE_CHECKING
 
-from acaciamc.error import *
+import acaciamc.mccmdgen.cmds as cmds
+from acaciamc.localization import localize
+from acaciamc.mccmdgen.ctexpr import CTDataType
+from acaciamc.mccmdgen.datatype import DefaultDataType
+from acaciamc.mccmdgen.expr import *
+from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
 from acaciamc.tools import (
     axe, versionlib,
     cmethod_of, ImmutableMixin, transform_immutable
 )
-from acaciamc.mccmdgen.mcselector import MCSelector, SELECTORVAR_T
-from acaciamc.mccmdgen.datatype import DefaultDataType
-from acaciamc.mccmdgen.ctexpr import CTDataType
-from acaciamc.mccmdgen.expr import *
-from acaciamc.localization import localize
-import acaciamc.mccmdgen.cmds as cmds
-from .types import Type
 from .position import PosDataType
+from .types import Type
 
 if TYPE_CHECKING:
     from .position import Position
@@ -27,10 +26,12 @@ if TYPE_CHECKING:
 RE_INT = re.compile(r"^[+-]?\s*\d+$")
 PLAYER = "player"  # ID of player entity
 
+
 class IntRange(axe.AnyOf):
     """Accepts a string representing integer range or an integer and
     convert it to Python string.
     """
+
     def __init__(self):
         super().__init__(axe.LiteralInt(), axe.LiteralString())
 
@@ -56,7 +57,7 @@ class IntRange(axe.AnyOf):
             if not min_ and not max_:
                 self.wrong_argument()
             if (min_ and not self.check_int(min_)
-                or max_ and not self.check_int(max_)):
+                    or max_ and not self.check_int(max_)):
                 self.wrong_argument()
             return "%s..%s" % (min_, max_)
         else:
@@ -65,10 +66,13 @@ class IntRange(axe.AnyOf):
             else:
                 self.wrong_argument()
 
+
 class EFilterDataType(DefaultDataType):
     name = "Enfilter"
 
+
 ctdt_efilter = CTDataType("Enfilter")
+
 
 class EFilterType(Type):
     def do_init(self):
@@ -83,6 +87,7 @@ class EFilterType(Type):
     def cdatatype_hook(self):
         return ctdt_efilter
 
+
 class _EFilterData:
     def __init__(self, tag: Optional[str], subcmds: List["_ExecuteSubcmd"],
                  selector: MCSelector):
@@ -95,6 +100,7 @@ class _EFilterData:
         return _EFilterData(
             self.tag, self.subcmds.copy(), self.selector.copy()
         )
+
 
 class EntityFilter(ConstExprCombined, ImmutableMixin):
     cdata_type = ctdt_efilter
@@ -115,6 +121,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             self.need_set_selector_var(compiler, "a")
             self.entity_type = PLAYER
             return self
+
         @cmethod_of(self, "random")
         @axe.chop
         @axe.arg("type", axe.Nullable(axe.LiteralString()), default=None,
@@ -136,7 +143,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
                     raise axe.ArgumentError(
                         "type",
                         localize("objects.entityfilter.random.typeconflict")
-                            % (type_, self.entity_type)
+                        % (type_, self.entity_type)
                     )
             if not selector.has_arg("type"):
                 selector.type(type_)
@@ -154,6 +161,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             # now (the same for nearest_from and farthest_from):
             self.next_use_new_data = True
             return self
+
         @cmethod_of(self, "nearest_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -166,6 +174,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.limit(limit)
             self.next_use_new_data = True  # see `_random` above
             return self
+
         @cmethod_of(self, "farthest_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -178,6 +187,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.limit(-limit)
             self.next_use_new_data = True  # see `_random` above
             return self
+
         @cmethod_of(self, "has_tag")
         @axe.chop
         @axe.star_arg("tags", axe.LiteralString())
@@ -186,6 +196,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.last_selector(compiler)
             selector.tag(*tags)
             return self
+
         @cmethod_of(self, "has_no_tag")
         @axe.chop
         @axe.star_arg("tags", axe.LiteralString())
@@ -194,6 +205,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.last_selector(compiler)
             selector.tag_n(*tags)
             return self
+
         @cmethod_of(self, "distance_from")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -208,6 +220,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.need_set_context(compiler, *origin.context)
             selector.distance(min_, max_)
             return self
+
         @cmethod_of(self, "is_type")
         @axe.chop
         @axe.arg("type", axe.LiteralString(), rename="type_")
@@ -217,6 +230,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.type(type_)
             self.entity_type = type_
             return self
+
         @cmethod_of(self, "is_not_type")
         @axe.chop
         @axe.star_arg("types", axe.LiteralString())
@@ -225,6 +239,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.last_selector(compiler)
             selector.type_n(*types)
             return self
+
         @cmethod_of(self, "inside")
         @axe.chop
         @axe.arg("origin", PosDataType)
@@ -237,6 +252,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.need_set_context(compiler, *origin.context)
             selector.volume(dx, dy, dz)
             return self
+
         @cmethod_of(self, "rot_vertical")
         @axe.chop
         @axe.arg("min", axe.LiteralFloat(), default=-90.0, rename="min_")
@@ -247,6 +263,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.new_if_got(compiler, "rx", "rxm")
             selector.rot_vertical(min_, max_)
             return self
+
         @cmethod_of(self, "rot_horizontal")
         @axe.chop
         @axe.arg("min", axe.LiteralFloat(), default=-180.0, rename="min_")
@@ -257,6 +274,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.new_if_got(compiler, "ry", "rym")
             selector.rot_horizontal(min_, max_)
             return self
+
         @cmethod_of(self, "is_name")
         @axe.chop
         @axe.arg("name", axe.LiteralString())
@@ -265,6 +283,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.new_if_got(compiler, "name")
             selector.name(name)
             return self
+
         @cmethod_of(self, "is_not_name")
         @axe.chop
         @axe.star_arg("names", axe.LiteralString())
@@ -273,6 +292,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.last_selector(compiler)
             selector.name_n(*names)
             return self
+
         @cmethod_of(self, "has_item")
         @axe.chop
         @axe.arg("item", axe.LiteralString())
@@ -291,6 +311,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.last_selector(compiler)
             selector.has_item(item, quantity, data, slot_type, slot_num)
             return self
+
         @cmethod_of(self, "scores")
         @axe.chop
         @axe.arg("objective", axe.LiteralString())
@@ -301,6 +322,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector = self.last_selector(compiler)
             selector.scores(objective, range_)
             return self
+
         @cmethod_of(self, "level")
         @axe.chop
         @axe.arg("min", axe.Nullable(axe.LiteralInt()),
@@ -314,6 +336,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.level(min_, max_)
             self.entity_type = PLAYER
             return self
+
         @cmethod_of(self, "is_game_mode")
         @axe.chop
         @axe.arg("mode", axe.LiteralString())
@@ -323,6 +346,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.game_mode(mode)
             self.entity_type = PLAYER
             return self
+
         @cmethod_of(self, "is_not_game_mode")
         @axe.chop
         @axe.star_arg("modes", axe.LiteralString())
@@ -332,6 +356,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.game_mode_n(*modes)
             self.entity_type = PLAYER
             return self
+
         @cmethod_of(self, "has_permission")
         @versionlib.only(versionlib.at_least((1, 19, 80)))
         @axe.chop
@@ -343,6 +368,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
             selector.has_permission(*permissions)
             self.entity_type = PLAYER
             return self
+
         @cmethod_of(self, "has_no_permission")
         @versionlib.only(versionlib.at_least((1, 19, 80)))
         @axe.chop
@@ -366,10 +392,10 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
 
     def dump(self, command: str, among_tag: Optional[str] = None) -> CMDLIST_T:
         """
-        Select entities filtered by this filter and return commands.
+        Select entities filtered by this entity_filter and return commands.
         The command can have "{selected}" placeholder, which will be
         replaced by the selected entity.
-        When `among_tag` is specified, the filter will begin selecting
+        When `among_tag` is specified, the entity_filter will begin selecting
         among entities with that tag, instead of all entities.
         """
         res = []
@@ -396,7 +422,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
         return res
 
     def need_set_selector_var(
-        self, compiler, var: SELECTORVAR_T
+            self, compiler, var: SELECTORVAR_T
     ) -> MCSelector:
         if self.data[-1].selector.is_var_set():
             self._new_data(compiler)
@@ -405,7 +431,7 @@ class EntityFilter(ConstExprCombined, ImmutableMixin):
         return res
 
     def need_set_context(
-        self, compiler, *context: "_ExecuteSubcmd"
+            self, compiler, *context: "_ExecuteSubcmd"
     ) -> MCSelector:
         if self.context_occupied:
             self._new_data(compiler)
