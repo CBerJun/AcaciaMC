@@ -385,12 +385,12 @@ class TokenizerTests(TestSuite):
     def test_escapes(self):
         self.assert_tokens(
             r'"\#a\#(green, bold)\x77\u0066\U00000055\#(material_quartz)'
-            r'\\\$"',
+            r'\n\\\$"',
             tokens=[
                 Token(TT.string_begin, (1, 1), (1, 2)),
-                Token(TT.text_body, (1, 2), (1, 63),
-                      value='\xa7a\xa7a\xa7lwfU\xa7h\\$'),
-                Token(TT.string_end, (1, 63), (1, 64)),
+                Token(TT.text_body, (1, 2), (1, 65),
+                      value='\xa7a\xa7a\xa7lwfU\xa7h\n\\$'),
+                Token(TT.string_end, (1, 65), (1, 66)),
             ]
         )
 

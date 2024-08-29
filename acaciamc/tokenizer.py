@@ -867,8 +867,9 @@ class Tokenizer:
                 self.forward()
             self.forward()  # skip ')'
             return ''.join(res)
-        ## NOTE '\n' should be passed directly to MC
-        ## because MC use '\n' escape too
+        elif second == "n":
+            self.forward()  # skip 'n'
+            return '\n'
         elif second in UNICODE_ESCAPES:  # unicode number
             def _err():
                 src_range = (
