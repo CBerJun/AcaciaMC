@@ -193,7 +193,9 @@ DiagnosticKind.ERROR.registry.update({
     'invalid-number-char': 'Invalid character ${char} in base ${base} number',
     'unclosed-font': 'Unclosed font specifier',
     'invalid-font': 'Invalid font specifier: ${font}',
-    'invalid-unicode-escape': 'Incomplete \\${char raw} Unicode escape',
+    'incomplete-unicode-escape': 'Incomplete \\${char raw} Unicode escape',
+    'invalid-unicode-code-point': 'Invalid Unicode code point U+${code raw}; '
+        'code points cannot be larger than or equal to 0x110000',
     'unclosed-quote': 'Unclosed double quote',
     'incomplete-escape': 'Expect a character after backslash escape, found '
         'end of file',

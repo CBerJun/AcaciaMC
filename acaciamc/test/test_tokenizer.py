@@ -253,25 +253,27 @@ class TokenizerTests(TestSuite):
         )):
             self.tokenize(r'"\#()"')
 
-    def test_err_invalid_unicode_escape(self):
+    def test_err_incomplete_unicode_escape(self):
         with self.assert_diag(DiagnosticRequirement(
-            id="invalid-unicode-escape",
+            id="incomplete-unicode-escape",
             source=((1, 2), (1, 4)),
             args={'char': STArgReqSimpleValue('x')}
         )):
             self.tokenize(r'"\x"')
         with self.assert_diag(DiagnosticRequirement(
-            id="invalid-unicode-escape",
+            id="incomplete-unicode-escape",
             source=((1, 2), (1, 4)),
             args={'char': STArgReqSimpleValue('u')}
         )):
             self.tokenize(r'"\u777g"')
+
+    def test_err_invalid_unicode_code_point(self):
         with self.assert_diag(DiagnosticRequirement(
-            id="invalid-unicode-escape",
-            source=((1, 2), (1, 4)),
-            args={'char': STArgReqSimpleValue('U')}
+            id="invalid-unicode-code-point",
+            source=((1, 4), (1, 12)),
+            args={'code': STArgReqSimpleValue('001100Af')}
         )):
-            self.tokenize(r'"\Uffffffff"')
+            self.tokenize(r'"\U001100Af"')
 
     def test_err_incomplete_escape(self):
         with self.assert_diag(DiagnosticRequirement(

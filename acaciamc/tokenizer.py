@@ -872,30 +872,36 @@ class Tokenizer:
             self.forward()  # skip 'n'
             return '\n'
         elif second in UNICODE_ESCAPES:  # unicode number
-            def _err():
-                src_range = (
-                    self.file_entry
-                    .get_location((lineno, beginning_col))
-                    .to_range(2)  # len('\\x') == 2, for example
-                )
-                self.error_range(
-                    'invalid-unicode-escape', src_range,
-                    args={'char': STStr(second)}
-                )
             self.forward()  # skip UNICODE_ESCAPES character
             code = []
             length = UNICODE_ESCAPES[second]
+            unicode_start_col = self.current_col
             for _ in range(length):
                 if (
                     self.current_char is None
                     or self.current_char not in hexdigits
                 ):
-                    _err()
+                    src_range = (
+                        self.file_entry
+                        .get_location((lineno, beginning_col))
+                        .to_range(2)  # len('\\x') == 2, for example
+                    )
+                    self.error_range(
+                        'incomplete-unicode-escape', src_range,
+                        args={'char': STStr(second)}
+                    )
                 code.append(self.current_char)
                 self.forward()
-            unicode = int(''.join(code), base=16)
+            code_str = ''.join(code)
+            unicode = int(code_str, base=16)
             if unicode >= 0x110000:
-                _err()
+                src_range = self.file_entry.get_range(
+                    (lineno, unicode_start_col), self.current_pos
+                )
+                self.error_range(
+                    'invalid-unicode-code-point', src_range,
+                    args={'code': STStr(code_str)}
+                )
             return chr(unicode)
         # The escape cannot be recognized
         src_loc = self.file_entry.get_location((lineno, beginning_col))
