@@ -193,8 +193,12 @@ DiagnosticKind.ERROR.registry.update({
     'invalid-number-char': 'Invalid character ${char} in base ${base} number',
     'unclosed-font': 'Unclosed font specifier',
     'invalid-font': 'Invalid font specifier: ${font}',
-    'invalid-unicode-escape': 'Invalid \\${char raw} escape',
+    'invalid-unicode-escape': 'Incomplete \\${char raw} Unicode escape',
     'unclosed-quote': 'Unclosed double quote',
+    'incomplete-escape': 'Expect a character after backslash escape, found '
+        'end of file',
+    'invalid-escape': 'Invalid escape sequence \\${character raw}; consider '
+        'doubling the backslash?',
     # From parser
     'unexpected-token': 'Unexpected token ${token}',
     'empty-block': 'Expect an indented block',

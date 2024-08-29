@@ -767,8 +767,9 @@ class Tokenizer:
 
     def _read_escapable_char(self) -> str:
         """
-        Read current char as an escapable one (in string or command)
-        and skip the read char(s). Return the handled char(s).
+        Reads a character and handle escapes if that character is a
+        backslash. If the escape cannot be recognized, an ERROR
+        diagnostic is issued.
         NOTE Caller needs to ensure `self.current_char` is not None.
         """
         beginning_col = self.current_col
@@ -896,9 +897,18 @@ class Tokenizer:
             if unicode >= 0x110000:
                 _err()
             return chr(unicode)
-        # when escape can't be recognized, just return "\\"
-        # and the `second` char will be handled later
-        return first  # (here first == '\\')
+        # The escape cannot be recognized
+        src_loc = self.file_entry.get_location((lineno, beginning_col))
+        # Treat End of File specially
+        if second is None:
+            self.error_range("incomplete-escape", src_loc.to_range(1))
+        else:
+            self.error_range(
+                # 2 is length of '\\' plus the second character
+                "invalid-escape", src_loc.to_range(2),
+                args={"character": STStr(second)}
+            )
+        assert False
 
     def handle_string(self) -> List[Token]:
         """Help read a string literal."""

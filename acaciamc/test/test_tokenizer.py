@@ -273,6 +273,28 @@ class TokenizerTests(TestSuite):
         )):
             self.tokenize(r'"\Uffffffff"')
 
+    def test_err_incomplete_escape(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id="incomplete-escape",
+            source=((1, 6), (1, 7)),
+            args={}
+        )):
+            self.tokenize(r'"xx\"' + '\\')
+
+    def test_err_invalid_escape(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id="invalid-escape",
+            source=((1, 2), (1, 4)),
+            args={"character": STArgReqSimpleValue("X")}
+        )):
+            self.tokenize(r'"\X55"')
+        with self.assert_diag(DiagnosticRequirement(
+            id="invalid-escape",
+            source=((1, 3), (1, 5)),
+            args={"character": STArgReqSimpleValue(" ")}
+        )):
+            self.tokenize(r'"x\  "')
+
     def test_unclosed_quote(self):
         with self.assert_diag(DiagnosticRequirement(
             id="unclosed-quote",
