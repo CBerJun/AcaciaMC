@@ -781,8 +781,8 @@ class Tokenizer:
             return first
         # escapable
         second = self.current_char
-        if second == '\\':  # backslash itself
-            self.forward()  # skip second backslash
+        if second in ('\\', '"'):
+            self.forward()  # skip the second character
             return second
         elif second == '#':  # font
             self.forward()  # skip '#'
@@ -907,12 +907,6 @@ class Tokenizer:
             if (self.current_char is None) or (self.current_char == '\n'):
                 src_range = mgr.start_token.to_source_range(self.file_entry)
                 self.error_range('unclosed-quote', src_range)
-            if self.current_char == '\\' and self.peek() == '"':
-                # special escape in strings
-                mgr.add_text('"', self.current_pos)
-                self.forward()
-                self.forward()
-                continue
             tokens = self._fexpr_unit(mgr, is_cmd=False)
             if tokens:
                 return tokens

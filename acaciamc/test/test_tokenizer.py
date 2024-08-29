@@ -357,7 +357,7 @@ class TokenizerTests(TestSuite):
     def test_command(self):
         self.assert_tokens(
             '/foo ### spam!',
-            r'/ \ ham',
+            r'/ \"ham',
             '/*',
             '# foo',
             '   /**',
@@ -368,7 +368,7 @@ class TokenizerTests(TestSuite):
                 Token(TT.text_body, (1, 2), (1, 15), value='foo ### spam!'),
                 Token(TT.command_end, (1, 15), (1, 15)),
                 Token(TT.command_begin, (2, 1), (2, 2)),
-                Token(TT.text_body, (2, 2), (2, 8), value=' \\ ham'),
+                Token(TT.text_body, (2, 2), (2, 8), value=' "ham'),
                 Token(TT.command_end, (2, 8), (2, 8)),
                 Token(TT.command_begin, (3, 1), (3, 3)),
                 Token(TT.text_body, (3, 3), (6, 2), value=' # foo    /** *'),
