@@ -2,10 +2,12 @@
 
 from typing import (
     Union, List, TextIO, Tuple, Dict, Optional, NamedTuple, Any, Callable,
-    Generator, Mapping, TYPE_CHECKING
+    Generator, Mapping, Deque, TYPE_CHECKING
 )
 from contextlib import contextmanager
 from string import ascii_letters, digits, hexdigits
+from collections import deque
+from itertools import repeat
 import enum
 
 from acaciamc.reader import SourceRange, SourceLocation
@@ -278,7 +280,7 @@ class Tokenizer:
         self.current_lineno = 0
         self.current_col = 0
         self.position = 0  # string pointer
-        self.buffer_tokens: List[Token] = []
+        self.buffer_tokens: Deque[Token] = deque()
         self.bracket_stack: List[_BracketFrame] = []
         self.indent_record: List[int] = [0]
         # Indicates if this logical line has produced token:
@@ -353,16 +355,16 @@ class Tokenizer:
         """Get the next token."""
         while not self.buffer_tokens:
             self.buffer_tokens = self.parse_line()
-        return self.buffer_tokens.pop(0)
+        return self.buffer_tokens.popleft()
 
-    def parse_line(self) -> List[Token]:
+    def parse_line(self) -> Deque[Token]:
         """Parse a line."""
         self.current_line = self.src.readline()
         self.line_len = len(self.current_line)
         self.current_lineno += 1
         self.current_col = 0
         self.position = 0
-        res: List[Token] = []
+        res: Deque[Token] = deque()
         self.forward()
         # read indent
         if not (self.continued_command
@@ -576,20 +578,24 @@ class Tokenizer:
         # Count indent: if this physical line is not a continued line,
         # and (this physical line has content or ends with backslash)
         if (res or backslash) and prespaces != -1:
-            res[:0] = self.handle_indent(
+            token, cnt = self.handle_indent(
                 prespaces, begin_col=1,
                 # Based on the fact that only spaces are allowed for
                 # indentations:
                 end_col=prespaces+1
             )
+            # We don't need to worry that `extendleft` will reverse the
+            # tokens because all tokens are the same!
+            res.extendleft(repeat(token, cnt))
         # Now clean up if we reach end of file; this is delayed to be
         # done here because we still want the indent to be emitted
         # first.
         if eof:
             # Dump DEDENTs and emit END_MARKER
-            res.extend(self.handle_indent(
+            token, cnt = self.handle_indent(
                 0, begin_col=self.current_col, end_col=self.current_col
-            ))
+            )
+            res.extend(repeat(token, cnt))
             res.append(self.make_zerowidth_token(TokenType.end_marker))
         return res
 
@@ -660,29 +666,26 @@ class Tokenizer:
         return self.make_token(TokenType.new_line)
 
     def handle_indent(self, spaces: int, begin_col: int, end_col: int) \
-            -> List[Token]:
+            -> Tuple[Token, int]:
         """
-        Generate INDENT and DEDENT.
+        Generate INDENT and DEDENT. Return a (token, count) tuple, which
+        indicates that *count* duplicates of *token*s should be emitted.
         Usually INDENTs and DEDENTs appear in beginning of line, with
         beginning column number 1, but when dumping DEDENTs at end of
         file, the `begin_col` could be different.
         """
         ln = self.current_lineno
-        tokens = []
         if spaces > self.indent_record[-1]:
             self.indent_record.append(spaces)
-            tokens.append(Token(
-                TokenType.indent, (ln, begin_col), (ln, end_col)
-            ))
+            return Token(TokenType.indent, (ln, begin_col), (ln, end_col)), 1
         try:
             i = self.indent_record.index(spaces)
         except ValueError:
             self.error('invalid-dedent', (ln, begin_col))
         dedent_count = len(self.indent_record) - 1 - i
-        self.indent_record = self.indent_record[:i+1]
-        tokens.extend(Token(TokenType.dedent, (ln, end_col), (ln, end_col))
-                        for _ in range(dedent_count))
-        return tokens
+        del self.indent_record[i + 1:]
+        return (Token(TokenType.dedent, (ln, end_col), (ln, end_col)),
+                dedent_count)
 
     @staticmethod
     def _isdecimal(char: Union[str, None]):
