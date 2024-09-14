@@ -201,6 +201,8 @@ DiagnosticKind.ERROR.registry.update({
         'end of file',
     'invalid-escape': 'Invalid escape sequence \\${character raw}; consider '
         'doubling the backslash?',
+    'integer-literal-overflow': 'Integer literal overflows; it must be in the '
+        'range of a 32-bit signed integer',
     # From parser
     'unexpected-token': 'Unexpected token ${token}',
     'empty-block': 'Expect an indented block',

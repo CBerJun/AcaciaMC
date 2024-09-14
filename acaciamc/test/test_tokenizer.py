@@ -311,6 +311,20 @@ class TokenizerTests(TestSuite):
         )):
             self.tokenize('"spam${"spam')
 
+    def test_err_integer_literal_overflow(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id="integer-literal-overflow",
+            source=((1, 2), (1, 12)),
+            args={}
+        )):
+            self.tokenize("-2147483648")
+        with self.assert_diag(DiagnosticRequirement(
+            id="integer-literal-overflow",
+            source=((1, 1), (1, 12)),
+            args={}
+        )):
+            self.tokenize("0x800000000")
+
     def test_warn_new_font(self):
         with self.assert_diag(DiagnosticRequirement(
             id="new-font",
@@ -322,14 +336,15 @@ class TokenizerTests(TestSuite):
 
     def test_integer(self):
         self.assert_tokens(
-            '1230987 0b0001100 0o77665 0XfAc2 00222 0',
+            '1230987 0b0001100 0o77665 0XfAc2 00222 2147483647 0',
             tokens=[
                 Token(TT.integer, (1, 1), (1, 8), 1230987),
                 Token(TT.integer, (1, 9), (1, 18), 0b0001100),
                 Token(TT.integer, (1, 19), (1, 26), 0o77665),
                 Token(TT.integer, (1, 27), (1, 33), 0xfac2),
                 Token(TT.integer, (1, 34), (1, 39), 222),
-                Token(TT.integer, (1, 40), (1, 41), 0),
+                Token(TT.integer, (1, 40), (1, 50), 2147483647),
+                Token(TT.integer, (1, 51), (1, 52), 0),
             ]
         )
 

@@ -11,6 +11,7 @@ from itertools import repeat
 import enum
 
 from acaciamc.reader import SourceRange, SourceLocation
+from acaciamc.utils import is_int32
 from acaciamc.utils.str_template import STInt, STStr, STArgument
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
 
@@ -751,7 +752,16 @@ class Tokenizer:
         """Read an INTEGER or a FLOAT token."""
         with self.make_token() as gettok:
             tok_type, value = self._handle_number()
-        return gettok(tok_type, value)
+        token = gettok(tok_type, value)
+        # Check integer overflow
+        if tok_type is TokenType.integer:
+            assert isinstance(value, int)
+            if not is_int32(value):
+                self.error_range(
+                    "integer-literal-overflow",
+                    token.to_source_range(self.file_entry)
+                )
+        return token
 
     def handle_name(self):
         """Read a keyword or an IDENTIFIER token."""
