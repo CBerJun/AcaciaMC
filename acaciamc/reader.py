@@ -5,65 +5,22 @@ from io import StringIO
 from typing import NamedTuple, Dict, List, Optional, Tuple, TextIO
 from itertools import accumulate
 
-class SourceLocation(NamedTuple):
-    """
-    A location in a source file.
-    Line and col numbers are 1-indexed.
-    """
+# 1-indexed (line_number, column_number) tuple representing a location
+# in a source file:
+LineCol = Tuple[int, int]
+# A range in a source file that includes the character that the first
+# `LineCol` points to, up to the character that the second `LineCol`
+# points to.
+LineColRange = Tuple[LineCol, LineCol]
 
+class PackedSourceRange(NamedTuple):
+    """
+    A `FileEntry` put together with a `LineColRange` -- all information
+    needed to find a range in source file. Note that this (unlike most
+    other named tuples) might be unpacked (using Python's * operator).
+    """
     file: "FileEntry"
-    pos: Tuple[int, int]  # line, col
-
-    def to_str(self) -> str:
-        line, col = self.pos
-        return f"{self.file.display_name}:{line}:{col}"
-
-    def to_range(self, x: int) -> "SourceRange":
-        """
-        Get a `SourceRange` starting at `self` with `x` length.
-        Note that this does not take care of line breaks.
-        """
-        ln, col = self.pos
-        return SourceRange(self, SourceLocation(self.file, (ln, col + x)))
-
-class SourceRange(NamedTuple):
-    """
-    A range in a source file that begins before the character `begin`
-    points to and ends before the character `end` points to.
-    """
-
-    begin: SourceLocation
-    end: SourceLocation
-    # assert begin.file is end.file
-
-    @property
-    def file(self) -> "FileEntry":
-        return self.begin.file
-
-    def to_str(self) -> str:
-        if self.begin == self.end:
-            return self.begin.to_str()
-        ln1, col1 = self.begin.pos
-        ln2, col2 = self.end.pos
-        filename = self.file.display_name
-        if ln1 == ln2:
-            return f'{filename}:{ln1}:{col1}-{col2}'
-        return f'{filename}:{ln1}:{col1}-{ln2}:{col2}'
-
-    def get_lines(self) -> List[str]:
-        """Get the lines where `self` is in source."""
-        file = self.file
-        line_offsets = file.get_line_offsets()
-        ln1, _ = self.begin.pos
-        ln2, _ = self.end.pos
-        p1 = line_offsets[ln1 - 1]  # 1-indexed -> 0-indexed
-        p2 = line_offsets[ln2] - 1  # exclude trailing '\n'
-        assert p1 <= p2  # equal for an empty line
-        source = file.text[p1:p2]
-        if not source:
-            # Make sure we return *something* even if this line is empty
-            return ['']
-        return source.splitlines()
+    range: LineColRange
 
 class FileEntry:
     """A file."""
@@ -92,8 +49,8 @@ class FileEntry:
         """Make line offsets mapping."""
         # len(line_offsets) == text.count('\n') + 2
         # Reason: one '\n' creates 2 lines, 2 creates 3, etc. so +1
-        # For convenience of `SourceRange.get_lines`, we need a "fake"
-        # line, so +1 again.
+        # For the convenience of `get_lines`, we need a "fake" line, so
+        # +1 again.
         if self.line_offsets is None:
             lines = self.text.splitlines(keepends=True)
             # No need to consider \r\n since the `text` newlines are
@@ -113,22 +70,20 @@ class FileEntry:
                 offsets[-1] += 1
         return self.line_offsets
 
-    def get_location(self, pos: Tuple[int, int]) -> SourceLocation:
+    def get_lines(self, l1: int, l2: int) -> List[str]:
         """
-        Convert a (line number, column number) tuple to a SourceLocation
-        in this file.
+        Get line `l1` to line `l2` of `file`. Both `l1` and `l2` are
+        1-indexed.
         """
-        return SourceLocation(self, pos)
-
-    def get_range(self, begin: Tuple[int, int], end: Tuple[int, int]) \
-            -> SourceRange:
-        """
-        Convert two (line number, column number) pairs into a
-        SourceRange in this file.
-        """
-        loc1 = self.get_location(begin)
-        loc2 = self.get_location(end)
-        return SourceRange(loc1, loc2)
+        line_offsets = self.get_line_offsets()
+        p1 = line_offsets[l1 - 1]  # 1-indexed -> 0-indexed
+        p2 = line_offsets[l2] - 1  # exclude trailing '\n'
+        assert p1 <= p2  # equal for an empty line
+        source = self.text[p1:p2]
+        if not source:
+            # Make sure we return something even if this line is empty
+            return ['']
+        return source.splitlines()
 
 class Reader:
     """A source file manager."""

@@ -9,16 +9,11 @@ dummy_file = os.path.join(test_dir, "data", "dummy.txt")
 
 DUMMY_CONTENT = 'This\nis\na dummy\nfile for\ntest/test_reader.py\n'
 DUMMY_LINE_OFFSETS = [0, 5, 8, 16, 25, 45, 46]
-RANGES = (
-    ((1, 3), (1, 3), ["This"]),
-    ((3, 2), (3, 6), ["a dummy"]),
-    ((2, 1), (5, 1), ["is", "a dummy", "file for", "test/test_reader.py"]),
-    ((6, 1), (6, 1), [""]),
-)
-LOCATION_AND_OFFSETS = (
-    ((3, 2), 4, (3, 6)),
-    ((2, 1), 2, (2, 3)),
-    ((6, 1), 0, (6, 1)),
+SOURCE_LINES = (
+    (1, 1, ["This"]),
+    (3, 3, ["a dummy"]),
+    (2, 5, ["is", "a dummy", "file for", "test/test_reader.py"]),
+    (6, 6, [""]),
 )
 
 class ReaderTests(TestSuite):
@@ -47,15 +42,7 @@ class ReaderTests(TestSuite):
         self.assert_true(line_offsets is self.file_entry.get_line_offsets(),
                          "cache did not hit")
 
-    def test_source_range(self):
-        for pos1, pos2, contents in RANGES:
-            rng = self.file_entry.get_range(pos1, pos2)
-            self.assert_true(rng.get_lines() == contents,
+    def test_get_lines(self):
+        for l1, l2, contents in SOURCE_LINES:
+            self.assert_true(self.file_entry.get_lines(l1, l2) == contents,
                              "wrong get_lines() result")
-
-    def test_source_location(self):
-        for pos1, offset, pos2 in LOCATION_AND_OFFSETS:
-            loc1 = self.file_entry.get_location(pos1)
-            loc2 = loc1.to_range(offset).end
-            self.assert_true(loc2.pos == pos2,
-                             "wrong to_range() result")

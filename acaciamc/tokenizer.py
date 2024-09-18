@@ -10,7 +10,7 @@ from collections import deque
 from itertools import repeat
 import enum
 
-from acaciamc.reader import SourceRange, SourceLocation
+from acaciamc.reader import LineCol, LineColRange
 from acaciamc.utils import is_int32
 from acaciamc.utils.str_template import STInt, STStr, STArgument
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
@@ -199,9 +199,13 @@ class Token(NamedTuple):
     """
 
     type: TokenType
-    pos1: Tuple[int, int]  # lineno, col
-    pos2: Tuple[int, int]
+    pos1: LineCol
+    pos2: LineCol
     value: Any = None
+
+    @property
+    def range(self) -> LineColRange:
+        return (self.pos1, self.pos2)
 
     def __repr__(self) -> str:
         if self.value is None:
@@ -212,9 +216,6 @@ class Token(NamedTuple):
             self.type.name, value_str,
             *self.pos1, *self.pos2
         )
-
-    def to_source_range(self, file_entry: "FileEntry") -> SourceRange:
-        return file_entry.get_range(self.pos1, self.pos2)
 
     def display_string(self) -> str:
         """Get a string representation to display to user."""
@@ -237,19 +238,19 @@ class _FormattedStrManager:
 
     def __init__(self, start_token: Token):
         self.texts: List[str] = []
-        self.text_pos: Optional[Tuple[int, int]] = None
+        self.text_pos: Optional[LineCol] = None
         # The `start_token` is not used by us, but `Tokenizer` uses it
         # to track where the we start in source.
         self.start_token = start_token
         # This is not used by us, but by `Tokenizer`:
         self.last_dollar_lbrace: Optional[Token] = None
 
-    def add_text(self, text: str, pos: Tuple[int, int]) -> None:
+    def add_text(self, text: str, pos: LineCol) -> None:
         if self.text_pos is None:
             self.text_pos = pos
         self.texts.append(text)
 
-    def retrieve_text_token(self, pos: Tuple[int, int]) -> Optional[Token]:
+    def retrieve_text_token(self, pos: LineCol) -> Optional[Token]:
         if not self.texts:
             return None
         assert self.text_pos is not None
@@ -265,9 +266,16 @@ class _BracketFrame(NamedTuple):
     type: TokenType
     # We assume that every bracket is 1-character long and `pos` points
     # to that character.
-    pos: Tuple[int, int]
+    pos: LineCol
     cmd_fexpr: bool = False
     str_fexpr: bool = False
+
+def source_range_from_pos(pos: LineCol, length: int) -> LineColRange:
+    """
+    Get a `LineColRange` that starts at `pos` and has length `length`.
+    Note that this does not take care of line breaks.
+    """
+    return (pos, (pos[0], pos[1] + length))
 
 class Tokenizer:
     def __init__(self, src: TextIO, file_entry: "FileEntry",
@@ -305,35 +313,29 @@ class Tokenizer:
         self.continued_comment = False
         # Records pos of start of long comment (pos before "#*"). Exists
         # iff continued_comment is True:
-        self.continued_comment_pos: Optional[Tuple[int, int]] = None
+        self.continued_comment_pos: Optional[LineCol] = None
         # Indicate if the last token was INTERFACE:
         self.last_is_interface = False
 
     @property
-    def current_pos(self) -> Tuple[int, int]:
+    def current_pos(self) -> LineCol:
         return self.current_lineno, self.current_col
 
-    @property
-    def current_location(self) -> SourceLocation:
-        return self.file_entry.get_location(self.current_pos)
-
-    def error(self, diag_id: str, pos: Optional[Tuple[int, int]] = None,
+    def error(self, diag_id: str, pos: Optional[LineCol] = None,
               args: Optional[Mapping[str, STArgument]] = None):
         """Raise an ERROR diagnostic on a specific location in source."""
         if pos is None:
             pos = self.current_pos
-        location = self.file_entry.get_location(pos)
-        loc_range = SourceRange(location, location)
-        self.error_range(diag_id, loc_range, args)
+        self.error_range(diag_id, (pos, pos), args)
 
     def error_range(
-        self, diag_id: str, rng: SourceRange,
+        self, diag_id: str, r: LineColRange,
         args: Optional[Mapping[str, STArgument]] = None
     ):
         """Raise an ERROR diagnostic on a range in source."""
         if args is None:
             args = {}
-        raise DiagnosticError(Diagnostic(id=diag_id, source=rng, args=args))
+        raise DiagnosticError(Diagnostic(diag_id, self.file_entry, r, args))
 
     def forward(self):
         """Read next char and push pointer."""
@@ -474,7 +476,7 @@ class Tokenizer:
             except ValueError:
                 # We've run out of possibilities.
                 self.error_range(
-                    'invalid-char', self.current_location.to_range(1),
+                    'invalid-char', source_range_from_pos(self.current_pos, 1),
                     args={'char': STStr(self.current_char)}
                 )
             else:
@@ -486,7 +488,7 @@ class Tokenizer:
                     if not self.bracket_stack:
                         self.error_range(
                             'unmatched-bracket',
-                            self.current_location.to_range(1),
+                            source_range_from_pos(self.current_pos, 1),
                             args={'char': STStr(self.current_char)}
                         )
                     expect = RB2LB[token_type]
@@ -495,7 +497,7 @@ class Tokenizer:
                     if got is not expect:
                         self.error_range(
                             'unmatched-bracket-pair',
-                            self.current_location.to_range(1),
+                            source_range_from_pos(self.current_pos, 1),
                             args={
                                 'open': STStr(got.value),
                                 'close': STStr(token_type.value),
@@ -523,9 +525,8 @@ class Tokenizer:
                 mgr = self.string_stack[-1]
             assert mgr is not None
             assert mgr.last_dollar_lbrace is not None
-            src_range = mgr.last_dollar_lbrace.to_source_range(self.file_entry)
             # Throw
-            self.error_range('unclosed-fexpr', src_range)
+            self.error_range('unclosed-fexpr', mgr.last_dollar_lbrace.range)
         backslash = False
         eof = False
         if res:
@@ -542,23 +543,23 @@ class Tokenizer:
         elif self.current_char is None:
             if self.continued_comment:
                 assert self.continued_comment_pos
-                cpos = self.file_entry.get_location(self.continued_comment_pos)
-                # 2 is the length of "#*".
-                self.error_range('unclosed-long-comment', cpos.to_range(2))
+                self.error_range(
+                    'unclosed-long-comment',
+                    # 2 is the length of "#*".
+                    source_range_from_pos(self.continued_comment_pos, 2)
+                )
             if self.continued_command:
                 assert self.inside_command
                 if self.in_command_fexpr:
-                    assert self.inside_command.last_dollar_lbrace
-                    src_range = self.inside_command.last_dollar_lbrace \
-                        .to_source_range(self.file_entry)
-                    self.error_range('unclosed-fexpr', src_range)
-                src_range = self.inside_command.start_token \
-                    .to_source_range(self.file_entry)
-                self.error_range('unclosed-long-command', src_range)
+                    command_dl = self.inside_command.last_dollar_lbrace
+                    assert command_dl is not None
+                    self.error_range('unclosed-fexpr', command_dl.range)
+                self.error_range('unclosed-long-command',
+                                 self.inside_command.start_token.range)
             if self.bracket_stack:
                 br = self.bracket_stack[-1]
                 # Assume that all brackets are made of just 1 character
-                src_range = self.file_entry.get_location(br.pos).to_range(1)
+                src_range = source_range_from_pos(br.pos, 1)
                 self.error_range(
                     'unclosed-bracket', src_range,
                     args={'char': STStr(br.type.value)}
@@ -574,7 +575,7 @@ class Tokenizer:
                 self.error('eof-after-continuation')
             if self.current_char != '\n':
                 self.error_range('char-after-continuation',
-                                 self.current_location.to_range(1))
+                                 source_range_from_pos(self.current_pos, 1))
             backslash = self.last_line_continued = True
         # Count indent: if this physical line is not a continued line,
         # and (this physical line has content or ends with backslash)
@@ -707,7 +708,7 @@ class Tokenizer:
             if self.current_char.upper() not in valid_chars:
                 self.error_range(
                     "invalid-number-char",
-                    self.current_location.to_range(1),
+                    source_range_from_pos(self.current_pos, 1),
                     args={"char": STStr(self.current_char),
                           "base": STInt(base)}
                 )
@@ -757,10 +758,7 @@ class Tokenizer:
         if tok_type is TokenType.integer:
             assert isinstance(value, int)
             if not is_int32(value):
-                self.error_range(
-                    "integer-literal-overflow",
-                    token.to_source_range(self.file_entry)
-                )
+                self.error_range("integer-literal-overflow", token.range)
         return token
 
     def handle_name(self):
@@ -811,10 +809,8 @@ class Tokenizer:
             cur_col = self.current_col
             while True:
                 if self.current_char is None or self.current_char == '\n':
-                    src_range = (
-                        self.file_entry
-                        .get_location((lineno, beginning_col))
-                        .to_range(3)  # len("\\#(") == 3
+                    src_range = source_range_from_pos(
+                        (lineno, beginning_col), 3  # len("\\#(") == 3
                     )
                     self.error_range('unclosed-font', src_range)
                 if self.current_char in (',', ')'):
@@ -845,19 +841,12 @@ class Tokenizer:
                             font_rs = font_withspaces.rstrip(' ')
                             nlspaces = len(font_withspaces) - len(font_ls)
                             nrspaces = len(font_withspaces) - len(font_rs)
-                            loc1 = self.file_entry.get_location(
-                                (lineno, cur_col + nlspaces)
-                            )
-                            loc2 = self.file_entry.get_location(
+                            src_range = (
+                                (lineno, cur_col + nlspaces),
                                 (lineno, self.current_col - nrspaces)
                             )
-                            src_range = SourceRange(loc1, loc2)
                         else:
-                            src_range = (
-                                self.file_entry
-                                .get_location((lineno, cur_col))
-                                .to_range(0)
-                            )
+                            src_range = ((lineno, cur_col), (lineno, cur_col))
                     if diag_id == 'invalid-font':
                         self.error_range(
                             diag_id, src_range,
@@ -867,7 +856,7 @@ class Tokenizer:
                         assert diag_id == 'new-font'
                         self.diagnostic_manager.push_diagnostic(
                             Diagnostic(
-                                id=diag_id, source=src_range,
+                                diag_id, self.file_entry, src_range,
                                 args={'font': STStr(font)}
                             )
                         )
@@ -894,13 +883,10 @@ class Tokenizer:
                     self.current_char is None
                     or self.current_char not in hexdigits
                 ):
-                    src_range = (
-                        self.file_entry
-                        .get_location((lineno, beginning_col))
-                        .to_range(2)  # len('\\x') == 2, for example
-                    )
                     self.error_range(
-                        'incomplete-unicode-escape', src_range,
+                        'incomplete-unicode-escape',
+                        # len('\\x') == len('\\u') == len('\\U') == 2
+                        source_range_from_pos((lineno, beginning_col), 2),
                         args={'char': STStr(second)}
                     )
                 code.append(self.current_char)
@@ -908,23 +894,22 @@ class Tokenizer:
             code_str = ''.join(code)
             unicode = int(code_str, base=16)
             if unicode >= 0x110000:
-                src_range = self.file_entry.get_range(
-                    (lineno, unicode_start_col), self.current_pos
-                )
                 self.error_range(
-                    'invalid-unicode-code-point', src_range,
+                    'invalid-unicode-code-point',
+                    ((lineno, unicode_start_col), self.current_pos),
                     args={'code': STStr(code_str)}
                 )
             return chr(unicode)
         # The escape cannot be recognized
-        src_loc = self.file_entry.get_location((lineno, beginning_col))
+        src_loc = (lineno, beginning_col)
         # Treat End of File specially
         if second is None:
-            self.error_range("incomplete-escape", src_loc.to_range(1))
+            self.error_range("incomplete-escape",
+                             source_range_from_pos(src_loc, 1))
         else:
             self.error_range(
                 # 2 is length of '\\' plus the second character
-                "invalid-escape", src_loc.to_range(2),
+                "invalid-escape", source_range_from_pos(src_loc, 2),
                 args={"character": STStr(second)}
             )
         assert False
@@ -935,8 +920,7 @@ class Tokenizer:
         while self.current_char != '"':
             # check None and \n
             if (self.current_char is None) or (self.current_char == '\n'):
-                src_range = mgr.start_token.to_source_range(self.file_entry)
-                self.error_range('unclosed-quote', src_range)
+                self.error_range('unclosed-quote', mgr.start_token.range)
             tokens = self._fexpr_unit(mgr, is_cmd=False)
             if tokens:
                 return tokens

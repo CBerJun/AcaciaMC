@@ -18,7 +18,7 @@ from acaciamc.utils.str_template import STStr
 import acaciamc.ast as ast
 
 if TYPE_CHECKING:
-    from acaciamc.reader import Reader, FileEntry
+    from acaciamc.reader import Reader, FileEntry, LineCol
     from acaciamc.diagnostic import DiagnosticsManager
 
 class CachedModule(NamedTuple):
@@ -178,7 +178,7 @@ class Symbol:
     `Identifier` node will be resolved to a `Symbol`.
     """
 
-    def __init__(self, pos1: Tuple[int, int], pos2: Tuple[int, int]):
+    def __init__(self, pos1: "LineCol", pos2: "LineCol"):
         self.pos1 = pos1
         self.pos2 = pos2
 
@@ -188,8 +188,7 @@ class GlobalSymbol(Symbol):
     become attributes of a module object.
     """
 
-    def __init__(self, name: str, pos1: Tuple[int, int],
-                 pos2: Tuple[int, int]):
+    def __init__(self, name: str, pos1: "LineCol", pos2: "LineCol"):
         super().__init__(pos1, pos2)
         self.name = name
 
@@ -281,7 +280,7 @@ class PostASTVisitor(ast.ASTVisitor):
             symbol = self.scope.names[name]
             self.forest.diag_mgr.push_diagnostic(Diagnostic(
                 "unused-name",
-                self.file_entry.get_range(symbol.pos1, symbol.pos2),
+                self.file_entry, (symbol.pos1, symbol.pos2),
                 args={"name": STStr(name)}
             ))
         self.scope = original_scope
@@ -293,8 +292,7 @@ class PostASTVisitor(ast.ASTVisitor):
         id_def.annotation = \
             self.define_id(id_def.name, id_def.begin, id_def.end)
 
-    def define_id(self, name: str, pos1: Tuple[int, int],
-                  pos2: Tuple[int, int]) -> Symbol:
+    def define_id(self, name: str, pos1: "LineCol", pos2: "LineCol") -> Symbol:
         """
         Define `name` in current scope with source range from `pos1` to
         `pos2`. Return the related `Symbol`.
@@ -304,14 +302,13 @@ class PostASTVisitor(ast.ASTVisitor):
         symbol = self.scope.names.get(name)
         if symbol is not None:
             # The name is already defined
-            id_range = self.file_entry.get_range(pos1, pos2)
             err = DiagnosticError(Diagnostic(
-                "name-redefinition", id_range,
+                "name-redefinition", self.file_entry, (pos1, pos2),
                 args={"name": STStr(name)}
             ))
-            prev_id_range = self.file_entry.get_range(symbol.pos1, symbol.pos2)
             err.add_note(Diagnostic(
-                "name-redefinition-note", prev_id_range, args={}
+                "name-redefinition-note", self.file_entry,
+                (symbol.pos1, symbol.pos2), args={}
             ))
             raise err
         if self.scope.is_toplevel():
@@ -328,13 +325,15 @@ class PostASTVisitor(ast.ASTVisitor):
                 self.visit(x)
 
     def visit_ModuleMeta(self, node: ast.ModuleMeta):
-        meta_range = self.file_entry.get_range(node.begin, node.end)
-        imported_here = Diagnostic("imported-here", meta_range, args={})
+        imported_here = Diagnostic(
+            "imported-here", self.file_entry, (node.begin, node.end),
+            args={}
+        )
         with self.forest.diag_mgr.using_note(imported_here):
             module = self.forest.load_module(node)
         if module is None:
             raise DiagnosticError(Diagnostic(
-                "module-not-found", meta_range,
+                "module-not-found", self.file_entry, (node.begin, node.end),
                 args={"module": STStr(node.unparse())}
             ))
         return module
@@ -346,9 +345,8 @@ class PostASTVisitor(ast.ASTVisitor):
         # store the symbol in its `annotation`.
         symbol = self.scope.lookup_symbol(node.name)
         if symbol is None:
-            id_range = self.file_entry.get_range(node.begin, node.end)
             raise DiagnosticError(Diagnostic(
-                "undefined-name", id_range,
+                "undefined-name", self.file_entry, (node.begin, node.end),
                 args={"name": STStr(node.name)}
             ))
         node.annotation = symbol
@@ -422,7 +420,7 @@ class PostASTVisitor(ast.ASTVisitor):
             if module.namespace.lookup_symbol(name) is None:
                 raise DiagnosticError(Diagnostic(
                     "cannot-import-name",
-                    self.file_entry.get_range(item.name.begin, item.name.end),
+                    self.file_entry, (item.name.begin, item.name.end),
                     args={"name": STStr(name),
                           "module": STStr(node.meta.unparse())}
                 ))
@@ -452,7 +450,7 @@ class PostASTVisitor(ast.ASTVisitor):
         if isinstance(module, LoadingModule):
             self.forest.diag_mgr.push_diagnostic(Diagnostic(
                 "partial-wildcard-import",
-                self.file_entry.get_range(node.begin, node.end),
+                self.file_entry, (node.begin, node.end),
                 args={"module": STStr(node.meta.unparse())}
             ))
 

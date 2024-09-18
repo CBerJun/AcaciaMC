@@ -7,6 +7,7 @@ from typing import (
 from collections import OrderedDict
 from enum import Enum
 
+from acaciamc.reader import LineCol, LineColRange
 from acaciamc.tokenizer import TokenType, BRACKETS
 from acaciamc.diagnostic import Diagnostic, DiagnosticError
 from acaciamc.utils.str_template import STArgument, STStr, STEnum
@@ -43,9 +44,6 @@ AUG_ASSIGN_TOKENS: Mapping[TokenType, Type[ast.BinaryOperator]] = {
     TokenType.divide_equal: ast.Div,
     TokenType.mod_equal: ast.Mod,
 }
-
-IntPair = Tuple[int, int]
-TwoIntPairs = Tuple[IntPair, IntPair]
 
 class FuncType(NamedTuple):
     allowed_valpassing: Tuple[Type[ast.ValuePassing], ...]
@@ -121,17 +119,17 @@ class Parser:
         }
 
     @property
-    def current_range(self) -> TwoIntPairs:
+    def current_range(self) -> LineColRange:
         """Range of current token."""
         return self.current_token.pos1, self.current_token.pos2
 
     @property
-    def current_pos1(self) -> IntPair:
+    def current_pos1(self) -> LineCol:
         """Begin of current token."""
         return self.current_token.pos1
 
     @property
-    def prev_pos2(self) -> IntPair:
+    def prev_pos2(self) -> LineCol:
         """End of previous token."""
         assert self.prev_token
         return self.prev_token.pos2
@@ -150,18 +148,19 @@ class Parser:
             self.diag_obj(diag_id, token.pos1, token.pos2, args)
         )
 
-    def error_range(self, diag_id: str, pos1: IntPair, pos2: IntPair,
+    def error_range(self, diag_id: str, pos1: LineCol, pos2: LineCol,
                     args: Optional[Mapping[str, STArgument]] = None):
         """Raise an `DiagnosticError`."""
         raise DiagnosticError(self.diag_obj(diag_id, pos1, pos2, args))
 
-    def diag_obj(self, diag_id: str, pos1: IntPair, pos2: IntPair,
+    def diag_obj(self, diag_id: str, pos1: LineCol, pos2: LineCol,
                  args: Optional[Mapping[str, STArgument]] = None):
         """Helper to create a `Diagnostic`."""
         if args is None:
             args = {}
-        rng = self.tokenizer.file_entry.get_range(pos1, pos2)
-        return Diagnostic(id=diag_id, source=rng, args=args)
+        return Diagnostic(
+            diag_id, self.tokenizer.file_entry, (pos1, pos2), args
+        )
 
     def unexpected_token(self):
         """Raise an 'unexpected-token' ERROR on current token."""
@@ -782,7 +781,7 @@ class Parser:
         new_method: Optional[ast.NewMethod] = None
         methods: Dict[str, ast.EntityMethod] = {}
         fields: Dict[str, ast.EntityField] = {}
-        last_pos2: Optional[IntPair] = None
+        last_pos2: Optional[LineCol] = None
         def duplication_check(item_name: ast.IdentifierDef):
             # This is shared by methods and fields
             name = item_name.name
@@ -860,7 +859,7 @@ class Parser:
         self.eat(TokenType.command_end)
         return ast.Command(content, begin=pos1, end=self.prev_pos2)
 
-    def module_meta(self) -> Tuple[ast.ModuleMeta, TwoIntPairs]:
+    def module_meta(self) -> Tuple[ast.ModuleMeta, LineColRange]:
         """module_meta := IDENTIFIER (POINT IDENTIFIER)*"""
         # at least one name should be given
         pos1 = self.current_pos1
@@ -964,7 +963,7 @@ class Parser:
         id_def = self._id_def()
         bases = self._extends_clause()
         self.eat(TokenType.colon)
-        last_pos2: Optional[IntPair] = None
+        last_pos2: Optional[LineCol] = None
         fields: Dict[str, ast.StructField] = {}
         for _ in self.indented_block():
             item = self._struct_body()

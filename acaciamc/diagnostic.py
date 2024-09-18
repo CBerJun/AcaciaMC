@@ -11,7 +11,7 @@ from acaciamc.utils.ansi import AnsiColor, AnsiStyle, ansi
 from acaciamc.utils.str_template import STArgument, substitute
 
 if TYPE_CHECKING:
-    from acaciamc.reader import SourceRange, Reader
+    from acaciamc.reader import Reader, FileEntry, LineColRange
 
 class DiagnosticKind(Enum):
     """Kind of diagnostic."""
@@ -52,7 +52,8 @@ class Diagnostic(NamedTuple):
     """Represents a diagnostic message."""
 
     id: str
-    source: "SourceRange"
+    source_file: "FileEntry"
+    source_range: "LineColRange"
     args: Mapping[str, STArgument]
 
     @property
@@ -132,18 +133,20 @@ class DiagnosticsManager:
         file = self.stream if file is None else file
         if file is None:
             return
+        (first_ln, first_col), (last_ln, last_col) = diag.source_range
         with ansi(file, *self.message_styles):
-            file.write(f"{diag.source.to_str()}: ")
+            file.write(
+                f"{diag.source_file.display_name}:{first_ln}:{first_col}: "
+            )
             with ansi(file, diag.kind.color):
                 file.write(f"{diag.kind.display}: ")
             file.write(diag.format_message())
         file.write(f" [{diag.id}]\n")
-        first_ln, first_col = diag.source.begin.pos
-        last_ln, last_col = diag.source.end.pos
         # Make column number 0-indexed
         first_col -= 1
         last_col -= 1
-        for i, line in enumerate(diag.source.get_lines(), start=first_ln):
+        source_lines = diag.source_file.get_lines(first_ln, last_ln)
+        for i, line in enumerate(source_lines, start=first_ln):
             file.write(f"{i:>{self.line_num_width}} | ")
             is_first = i == first_ln
             is_last = i == last_ln

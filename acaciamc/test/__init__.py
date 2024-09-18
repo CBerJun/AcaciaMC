@@ -1,8 +1,7 @@
 """Unit test for Acacia."""
 
 from typing import (
-    Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Tuple, Dict,
-    Iterable
+    Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Dict, Iterable
 )
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
@@ -10,7 +9,7 @@ from sys import stdout
 from traceback import print_exception
 
 from acaciamc.diagnostic import Diagnostic, DiagnosticsManager
-from acaciamc.reader import Reader
+from acaciamc.reader import Reader, LineColRange
 from acaciamc.utils.ansi import AnsiColor, AnsiStyle, ansi
 from acaciamc.utils.str_template import (
     STArgument, STInt, STStr, STEnum, substitute, DisplayableEnum
@@ -46,15 +45,14 @@ class STArgReqSimpleValue(STArgRequirement):
 
 class DiagnosticRequirement(NamedTuple):
     id: Optional[str] = None
-    source: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
+    source: Optional[LineColRange] = None
     args: Optional[Mapping[str, STArgRequirement]] = None
 
     def matches(self, diag: Diagnostic) -> bool:
         if self.id is not None and diag.id != self.id:
             return False
         if self.source is not None:
-            pos1, pos2 = self.source
-            if pos1 != diag.source.begin.pos or pos2 != diag.source.end.pos:
+            if diag.source_range != self.source:
                 return False
         if self.args is not None:
             # Keys must exactly match
