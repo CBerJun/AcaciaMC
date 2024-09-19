@@ -3,7 +3,7 @@ ANSI escape sequence color and style codes.
 See https://en.wikipedia.org/wiki/ANSI_escape_code
 """
 
-from typing import Union, Iterable, TextIO
+from typing import Union, Iterable, TextIO, Tuple
 from enum import Enum
 from contextlib import contextmanager
 
@@ -46,9 +46,17 @@ class AnsiStyle(Enum):
         """Get resetting code."""
         return self.value[1]
 
-def ansi_write(file: TextIO, codes: Iterable[int]):
-    """Write given ANSI code to `file`."""
-    file.write('\x1b[%sm' % ';'.join(map(str, codes)))
+def ansi_codes_to_str(codes: Iterable[int]) -> str:
+    """Convert one or more integer codes into an ANSI sequence."""
+    return '\x1b[%sm' % ';'.join(map(str, codes))
+
+def ansi_styles_to_str(*insns: Union[AnsiColor, AnsiStyle]) -> Tuple[str, str]:
+    """
+    Convert one or more styles into two ANSI sequences, used for
+    applying and clearing the given style(s), correspondingly.
+    """
+    return (ansi_codes_to_str(insn.begin() for insn in insns),
+            ansi_codes_to_str(insn.end() for insn in insns))
 
 @contextmanager
 def ansi(file: TextIO, *insns: Union[AnsiColor, AnsiStyle]):
@@ -56,8 +64,9 @@ def ansi(file: TextIO, *insns: Union[AnsiColor, AnsiStyle]):
     Apply ANSI styles in `insns` temporarily to output of `file`.
     Used as a context manager.
     """
-    ansi_write(file, (insn.begin() for insn in insns))
+    begin, end = ansi_styles_to_str(*insns)
+    file.write(begin)
     try:
         yield
     finally:
-        ansi_write(file, (insn.end() for insn in insns))
+        file.write(end)

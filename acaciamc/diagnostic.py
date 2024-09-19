@@ -7,7 +7,7 @@ from enum import Enum
 from contextlib import contextmanager
 from sys import stderr
 
-from acaciamc.utils.ansi import AnsiColor, AnsiStyle, ansi
+from acaciamc.utils.ansi import AnsiColor, AnsiStyle, ansi, ansi_styles_to_str
 from acaciamc.utils.str_template import STArgument, substitute
 
 if TYPE_CHECKING:
@@ -76,6 +76,7 @@ class DiagnosticsManager:
         self.min_line_num_left_padding = 1
         self.message_styles = (AnsiStyle.BOLD,)
         self.highlight_src_styles = (AnsiColor.YELLOW,)
+        self.primary_indicator = '^'
 
     @contextmanager
     def capture_errors(self):
@@ -151,25 +152,33 @@ class DiagnosticsManager:
             self.min_line_num_width,
             len(str(last_ln)) + self.min_line_num_left_padding
         )
+        indicator_line_begin = " " * line_num_width + " | "
         for i, line in enumerate(source_lines, start=first_ln):
+            indicator_line: List[str] = [indicator_line_begin]
             file.write(f"{i:>{line_num_width}} | ")
             is_first = i == first_ln
             is_last = i == last_ln
             if is_first:
                 file.write(line[:first_col])
+                indicator_line.append(" " * first_col)
                 highlight_start = first_col
             else:
                 highlight_start = 0
             if is_last:
                 highlight_end = last_col
             else:
-                highlight_end = None
+                highlight_end = len(line)
             with ansi(file, *self.highlight_src_styles):
                 file.write(line[highlight_start:highlight_end])
+            ic_begin, ic_end = ansi_styles_to_str(diag.kind.color)
+            indicator_line.append(ic_begin)
+            indicator_line.append(
+                self.primary_indicator * (highlight_end - highlight_start)
+            )
+            indicator_line.append(ic_end)
             if is_last:
                 file.write(line[last_col:])
-            file.write("\n")
-        file.write(" " * line_num_width + " |\n")
+            file.write("\n" + "".join(indicator_line) + "\n")
 
 class DiagnosticError(Exception):
     """Raised to issue an ERROR diagnostic and stop compilation."""
