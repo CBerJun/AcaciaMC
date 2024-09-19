@@ -72,7 +72,8 @@ class DiagnosticsManager:
         self.note_context: List[Diagnostic] = []
         self.reader = reader
         self.stream = stream
-        self.line_num_width = 5
+        self.min_line_num_width = 5
+        self.min_line_num_left_padding = 1
         self.message_styles = (AnsiStyle.BOLD,)
         self.highlight_src_styles = (AnsiColor.YELLOW,)
 
@@ -146,8 +147,12 @@ class DiagnosticsManager:
         first_col -= 1
         last_col -= 1
         source_lines = diag.source_file.get_lines(first_ln, last_ln)
+        line_num_width = max(
+            self.min_line_num_width,
+            len(str(last_ln)) + self.min_line_num_left_padding
+        )
         for i, line in enumerate(source_lines, start=first_ln):
-            file.write(f"{i:>{self.line_num_width}} | ")
+            file.write(f"{i:>{line_num_width}} | ")
             is_first = i == first_ln
             is_last = i == last_ln
             if is_first:
@@ -164,7 +169,7 @@ class DiagnosticsManager:
             if is_last:
                 file.write(line[last_col:])
             file.write("\n")
-        file.write(" " * self.line_num_width + " |\n")
+        file.write(" " * line_num_width + " |\n")
 
 class DiagnosticError(Exception):
     """Raised to issue an ERROR diagnostic and stop compilation."""
