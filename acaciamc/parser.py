@@ -741,7 +741,7 @@ class Parser:
                 if qualifier is not ast.MethodQualifier.static:
                     self.error_range(
                         'non-static-const-method',
-                        content.name.begin, content.name.end
+                        *content.name.source_range
                     )
             else:
                 content = self.def_stmt()
@@ -794,12 +794,12 @@ class Parser:
             # Error: this name has already been defined
             err = DiagnosticError(self.diag_obj(
                 'duplicate-entity-attr',
-                item_name.begin, item_name.end,
+                *item_name.source_range,
                 {"name": STStr(name)}
             ))
             err.add_note(self.diag_obj(
                 'duplicate-entity-attr-note',
-                prev_name.begin, prev_name.end
+                *prev_name.source_range
             ))
             raise err
         for _ in self.indented_block():
@@ -916,7 +916,7 @@ class Parser:
             name = self._id_def()
             alias = self.alias()
             if alias is None:
-                alias = ast.IdentifierDef(name.name, name.begin, name.end)
+                alias = ast.IdentifierDef(name.name, *name.source_range)
             items.append(ast.ImportItem(name, alias))
         if self.current_token.type is TokenType.lparen:
             self.paren_list_of(_id_alias)
@@ -978,12 +978,12 @@ class Parser:
             prev_item = fields[name]
             err = DiagnosticError(self.diag_obj(
                 'duplicate-struct-attr',
-                item.name.begin, item.name.end,
+                *item.name.source_range,
                 {"name": STStr(name)}
             ))
             err.add_note(self.diag_obj(
                 'duplicate-struct-attr-note',
-                prev_item.name.begin, prev_item.name.end
+                *prev_item.name.source_range
             ))
             raise err
         assert last_pos2 is not None
@@ -1047,9 +1047,7 @@ class Parser:
         else:
             expr = self.expr()
             if self.scopes[-1] is Scope.INTERFACE:
-                self.error_range(
-                    "interface-return-value", expr.begin, expr.end
-                )
+                self.error_range("interface-return-value", *expr.source_range)
         return ast.Return(expr, begin=pos1, end=self.prev_pos2)
 
     def simple_new_stmt(self):
@@ -1110,7 +1108,7 @@ class Parser:
             # var_def_stmt := IDENTIFIER COLON type_spec (EQUAL expr)?
             self.eat()  # eat colon
             if not isinstance(expr, ast.Identifier):
-                self.error_range('invalid-var-def', expr.begin, expr.end)
+                self.error_range('invalid-var-def', *expr.source_range)
                 assert False
             type_ = self.type_spec()
             if self.current_token.type is TokenType.equal:
@@ -1119,16 +1117,16 @@ class Parser:
             else:
                 rhs = None
             node = ast.VarDef(
-                ast.IdentifierDef(expr.name, expr.begin, expr.end),
+                ast.IdentifierDef(expr.name, *expr.source_range),
                 type_, rhs, begin=pos1, end=self.prev_pos2
             )
         elif self.current_token.type is TokenType.walrus:
             # auto_var_def_stmt := IDENTIFIER WALRUS expr
             self.eat()  # eat walrus
             if not isinstance(expr, ast.Identifier):
-                self.error_range('invalid-var-def', expr.begin, expr.end)
+                self.error_range('invalid-var-def', *expr.source_range)
                 assert False
-            id_def = ast.IdentifierDef(expr.name, expr.begin, expr.end)
+            id_def = ast.IdentifierDef(expr.name, *expr.source_range)
             rhs = self.expr()
             node = ast.AutoVarDef(id_def, rhs, begin=pos1, end=self.prev_pos2)
         else:  # just an expr, or a new statement
@@ -1244,7 +1242,7 @@ class Parser:
                 if got_keyword:
                     self.error_range(
                         'positional-arg-after-keyword',
-                        pos1=expr.begin, pos2=expr.end
+                        *expr.source_range
                     )
                 args.append(expr)
         pos1 = self.current_pos1

@@ -28,7 +28,7 @@ class MethodQualifier(DisplayableEnum):
 # These fields are not considered a "children" of an AST:
 RESERVED_FIELDS = frozenset((
     # For `HasSource`:
-    'begin', 'end',
+    'begin', 'end', 'source_range',
     # Public function in `AST`:
     'get_fields',
     # Annotation
@@ -66,6 +66,10 @@ class HasSource(AST):
     def __init__(self, begin: Tuple[int, int], end: Tuple[int, int]):
         self.begin = begin
         self.end = end
+
+    @property
+    def source_range(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        return (self.begin, self.end)
 
 # These classes are for classifying
 

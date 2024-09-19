@@ -289,8 +289,7 @@ class PostASTVisitor(ast.ASTVisitor):
         """
         Define a name in current scope using an `IdentifierDef` node.
         """
-        id_def.annotation = \
-            self.define_id(id_def.name, id_def.begin, id_def.end)
+        id_def.annotation = self.define_id(id_def.name, *id_def.source_range)
 
     def define_id(self, name: str, pos1: "LineCol", pos2: "LineCol") -> Symbol:
         """
@@ -326,14 +325,14 @@ class PostASTVisitor(ast.ASTVisitor):
 
     def visit_ModuleMeta(self, node: ast.ModuleMeta):
         imported_here = Diagnostic(
-            "imported-here", self.file_entry, (node.begin, node.end),
+            "imported-here", self.file_entry, node.source_range,
             args={}
         )
         with self.forest.diag_mgr.using_note(imported_here):
             module = self.forest.load_module(node)
         if module is None:
             raise DiagnosticError(Diagnostic(
-                "module-not-found", self.file_entry, (node.begin, node.end),
+                "module-not-found", self.file_entry, node.source_range,
                 args={"module": STStr(node.unparse())}
             ))
         return module
@@ -346,7 +345,7 @@ class PostASTVisitor(ast.ASTVisitor):
         symbol = self.scope.lookup_symbol(node.name)
         if symbol is None:
             raise DiagnosticError(Diagnostic(
-                "undefined-name", self.file_entry, (node.begin, node.end),
+                "undefined-name", self.file_entry, node.source_range,
                 args={"name": STStr(node.name)}
             ))
         node.annotation = symbol
@@ -420,7 +419,7 @@ class PostASTVisitor(ast.ASTVisitor):
             if module.namespace.lookup_symbol(name) is None:
                 raise DiagnosticError(Diagnostic(
                     "cannot-import-name",
-                    self.file_entry, (item.name.begin, item.name.end),
+                    self.file_entry, item.name.source_range,
                     args={"name": STStr(name),
                           "module": STStr(node.meta.unparse())}
                 ))
@@ -450,7 +449,7 @@ class PostASTVisitor(ast.ASTVisitor):
         if isinstance(module, LoadingModule):
             self.forest.diag_mgr.push_diagnostic(Diagnostic(
                 "partial-wildcard-import",
-                self.file_entry, (node.begin, node.end),
+                self.file_entry, node.source_range,
                 args={"module": STStr(node.meta.unparse())}
             ))
 
