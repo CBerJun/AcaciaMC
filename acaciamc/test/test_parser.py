@@ -829,6 +829,12 @@ class ParserTests(TestSuite):
             args={'token': STArgReqToken(TokenType.import_)}
         )):
             self.parse("inline import")
+        with self.assert_diag(DiagnosticRequirement(
+            id='unexpected-token',
+            source=((1, 5), (1, 7)),
+            args={'token': STArgReqToken(TokenType.walrus)}
+        )):
+            self.parse("(x) := 10")
 
     def test_err_empty_block(self):
         with self.assert_diag(DiagnosticRequirement(
@@ -922,20 +928,6 @@ class ParserTests(TestSuite):
             args={}
         )):
             self.parse("entity X:\n const def f():\n  pass")
-
-    def test_err_invalid_var_def(self):
-        with self.assert_diag(DiagnosticRequirement(
-            id='invalid-var-def',
-            source=((1, 1), (1, 6)),
-            args={}
-        )):
-            self.parse("x + 1: int = 2")
-        with self.assert_diag(DiagnosticRequirement(
-            id='invalid-var-def',
-            source=((1, 1), (1, 5)),
-            args={}
-        )):
-            self.parse("x[1] := 2")
 
     def test_err_positional_arg_after_keyword(self):
         with self.assert_diag(DiagnosticRequirement(

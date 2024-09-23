@@ -1059,94 +1059,121 @@ class Parser:
 
     def statement(self):
         """
-        expr_statement := (
-            var_def_stmt | auto_var_def_stmt | assign_stmt |
-            aug_assign_stmt | expr_stmt | expr_new_stmt
-        )
         simple_statement := (
             pass_stmt | command_stmt | import_stmt | from_import_stmt |
             return_stmt | simple_new_stmt
         )
-        embedded_statement := (
+        complex_statement := (
             if_stmt | while_stmt | for_stmt | interface_stmt |
             def_stmt | entity_stmt | struct_stmt | inline_def_stmt
         )
-        statement := ((simple_statement | expr_statement) NEW_LINE) |
-            embedded_statement | const_statement
+        single_line_statement := simple_statement | expr_statement
+            | var_def_statement
+        statement := (single_line_statement NEW_LINE) |
+            complex_statement | const_statement
         """
+        # Check for const_statement
         if self.current_token.type is TokenType.const:
             return self._handle_const()
-        stmt_method = self.token_to_simple_stmt.get(self.current_token.type)
-        if stmt_method:
-            res = stmt_method()
-            self.eat(TokenType.new_line)
-            return res
+        # Check for complex_statement
         stmt_method = self.token_to_complex_stmt.get(self.current_token.type)
         if stmt_method:
             return stmt_method()
+        # Check for single_line_statement
+        # - Check for simple_statement
+        stmt_method = self.token_to_simple_stmt.get(self.current_token.type)
+        if stmt_method:
+            node = stmt_method()
+        else:
+            # - Check for var_def_statement
+            node = self._var_def_statement()
+            # - Check for expr_statement
+            if node is None:
+                node = self._expr_statement()
+        self.eat(TokenType.new_line)
+        return node
 
-        # Other statements that start with an expression
+    def _var_def_statement(self) -> Optional[ast.Statement]:
+        """
+        Helper of `statement`. Checks for if we have a variable
+        definition and parses it if we do.
+
+        var_def_statement := var_def_stmt | auto_var_def_stmt
+        var_def_stmt := IDENTIFIER COLON type_spec (EQUAL expr)?
+        auto_var_def_stmt := IDENTIFIER WALRUS expr
+        """
+        if self.current_token.type is not TokenType.identifier:
+            return None
+        id_token = self.current_token
+        pos1 = self.current_pos1
+        self.peek()
+        assert self.next_token is not None
+        # Check for var_def_stmt
+        if self.next_token.type is TokenType.colon:
+            self.eat()
+            self.eat()  # eat COLON
+            type_ = self.type_spec()
+            if self.current_token.type is TokenType.equal:
+                self.eat()  # eat EQUAL
+                rhs = self.expr()
+            else:
+                rhs = None
+            return ast.VarDef(
+                ast.IdentifierDef(id_token.value, *id_token.range),
+                type_, rhs, begin=pos1, end=self.prev_pos2
+            )
+        # Check for auto_var_def_stmt
+        if self.next_token.type is TokenType.walrus:
+            self.eat()
+            self.eat()  # eat WALRUS
+            rhs = self.expr()
+            return ast.AutoVarDef(
+                ast.IdentifierDef(id_token.value, *id_token.range),
+                rhs, begin=pos1, end=self.prev_pos2
+            )
+        return None
+
+    def _expr_statement(self) -> ast.Statement:
+        """
+        Helper of `statement`. Parses statements that start with an
+        expression.
+
+        expr_statement := (
+            assign_stmt | aug_assign_stmt | expr_new_stmt | expr_stmt
+        )
+        assign_stmt := expr EQUAL expr
+        aug_assign_stmt := expr (PLUS_EQUAL | MINUS_EQUAL | TIMES_EQUAL
+            | DIVIDE_EQUAL | MOD_EQUAL) expr
+        expr_new_stmt := expr POINT NEW call_table
+        expr_stmt := expr
+        """
         pos1 = self.current_pos1
         expr = self.expr()
-
+        # Check for assign_stmt
         if self.current_token.type is TokenType.equal:
-            # assign_stmt := expr EQUAL expr
-            self.eat()  # eat equal
+            self.eat()  # eat EQUAL
             rhs = self.expr()
-            node = ast.Assign(expr, rhs, begin=pos1, end=self.prev_pos2)
-        elif self.current_token.type in AUG_ASSIGN_TOKENS:
-            # aug_assign_stmt := expr (PLUS_EQUAL | MINUS_EQUAL
-            #     | TIMES_EQUAL | DIVIDE_EQUAL | MOD_EQUAL) expr
+            return ast.Assign(expr, rhs, begin=pos1, end=self.prev_pos2)
+        # Check for aug_assign_stmt
+        if self.current_token.type in AUG_ASSIGN_TOKENS:
             operator_cls = AUG_ASSIGN_TOKENS[self.current_token.type]
             operator = operator_cls(*self.current_range)
             self.eat()  # eat operator
             rhs = self.expr()
-            node = ast.AugmentedAssign(
+            return ast.AugmentedAssign(
                 expr, operator, rhs, begin=pos1, end=self.prev_pos2
             )
-        elif self.current_token.type is TokenType.colon:
-            # var_def_stmt := IDENTIFIER COLON type_spec (EQUAL expr)?
-            self.eat()  # eat colon
-            if not isinstance(expr, ast.Identifier):
-                self.error_range('invalid-var-def', *expr.source_range)
-                assert False
-            type_ = self.type_spec()
-            if self.current_token.type is TokenType.equal:
-                self.eat()  # eat equal
-                rhs = self.expr()
-            else:
-                rhs = None
-            node = ast.VarDef(
-                ast.IdentifierDef(expr.name, *expr.source_range),
-                type_, rhs, begin=pos1, end=self.prev_pos2
-            )
-        elif self.current_token.type is TokenType.walrus:
-            # auto_var_def_stmt := IDENTIFIER WALRUS expr
-            self.eat()  # eat walrus
-            if not isinstance(expr, ast.Identifier):
-                self.error_range('invalid-var-def', *expr.source_range)
-                assert False
-            id_def = ast.IdentifierDef(expr.name, *expr.source_range)
-            rhs = self.expr()
-            node = ast.AutoVarDef(id_def, rhs, begin=pos1, end=self.prev_pos2)
-        else:  # just an expr, or a new statement
-            # expr_stmt := expr
-            # expr_new_stmt := expr POINT NEW call_table
-            node = None
-            if self.current_token.type is TokenType.point:
-                self.peek()
-                assert self.next_token
-                if self.next_token.type is TokenType.new:
-                    self.eat()
-                    self.eat()
-                    table = self.call_table()
-                    node = ast.NewCall(
-                        expr, table, begin=pos1, end=self.prev_pos2
-                    )
-            if node is None:
-                node = ast.ExprStatement(expr)
-        self.eat(TokenType.new_line)
-        return node
+        # Check for expr_new_stmt
+        if self.current_token.type is TokenType.point:
+            self.peek()
+            assert self.next_token
+            if self.next_token.type is TokenType.new:
+                self.eat()
+                self.eat()
+                table = self.call_table()
+                return ast.NewCall(expr, table, begin=pos1, end=self.prev_pos2)
+        # The final option: expr_stmt
+        return ast.ExprStatement(expr)
 
     ## Other generators
 

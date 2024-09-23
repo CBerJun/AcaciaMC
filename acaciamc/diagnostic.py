@@ -235,7 +235,6 @@ DiagnosticKind.ERROR.registry.update({
     'const-new-method': "'new' methods cannot be compile time function",
     'non-static-const-method': 'Non-static method cannot be compile time '
         'function',
-    'invalid-var-def': 'Variable declaration target must be an identifier',
     'positional-arg-after-keyword': 'Positional argument follows keyword '
         'argument',
     'multiple-new-methods': "Found multiple 'new' methods in the same "
