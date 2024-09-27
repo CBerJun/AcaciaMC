@@ -64,6 +64,11 @@ class Diagnostic(NamedTuple):
         """Format just the message (without source information)."""
         return substitute(self.kind.registry[self.id], self.args)
 
+class _CaptureResult:
+    """See `DiagnosticsManager.capture_errors`."""
+    def __init__(self):
+        self.got_error = False
+
 class DiagnosticsManager:
     """Manages and prints diagnostic messages."""
 
@@ -80,10 +85,17 @@ class DiagnosticsManager:
 
     @contextmanager
     def capture_errors(self):
-        """Capture `DiagnosticError` and automatically log them."""
+        """
+        Capture `DiagnosticError` and automatically log them. The value
+        yielded is an object with a boolean attribute `got_error`,
+        which, when accessed after the `with` statement has finished,
+        tells you if an error has been captured.
+        """
+        cr = _CaptureResult()
         try:
-            yield
+            yield cr
         except DiagnosticError as err:
+            cr.got_error = True
             self.push_diagnostic(err.diag, err.notes)
 
     @contextmanager
