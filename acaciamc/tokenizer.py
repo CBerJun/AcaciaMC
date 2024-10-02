@@ -322,7 +322,7 @@ class Tokenizer:
         return self.current_lineno, self.current_col
 
     def error(self, diag_id: str, pos: Optional[LineCol] = None,
-              args: Optional[Mapping[str, STArgument]] = None):
+              args: Mapping[str, STArgument] = {}):
         """Raise an ERROR diagnostic on a specific location in source."""
         if pos is None:
             pos = self.current_pos
@@ -330,12 +330,12 @@ class Tokenizer:
 
     def error_range(
         self, diag_id: str, r: LineColRange,
-        args: Optional[Mapping[str, STArgument]] = None
+        args: Mapping[str, STArgument] = {}
     ):
         """Raise an ERROR diagnostic on a range in source."""
-        if args is None:
-            args = {}
-        raise DiagnosticError(Diagnostic(diag_id, self.file_entry, r, args))
+        raise DiagnosticError(Diagnostic(
+            diag_id, self.file_entry, r, args=args
+        ))
 
     def forward(self):
         """Read next char and push pointer."""

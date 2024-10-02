@@ -1,7 +1,8 @@
 """Diagnostic related stuffs."""
 
 from typing import (
-    NamedTuple, List, Mapping, Optional, TextIO, Dict, Iterable, TYPE_CHECKING
+    NamedTuple, List, Mapping, Optional, TextIO, Dict, Iterable, Sequence,
+    TYPE_CHECKING
 )
 from enum import Enum
 from contextlib import contextmanager
@@ -53,8 +54,15 @@ class Diagnostic(NamedTuple):
 
     id: str
     source_file: "FileEntry"
+    # The "primary" source location. Its starting position is the source
+    # position we display to the user:
     source_range: "LineColRange"
-    args: Mapping[str, STArgument]
+    # The "secondary" source location(s). They only serve as notes and
+    # are displayed in source code using a different indicator from the
+    # primary range. All ranges may not overlap with each other or the
+    # primary range:
+    secondary_ranges: Sequence["LineColRange"] = ()
+    args: Mapping[str, STArgument] = {}
 
     @property
     def kind(self) -> DiagnosticKind:
@@ -69,6 +77,115 @@ class _CaptureResult:
     def __init__(self):
         self.got_error = False
 
+class _DiagnosticDump:
+    """Helper for `DiagnosticsManager.dump_diagnostic`."""
+
+    MIN_LINE_NUM_WIDTH = 5
+    MIN_LINE_NUM_LEFT_PADDING = 1
+    PRIMARY_SRC_STYLES = (AnsiColor.YELLOW,)
+    SECONDARY_SRC_STYLES = (AnsiColor.GREEN,)
+    PRIMARY_INDICATOR = '^'
+    SECONDARY_INDICATOR = '~'
+
+    def __init__(self, diag: Diagnostic, file: TextIO):
+        self.diag = diag
+        self.file = file
+        # Display the message line...
+        (primary_ln, primary_col), _ = diag.source_range
+        with ansi(file, AnsiStyle.BOLD):
+            file.write(
+                f"{diag.source_file.display_name}:{primary_ln}:{primary_col}: "
+            )
+            with ansi(file, diag.kind.color):
+                file.write(f"{diag.kind.display}: ")
+            file.write(diag.format_message())
+        file.write(f" [{diag.id}]\n")
+        # Display the source code and indicators...
+        self.ranges = list(diag.secondary_ranges)
+        self.ranges.append(diag.source_range)
+        self.ranges.sort()
+        self.range_index = 0
+        (first_ln, _), _ = self.ranges[0]
+        _, (self.last_ln, _) = self.ranges[-1]
+        source_lines = diag.source_file.get_lines(first_ln, self.last_ln)
+        line_num_width = max(
+            self.MIN_LINE_NUM_WIDTH,
+            len(str(self.last_ln)) + self.MIN_LINE_NUM_LEFT_PADDING
+        )
+        indicator_line_begin = " " * line_num_width + " | "
+        self.indicator_begin, indicator_end \
+            = ansi_styles_to_str(diag.kind.color)  # Indicator color
+        self.next_range()
+        for i, self.line in enumerate(source_lines, start=first_ln):
+            self.indicator_line: List[str] = [indicator_line_begin]
+            self.col = 0
+            self.got_highlighted = False
+            file.write(f"{i:>{line_num_width}} | ")
+            # Continued range...
+            if self.l1 < i:
+                if self.l2 > i:
+                    # Continued range the covers this line completely
+                    self.add_highlighted(len(self.line))
+                else:
+                    # Continued range ending on this line...
+                    assert self.l2 == i
+                    self.add_highlighted(self.c2)
+                    self.next_range()
+            # Ranges starting on this line...
+            while self.l1 == i:
+                self.add_non_highlighted(self.c1)
+                self.add_highlighted(
+                    self.c2 if self.l2 == i else len(self.line)
+                )
+                # If the range did not finish, we break and don't call
+                # `self.next_range`:
+                if self.l2 > i:
+                    break
+                self.next_range()
+            # There may be some non-highlighted text left on this line
+            if self.col < len(self.line):
+                file.write(self.line[self.col:])
+            # Don't forget to turn off the ANSI color of indicators:
+            self.indicator_line.append(indicator_end)
+            # Attach the indicator line to `file`
+            file.write("\n" + "".join(self.indicator_line) + "\n")
+
+    def next_range(self):
+        if self.range_index >= len(self.ranges):
+            # Imagine there is a final range that lies outside the
+            # lines we retrieved.
+            self.l1 = self.last_ln + 1
+            return
+        r = (self.l1, self.c1), (self.l2, self.c2) \
+            = self.ranges[self.range_index]
+        # Make column numbers 0-indexed
+        self.c1 -= 1
+        self.c2 -= 1
+        self.indicator_char, self.src_styles = (
+            (self.PRIMARY_INDICATOR, self.PRIMARY_SRC_STYLES)
+            if r == self.diag.source_range
+            else (self.SECONDARY_INDICATOR, self.SECONDARY_SRC_STYLES)
+        )
+        self.range_index += 1
+
+    def add_highlighted(self, end: int):
+        if end == self.col:
+            return
+        if not self.got_highlighted:
+            self.indicator_line.append(self.indicator_begin)
+            self.got_highlighted = True
+        self.indicator_line.append(self.indicator_char * (end - self.col))
+        with ansi(self.file, *self.src_styles):
+            self.file.write(self.line[self.col:end])
+        self.col = end
+
+    def add_non_highlighted(self, end: int):
+        if end == self.col:
+            return
+        self.indicator_line.append(' ' * (end - self.col))
+        self.file.write(self.line[self.col:end])
+        self.col = end
+
 class DiagnosticsManager:
     """Manages and prints diagnostic messages."""
 
@@ -77,11 +194,6 @@ class DiagnosticsManager:
         self.note_context: List[Diagnostic] = []
         self.reader = reader
         self.stream = stream
-        self.min_line_num_width = 5
-        self.min_line_num_left_padding = 1
-        self.message_styles = (AnsiStyle.BOLD,)
-        self.highlight_src_styles = (AnsiColor.YELLOW,)
-        self.primary_indicator = '^'
 
     @contextmanager
     def capture_errors(self):
@@ -147,50 +259,7 @@ class DiagnosticsManager:
         file = self.stream if file is None else file
         if file is None:
             return
-        (first_ln, first_col), (last_ln, last_col) = diag.source_range
-        with ansi(file, *self.message_styles):
-            file.write(
-                f"{diag.source_file.display_name}:{first_ln}:{first_col}: "
-            )
-            with ansi(file, diag.kind.color):
-                file.write(f"{diag.kind.display}: ")
-            file.write(diag.format_message())
-        file.write(f" [{diag.id}]\n")
-        # Make column number 0-indexed
-        first_col -= 1
-        last_col -= 1
-        source_lines = diag.source_file.get_lines(first_ln, last_ln)
-        line_num_width = max(
-            self.min_line_num_width,
-            len(str(last_ln)) + self.min_line_num_left_padding
-        )
-        indicator_line_begin = " " * line_num_width + " | "
-        for i, line in enumerate(source_lines, start=first_ln):
-            indicator_line: List[str] = [indicator_line_begin]
-            file.write(f"{i:>{line_num_width}} | ")
-            is_first = i == first_ln
-            is_last = i == last_ln
-            if is_first:
-                file.write(line[:first_col])
-                indicator_line.append(" " * first_col)
-                highlight_start = first_col
-            else:
-                highlight_start = 0
-            if is_last:
-                highlight_end = last_col
-            else:
-                highlight_end = len(line)
-            with ansi(file, *self.highlight_src_styles):
-                file.write(line[highlight_start:highlight_end])
-            ic_begin, ic_end = ansi_styles_to_str(diag.kind.color)
-            indicator_line.append(ic_begin)
-            indicator_line.append(
-                self.primary_indicator * (highlight_end - highlight_start)
-            )
-            indicator_line.append(ic_end)
-            if is_last:
-                file.write(line[last_col:])
-            file.write("\n" + "".join(indicator_line) + "\n")
+        _DiagnosticDump(diag, file)
 
 class DiagnosticError(Exception):
     """Raised to issue an ERROR diagnostic and stop compilation."""

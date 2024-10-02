@@ -136,7 +136,7 @@ class Parser:
 
     def error(
         self, diag_id: str, token: Optional["Token"] = None,
-        args: Optional[Mapping[str, STArgument]] = None
+        args: Mapping[str, STArgument] = {}
     ):
         """
         Raise an ERROR diagnostic using the range in `token` as source
@@ -149,17 +149,15 @@ class Parser:
         )
 
     def error_range(self, diag_id: str, pos1: LineCol, pos2: LineCol,
-                    args: Optional[Mapping[str, STArgument]] = None):
+                    args: Mapping[str, STArgument] = {}):
         """Raise an `DiagnosticError`."""
         raise DiagnosticError(self.diag_obj(diag_id, pos1, pos2, args))
 
     def diag_obj(self, diag_id: str, pos1: LineCol, pos2: LineCol,
-                 args: Optional[Mapping[str, STArgument]] = None):
+                 args: Mapping[str, STArgument] = {}):
         """Helper to create a `Diagnostic`."""
-        if args is None:
-            args = {}
         return Diagnostic(
-            diag_id, self.tokenizer.file_entry, (pos1, pos2), args
+            diag_id, self.tokenizer.file_entry, (pos1, pos2), args=args
         )
 
     def unexpected_token(self):
