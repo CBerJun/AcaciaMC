@@ -1,10 +1,13 @@
 """Abstract Syntax Tree definitions for Acacia."""
 
 from typing import (
-    Union, List, Optional, Dict, Iterable, Tuple, Any, FrozenSet
+    Union, List, Optional, Dict, Iterable, Tuple, Any, FrozenSet, TYPE_CHECKING
 )
 
 from acaciamc.utils.str_template import DisplayableEnum
+
+if TYPE_CHECKING:
+    from acaciamc.reader import LineCol, LineColRange
 
 # --- AST components
 
@@ -63,12 +66,12 @@ class HasSource(AST):
     code.
     """
 
-    def __init__(self, begin: Tuple[int, int], end: Tuple[int, int]):
+    def __init__(self, begin: "LineCol", end: "LineCol"):
         self.begin = begin
         self.end = end
 
     @property
-    def source_range(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    def source_range(self) -> "LineColRange":
         return (self.begin, self.end)
 
 # These classes are for classifying
@@ -301,7 +304,8 @@ class EntityMethod(HasSource):
 class NewMethod(HasSource):
     """The "new" method in an entity template."""
 
-    def __init__(self, data: FuncData, new_begin, new_end, begin, end):
+    def __init__(self, data: FuncData, new_begin: "LineCol",
+                 new_end: "LineCol", begin, end):
         super().__init__(begin, end)
         self.data = data
         # These two are for diagnostics:
@@ -403,7 +407,8 @@ class FromImport(Statement):
         self.items = items
 
 class FromImportAll(Statement):
-    def __init__(self, meta: ModuleMeta, star_begin, star_end, begin, end):
+    def __init__(self, meta: ModuleMeta, star_begin: "LineCol",
+                 star_end: "LineCol", begin, end):
         super().__init__(begin, end)
         self.meta = meta
         # These two are for diagnostics:
@@ -609,7 +614,7 @@ class ASTVisualizer:
     def __init__(self, indent=2):
         self.indent = indent
 
-    def _convert(self, value, indent: int) -> str:
+    def _convert(self, value: object, indent: int) -> str:
         res: List[str] = []
         indent_next = indent + self.indent
         if isinstance(value, AST):
@@ -618,12 +623,13 @@ class ASTVisualizer:
             else:
                 location_str = ""
             res.append(f'{location_str}{type(value).__name__}(\n')
-            for field in value.get_fields():
-                fvalue = getattr(value, field)
-                res.append('%s%s = %s\n' % (
+            res.extend(
+                '%s%s = %s\n' % (
                     ' ' * indent_next, field,
-                    self._convert(fvalue, indent=indent_next)
-                ))
+                    self._convert(getattr(value, field), indent=indent_next)
+                )
+                for field in value.get_fields()
+            )
             res.append('%s)' % (' ' * indent))
         elif isinstance(value, list):
             res.append('[\n')
