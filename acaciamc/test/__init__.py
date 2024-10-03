@@ -1,7 +1,8 @@
 """Unit test for Acacia."""
 
 from typing import (
-    Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Dict, Iterable
+    Optional, Union, NamedTuple, Mapping, List, Type, TextIO, Dict, Iterable,
+    Sequence
 )
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
@@ -47,6 +48,7 @@ class DiagnosticRequirement(NamedTuple):
     id: Optional[str] = None
     source: Optional[LineColRange] = None
     args: Optional[Mapping[str, STArgRequirement]] = None
+    secondary_sources: Optional[Sequence[LineColRange]] = None
 
     def matches(self, diag: Diagnostic) -> bool:
         if self.id is not None and diag.id != self.id:
@@ -62,6 +64,10 @@ class DiagnosticRequirement(NamedTuple):
                 arg = diag.args[name]
                 if not argreq.verify(arg):
                     return False
+        if self.secondary_sources is not None:
+            # All source ranges must be identical
+            if sorted(self.secondary_sources) != sorted(diag.secondary_ranges):
+                return False
         return True
 
 class TestFailure(Exception):
