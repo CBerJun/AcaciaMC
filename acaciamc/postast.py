@@ -449,7 +449,8 @@ class PostASTVisitor(ast.ASTVisitor):
         if isinstance(module, LoadingModule):
             self.forest.diag_mgr.push_diagnostic(Diagnostic(
                 "partial-wildcard-import",
-                self.file_entry, node.source_range,
+                self.file_entry, node.meta.source_range,
+                secondary_ranges=((node.star_begin, node.star_end),),
                 args={"module": STStr(node.meta.unparse())}
             ))
 

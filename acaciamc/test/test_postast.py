@@ -200,8 +200,9 @@ class PostASTImportTests(TestSuite):
     def test_warn_partial_wildcard_import(self):
         with self.assert_diag(DiagnosticRequirement(
             "partial-wildcard-import",
-            ((1, 1), (1, 23)),
-            args={"module": STArgReqSimpleValue("__main__")}
+            ((1, 6), (1, 14)),
+            args={"module": STArgReqSimpleValue("__main__")},
+            secondary_sources=(((1, 22), (1, 23)),)
         )), \
             self.assert_diag(DiagnosticRequirement(
             "imported-here",
