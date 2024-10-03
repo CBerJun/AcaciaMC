@@ -10,7 +10,8 @@ from itertools import accumulate
 LineCol = Tuple[int, int]
 # A range in a source file that includes the character that the first
 # `LineCol` points to, up to the character that the second `LineCol`
-# points to.
+# points to. The character pointed to by the second `LineCol` is not
+# included.
 LineColRange = Tuple[LineCol, LineCol]
 
 class PackedSourceRange(NamedTuple):
@@ -72,7 +73,7 @@ class FileEntry:
 
     def get_lines(self, l1: int, l2: int) -> List[str]:
         """
-        Get line `l1` to line `l2` of `file`. Both `l1` and `l2` are
+        Get line `l1` to line `l2` of this file. Both `l1` and `l2` are
         1-indexed.
         """
         line_offsets = self.get_line_offsets()
@@ -94,7 +95,7 @@ class Reader:
 
     def get_real_file(self, filename: str) -> FileEntry:
         """
-        Get a `FileEntry` by its (possibly unnormalized) path on the
+        Get a `FileEntry` by its (possibly non-normalized) path on the
         real file system. The passed in `filename` will become the
         entry's display name.
         """
@@ -112,7 +113,7 @@ class Reader:
         """Add a fake file."""
         file_id = len(self.fake_entries)
         if display_name is None:
-            display_name = f"<fakefile #{file_id}>"
+            display_name = f"<fake file #{file_id}>"
         entry = FileEntry(text, display_name)
         self.fake_entries.append(entry)
         return entry
