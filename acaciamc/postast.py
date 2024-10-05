@@ -200,13 +200,39 @@ class Scope:
         # Mapping from all the names defined in this scope to their
         # corresponding symbols:
         self.names: Dict[str, Symbol] = {}
-        # Keep track of unused names defined in this scope; used
-        # for "unused-name" WARNING:
-        self.unused_names: Set[str] = set()
 
     def add_symbol(self, name: str, symbol: Symbol) -> None:
         """Define a symbol in this scope."""
         self.names[name] = symbol
+
+    def lookup_symbol(self, name: str) -> Optional[Symbol]:
+        """
+        Lookup symbol in this scope as well as all the outer scopes,
+        from inner to outer. If found, the `name` will be marked as
+        "used" in the scope that defines it, if that scope is a
+        `LocalScope`. Otherwise, return None.
+        """
+        scope = self
+        while scope is not None:
+            symbol = scope.names.get(name)
+            if symbol is not None:
+                if isinstance(scope, LocalScope):
+                    scope.mark_name_as_used(name)
+                return symbol
+            scope = scope.outer
+        return None
+
+class LocalScope(Scope):
+    """A local scope that keeps track of unused names."""
+
+    def __init__(self, outer: Scope):
+        super().__init__(outer)
+        # Keep track of unused names defined in this scope; used
+        # for "unused-name" warning:
+        self.unused_names: Set[str] = set()
+
+    def add_symbol(self, name: str, symbol: Symbol) -> None:
+        super().add_symbol(name, symbol)
         self.unused_names.add(name)
 
     def mark_name_as_used(self, name: str) -> None:
@@ -215,26 +241,6 @@ class Scope:
         scope.
         """
         self.unused_names.discard(name)
-
-    def lookup_symbol(self, name: str) -> Optional[Symbol]:
-        """
-        Lookup symbol in this scope as well as all the outer scopes,
-        from inner to outer. If found, the `name` will be marked as
-        "used" in the scope that defines it. Otherwise, return None.
-        """
-        scope = self
-        while True:
-            symbol = scope.names.get(name)
-            if symbol is not None:
-                scope.mark_name_as_used(name)
-                return symbol
-            if scope.outer is None:
-                return None
-            scope = scope.outer
-
-    def is_toplevel(self) -> bool:
-        """Return if this scope is the module toplevel."""
-        return self.outer is None
 
 class PostASTVisitor(ast.ASTVisitor):
     """
@@ -264,17 +270,15 @@ class PostASTVisitor(ast.ASTVisitor):
         self.file_entry = file_entry
         self.forest = forest
         self.scope: Scope = root_scope
+        self.toplevel_scope = root_scope  # The module level scope
 
     @contextmanager
     def new_scope(self):
         """
-        Enter a new scope. Also warn on unused names on exit. Note that
-        the toplevel scope (the root scope) is not created using this.
-        That explains why unused names in global scope are not warned
-        on.
+        Enter a new local scope. Also warn on unused names on exit.
         """
         original_scope = self.scope
-        self.scope = Scope(self.scope)
+        self.scope = LocalScope(self.scope)
         yield
         for name in self.scope.unused_names:
             symbol = self.scope.names[name]
@@ -310,7 +314,7 @@ class PostASTVisitor(ast.ASTVisitor):
                 (symbol.pos1, symbol.pos2), args={}
             ))
             raise err
-        if self.scope.is_toplevel():
+        if self.scope is self.toplevel_scope:
             new_symbol = GlobalSymbol(name, pos1, pos2)
         else:
             new_symbol = Symbol(pos1, pos2)
