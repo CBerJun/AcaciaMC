@@ -81,7 +81,7 @@ class TestSuite:
     """
     A collection of testcases.
     Each testcase should be a method whose name starts with
-    `case_prefix`. 
+    `case_prefix`.
     """
 
     # To be set by subclasses:

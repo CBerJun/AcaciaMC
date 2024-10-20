@@ -615,7 +615,7 @@ class Tokenizer:
         the position when we exits.
         Callback accepts an optional `value` that is used as token
         value. If `tok_type` is None, callback has a required argument
-        that is used as token type. 
+        that is used as token type.
         """
         if tok_type is None:
             # Redeclaration of `_get` causes type checker error.
