@@ -1037,3 +1037,19 @@ class ParserTests(TestSuite):
         # These are valid:
         self.parse("interface x:\n  def y():\n    return foo")
         self.parse("interface x:\n  pass\ndef f():\n  return y")
+
+    def test_err_init_submodule(self):
+        with self.assert_diag(DiagnosticRequirement(
+            id='init-submodule',
+            source=((1, 10), (1, 18)),
+            args={}
+        )):
+            self.parse("import x.__init__")
+        with self.assert_diag(DiagnosticRequirement(
+            id='init-submodule',
+            source=((1, 8), (1, 16)),
+            args={}
+        )):
+            self.parse("from x.__init__.y import z")
+        # This is valid:
+        self.parse("import __init__")

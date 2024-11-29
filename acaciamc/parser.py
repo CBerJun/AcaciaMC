@@ -859,17 +859,20 @@ class Parser:
 
     def module_meta(self) -> Tuple[ast.ModuleMeta, LineColRange]:
         """module_meta := IDENTIFIER (POINT IDENTIFIER)*"""
-        # at least one name should be given
+        # At least one name should be given
         pos1 = self.current_pos1
         names = [self.current_token.value]
         last_range = self.current_range
         self.eat(TokenType.identifier)
-        # read more names
+        # Read more names
         while self.current_token.type is TokenType.point:
             self.eat()
-            names.append(self.current_token.value)
+            submodule = self.current_token.value
             last_range = self.current_range
             self.eat(TokenType.identifier)
+            if submodule == "__init__":
+                self.error_range("init-submodule", *last_range)
+            names.append(submodule)
         meta = ast.ModuleMeta(names, begin=pos1, end=self.prev_pos2)
         return meta, last_range
 

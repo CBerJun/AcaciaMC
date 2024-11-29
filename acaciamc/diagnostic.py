@@ -326,6 +326,8 @@ DiagnosticKind.ERROR.registry.update({
         "same struct",
     'return-scope': "'return' outside function or interface",
     'interface-return-value': "Cannot return a value from an interface",
+    'init-submodule': "Submodule name '__init__' is special and should not be "
+        "explicitly used in import statements",
     # From post AST visitor
     'module-not-found': "Module ${module} is not found",
     'undefined-name': "Name ${name} is not defined",
