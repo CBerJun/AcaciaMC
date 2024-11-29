@@ -1,7 +1,7 @@
 """Abstract Syntax Tree definitions for Acacia."""
 
 from typing import (
-    Union, List, Optional, Dict, Iterable, Tuple, Any, FrozenSet, TYPE_CHECKING
+    Union, List, Optional, Dict, Iterable, Tuple, FrozenSet, TYPE_CHECKING
 )
 
 from acaciamc.utils.str_template import DisplayableEnum
@@ -34,8 +34,6 @@ RESERVED_FIELDS = frozenset((
     'begin', 'end', 'source_range',
     # Public function in `AST`:
     'get_fields',
-    # Annotation
-    'annotation',
 ))
 
 class AST:
@@ -44,8 +42,6 @@ class AST:
     # See `get_fields`:
     _fields: Optional[Tuple[str, ...]] = None
     _fields_ignore: FrozenSet[str] = frozenset()
-    # Extra information on this node (used by post AST visitor):
-    annotation: Any = None
 
     def get_fields(self) -> Tuple[str, ...]:
         """Get the names of fields of a node."""
@@ -560,50 +556,6 @@ class MapDef(Expression):
         self.values = values
 
 # --- AST-related utilities
-
-class ASTVisitor:
-    """
-    A base class that walks through the whole AST tree and calls a
-    visitor function for every node found. The visitor function for
-    a node of type `T` is named `visit_T`. If no visitor function is
-    defined, `generic_visit` will be used.
-    """
-
-    def visit(self, node: AST, **kwargs) -> Any:
-        visitor = getattr(
-            self,
-            'visit_%s' % node.__class__.__name__,
-            self.generic_visit
-        )
-        return visitor(node, **kwargs)
-
-    def child_visit(self, obj: object):
-        """
-        If `obj` is an `AST`, visit it.
-        If `obj` is a list of `AST`, visit all the elements.
-        If `obj` is a dictionary whose values are `AST` nodes, visit
-        all the values.
-        Otherwise, do nothing.
-        """
-        if isinstance(obj, AST):
-            self.visit(obj)
-        elif isinstance(obj, list):
-            for x in obj:
-                if isinstance(x, AST):
-                    self.visit(x)
-        elif isinstance(obj, dict):
-            for x in obj.values():
-                if isinstance(x, AST):
-                    self.visit(x)
-
-    def generic_visit(self, node: AST):
-        """
-        Called when a specific visitor function does not exist. This
-        default implementation visits all the children of given node
-        using `child_visit`.
-        """
-        for field in node.get_fields():
-            self.child_visit(getattr(node, field))
 
 class ASTVisualizer:
     """

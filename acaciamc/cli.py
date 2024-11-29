@@ -2,16 +2,19 @@
 
 from acaciamc.diagnostic import DiagnosticsManager
 from acaciamc.reader import Reader
-from acaciamc.postast import ASTForest
+from acaciamc.tokenizer import Tokenizer
+from acaciamc.parser import Parser
 from acaciamc.ast import ASTVisualizer
 
 def main():
     reader = Reader()
     diag = DiagnosticsManager(reader)
     entry = reader.get_real_file("test/temp.aca")
-    forest = ASTForest(reader, diag, entry, mc_version=(1, 20, 10))
-    visualizer = ASTVisualizer()
-    if forest.succeeded:
-        for module, node in forest.modules.items():
-            print(f"======== Module {module!r} ========")
-            print(visualizer.convert(node.ast))
+    with entry.open() as file:
+        tokenizer = Tokenizer(file, entry, diag, (1, 19, 70))
+        parser = Parser(tokenizer)
+        node = None
+        with diag.capture_errors():
+            node = parser.module()
+        if node is not None:
+            print(ASTVisualizer().convert(node))
