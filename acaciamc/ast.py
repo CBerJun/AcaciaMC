@@ -133,16 +133,11 @@ class FormattedStr(AST):
 class ModuleMeta(HasSource):
     """A name of the module/package like "math" or "foo.bar"."""
 
-    _fields_ignore = frozenset(("unparse",))
-
     def __init__(self, path: Iterable[str], begin, end):
         super().__init__(begin, end)
-        self.path = list(path)
+        self.path = tuple(path)
         assert self.path
-
-    def unparse(self) -> str:
-        """Return the normalized module name."""
-        return ".".join(self.path)
+        self.name = ".".join(self.path)
 
 # --- Enumeration
 

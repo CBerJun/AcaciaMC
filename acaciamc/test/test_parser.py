@@ -574,7 +574,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "@type": ast.Import, "begin": (1, 1), "end": (1, 23),
         "meta": {
             "@type": ast.ModuleMeta,
-            "path": ["foo", "spam"],
+            "path": ("foo", "spam"),
             "begin": (1, 8), "end": (1, 16)
         },
         "name": {
@@ -586,7 +586,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "@type": ast.FromImport, "begin": (1, 1), "end": (1, 35),
         "meta": {
             "@type": ast.ModuleMeta,
-            "path": ["spam"],
+            "path": ("spam",),
             "begin": (1, 6), "end": (1, 10)
         },
         "items": [
@@ -618,7 +618,7 @@ STMT_SNIPPETS: Tuple[Tuple[str, Dict[str, Any]], ...] = (
         "@type": ast.FromImportAll, "begin": (1, 1), "end": (1, 19),
         "meta": {
             "@type": ast.ModuleMeta,
-            "path": ["wood"],
+            "path": ("wood",),
             "begin": (1, 6), "end": (1, 10)
         },
         "star_begin": (1, 18), "star_end": (1, 19)
