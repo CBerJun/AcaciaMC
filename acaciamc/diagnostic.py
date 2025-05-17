@@ -190,7 +190,6 @@ class DiagnosticsManager:
     """Manages and prints diagnostic messages."""
 
     def __init__(self, reader: "Reader", stream: Optional[TextIO] = stderr):
-        self.diags: List[Diagnostic] = []
         self.note_context: List[Diagnostic] = []
         self.reader = reader
         self.stream = stream
@@ -231,24 +230,25 @@ class DiagnosticsManager:
         finally:
             self.note_context.pop()
 
+    def push_diagnostic_raw(self, diag: Diagnostic):
+        """Add a single diagnostic."""
+        # Currently we simply dump it to output stream...
+        self.dump_diagnostic(diag)
+
     def push_diagnostic(self, diag: Diagnostic,
-                        notes: Optional[Iterable[Diagnostic]] = None):
+                        notes: Iterable[Diagnostic] = ()):
         """
         Add a diagnostic, optionally with some notes. The main
         diagnostic will appear first, then the given `notes`, then the
-        notes added using `using_note`. If the given `diag` is itself
-        a note then notes specified by `using_note` will not be added.
+        notes added using `using_note`.
         """
-        self.diags.append(diag)
-        self.dump_diagnostic(diag)
-        if notes is not None:
-            for note in notes:
-                assert note.kind is DiagnosticKind.NOTE
-                self.push_diagnostic(note)
-        if diag.kind is not DiagnosticKind.NOTE:
-            # Apply notes added by `using_note`
-            for note in reversed(self.note_context):
-                self.push_diagnostic(note)
+        self.push_diagnostic_raw(diag)
+        for note in notes:
+            assert note.kind is DiagnosticKind.NOTE
+            self.push_diagnostic_raw(note)
+        # Apply notes added by `using_note`
+        for note in reversed(self.note_context):
+            self.push_diagnostic_raw(note)
 
     def dump_diagnostic(self, diag: Diagnostic, file: Optional[TextIO] = None):
         """

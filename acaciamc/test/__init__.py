@@ -22,7 +22,7 @@ class TrackedDiagnosticsManager(DiagnosticsManager):
         self.owner = owner
 
     def push_diagnostic(self, diag: Diagnostic,
-                        notes: Optional[Iterable[Diagnostic]] = None):
+                        notes: Iterable[Diagnostic] = ()):
         self.owner.note_diag(diag)
         return super().push_diagnostic(diag, notes)
 
