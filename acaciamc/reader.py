@@ -1,6 +1,6 @@
 """Source file management."""
 
-from os import path
+import os
 from io import StringIO
 from typing import NamedTuple, Dict, List, Optional, Tuple, TextIO
 from itertools import accumulate
@@ -56,10 +56,10 @@ class FileEntry:
             lines = self.text.splitlines(keepends=True)
             # No need to consider \r\n since the `text` newlines are
             # already normalized.
-            lens_acc = accumulate(map(len, lines))
-            # Add a zero for the first line.
-            self.line_offsets = offsets = list(lens_acc)
-            offsets.insert(0, 0)
+            self.line_offsets = offsets = [
+                0,  # Add a zero for the first line.
+                *accumulate(map(len, lines)),
+            ]
             # If the original file ends with a '\n', the last empty
             # line would be stripped by `str.splitlines`, so we add
             # it back here.
@@ -100,7 +100,7 @@ class Reader:
         entry's display name.
         """
         # Check cache
-        norm_filename = path.realpath(filename)
+        norm_filename = os.path.realpath(filename)
         entry = self.real_entries.get(norm_filename)
         if entry is None:
             # Load the file
@@ -123,5 +123,5 @@ class Reader:
         Delete cache of `filename` so that it can be reloaded later. If
         the file does not exist in cache, this does nothing.
         """
-        norm_filename = path.realpath(filename)
+        norm_filename = os.path.realpath(filename)
         self.real_entries.pop(norm_filename, None)
