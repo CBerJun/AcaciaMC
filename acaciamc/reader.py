@@ -48,10 +48,12 @@ class FileEntry:
 
     def get_line_offsets(self) -> List[int]:
         """Make line offsets mapping."""
+        # text[line_offsets[i] : line_offsets[i+1]] == the content of
+        # line i (zero indexed), with a trailing \n (except for the last
+        # line if text does not end with \n. In such case the right
+        # bound of the above range is one more than necessary, as if
+        # there is a \n there) Consequently,
         # len(line_offsets) == text.count('\n') + 2
-        # Reason: one '\n' creates 2 lines, 2 creates 3, etc. so +1
-        # For the convenience of `get_lines`, we need a "fake" line, so
-        # +1 again.
         if self.line_offsets is None:
             lines = self.text.splitlines(keepends=True)
             # No need to consider \r\n since the `text` newlines are
@@ -80,11 +82,9 @@ class FileEntry:
         p1 = line_offsets[l1 - 1]  # 1-indexed -> 0-indexed
         p2 = line_offsets[l2] - 1  # exclude trailing '\n'
         assert p1 <= p2  # equal for an empty line
-        source = self.text[p1:p2]
-        if not source:
-            # Make sure we return something even if this line is empty
-            return ['']
-        return source.splitlines()
+        # Using split('\n') ensures correct number of lines returned,
+        # as splitlines() doesn't handle empty lines well.
+        return self.text[p1:p2].split('\n')
 
 class Reader:
     """A source file manager."""

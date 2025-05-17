@@ -7,13 +7,17 @@ from acaciamc.test import TestSuite
 test_dir = os.path.dirname(__file__)
 dummy_file = os.path.join(test_dir, "data", "dummy.txt")
 
-DUMMY_CONTENT = 'This\nis\na dummy\nfile for\ntest/test_reader.py\n'
-DUMMY_LINE_OFFSETS = [0, 5, 8, 16, 25, 45, 46]
+DUMMY_CONTENT = 'This\nis\na dummy\nfile for\ntest/test_reader.py\n\n'
+DUMMY_LINE_OFFSETS = [0, 5, 8, 16, 25, 45, 46, 47]
 SOURCE_LINES = (
     (1, 1, ["This"]),
     (3, 3, ["a dummy"]),
+    (3, 4, ["a dummy", "file for"]),
     (2, 5, ["is", "a dummy", "file for", "test/test_reader.py"]),
+    (5, 6, ["test/test_reader.py", ""]),
     (6, 6, [""]),
+    (7, 7, [""]),
+    (6, 7, ["", ""]),
 )
 
 class ReaderTests(TestSuite):
