@@ -680,12 +680,12 @@ class Tokenizer:
         if spaces > self.indent_record[-1]:
             self.indent_record.append(spaces)
             return Token(TokenType.indent, (ln, begin_col), (ln, end_col)), 1
-        try:
-            i = self.indent_record.index(spaces)
-        except ValueError:
+        dedent_count = 0
+        while self.indent_record[-1] > spaces:
+            self.indent_record.pop()
+            dedent_count += 1
+        if self.indent_record[-1] != spaces:
             self.error('invalid-dedent', (ln, begin_col))
-        dedent_count = len(self.indent_record) - 1 - i
-        del self.indent_record[i + 1:]
         return (Token(TokenType.dedent, (ln, end_col), (ln, end_col)),
                 dedent_count)
 
