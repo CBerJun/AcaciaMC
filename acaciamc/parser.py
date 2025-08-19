@@ -411,10 +411,9 @@ class Parser:
             op_cls = UNARY_OP_TOKENS[self.current_token.type]
             ops.append(op_cls(*self.current_range))
             self.eat()
-        ops.reverse()
         node = self.expr_l1()
         pos2 = node.end
-        for op in ops:
+        for op in reversed(ops):
             node = ast.UnaryOp(op, node, begin=op.begin, end=pos2)
         return node
 
@@ -468,10 +467,9 @@ class Parser:
         while self.current_token.type is TokenType.not_:
             ops.append(ast.UnaryNot(*self.current_range))
             self.eat()
-        ops.reverse()
         node = self.expr_l5()
         pos2 = node.end
-        for op in ops:
+        for op in reversed(ops):
             node = ast.UnaryOp(op, node, begin=op.begin, end=pos2)
         return node
 
@@ -524,7 +522,6 @@ class Parser:
             (ELIF expr COLON statement_block)*
             (ELSE COLON statement_block)?
         """
-        # Parsing...
         if_pos1 = self.current_pos1
         self.eat(TokenType.if_)
         condition = self.expr()
@@ -552,9 +549,7 @@ class Parser:
         else:
             last_block = stmts
         pos2 = last_block[-1].end
-        # Assembling AST...
-        elifs.reverse()
-        for elif_pos, elif_condition, elif_stmts in elifs:
+        for elif_pos, elif_condition, elif_stmts in reversed(elifs):
             else_stmts = [ast.If(
                 elif_condition, elif_stmts, else_stmts,
                 begin=elif_pos, end=pos2
