@@ -21,7 +21,7 @@ class TokenizerTests(TestSuite):
                 while True:
                     token = tokenizer.get_next_token()
                     tokens.append(token)
-                    if token.type is TT.end_marker:
+                    if token.type is TT.end_of_file:
                         break
         return tokens
 
@@ -35,8 +35,8 @@ class TokenizerTests(TestSuite):
         if not got_tokens:
             raise TestFailure('No token generated')
         last = got_tokens.pop()
-        if last.type is not TT.end_marker:
-            raise TestFailure('Last token is not END_MARKER')
+        if last.type is not TT.end_of_file:
+            raise TestFailure('Last token is not END_OF_FILE')
         if tokens != got_tokens:
             raise TestFailure('Token streams do not match')
 
@@ -743,5 +743,5 @@ def tokenize_test_repr(*lines: str, mc_version=(1, 20, 10)):
             while True:
                 token = tokenizer.get_next_token()
                 print(token_to_test_repr(token) + ',')
-                if token.type is TT.end_marker:
+                if token.type is TT.end_of_file:
                     break

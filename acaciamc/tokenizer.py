@@ -101,7 +101,7 @@ class TokenType(enum.Enum):
     indent = 'INDENT', TokenAttr.SPECIAL
     dedent = 'DEDENT', TokenAttr.SPECIAL
     new_line = 'NEW_LINE', TokenAttr.SPECIAL
-    end_marker = 'END_MARKER', TokenAttr.SPECIAL
+    end_of_file = 'END_OF_FILE', TokenAttr.SPECIAL
 
     # Brackets
     lparen = '(', TokenAttr.PUNCTUATION
@@ -616,12 +616,12 @@ class Tokenizer:
         # done here because we still want the indent to be emitted
         # first.
         if eof:
-            # Dump DEDENTs and emit END_MARKER
+            # Dump DEDENTs and emit END_OF_FILE
             token, cnt = self.handle_indent(
                 0, begin_col=self.current_col, end_col=self.current_col
             )
             res.extend(repeat(token, cnt))
-            res.append(self.make_zerowidth_token(TokenType.end_marker))
+            res.append(self.make_zerowidth_token(TokenType.end_of_file))
         return res
 
     def make_zerowidth_token(self, tok_type: TokenType, value=None) -> Token:

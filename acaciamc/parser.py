@@ -1179,9 +1179,9 @@ class Parser:
     ## Other generators
 
     def module(self) -> ast.Module:
-        """module := statement* END_MARKER"""
+        """module := statement* END_OF_FILE"""
         stmts = []
-        while self.current_token.type is not TokenType.end_marker:
+        while self.current_token.type is not TokenType.end_of_file:
             stmts.append(self.statement())
         return ast.Module(stmts)
 
