@@ -306,6 +306,13 @@ def source_range_from_pos(pos: LineCol, length: int) -> LineColRange:
     """
     return (pos, (pos[0], pos[1] + length))
 
+class _IncompleteToken(NamedTuple):
+    """See `Tokenizer.build_token`."""
+
+    pos1: LineCol
+    pos2: LineCol
+    type: Optional[TokenType]
+
 class Tokenizer:
     def __init__(self, src: TextIO, file_entry: "FileEntry",
                  diagnostic_manager: "DiagnosticsManager",
@@ -345,6 +352,9 @@ class Tokenizer:
         self.continued_comment_pos: Optional[LineCol] = None
         # Indicate if the last token was INTERFACE:
         self.last_is_interface = False
+        # See method `build_token`. Stores built tokens that haven't
+        # been retrieved:
+        self.built_tokens: List[_IncompleteToken] = []
 
     @property
     def current_pos(self) -> LineCol:
@@ -446,9 +456,9 @@ class Tokenizer:
             if self.last_is_interface:
                 if self.current_char == '"':
                     # Quoted path
-                    with self.make_string_begin() as gettok:
+                    with self.build_string_begin():
                         self.forward()  # skip '"'
-                    res.append(gettok())
+                    res.append(self.retrieve_token())
                 else:
                     # Unquoted path
                     res.append(self.handle_interface_path())
@@ -467,18 +477,18 @@ class Tokenizer:
                     self.last_is_interface = True
             elif self.current_char == '/' and not (self.has_content or res):
                 # Only read when "/" is first token of this logical line.
-                with self.make_token(TokenType.command_begin) as gettok:
+                with self.build_token(TokenType.command_begin):
                     self.forward()  # skip "/"
                     if self.current_char == '*':
                         self.continued_command = True
                         self.forward()  # skip "*"
-                command_begin = gettok()
+                command_begin = self.retrieve_token()
                 res.append(command_begin)
                 self.inside_command = _FormattedStrManager(command_begin)
             elif self.current_char == '"':
-                with self.make_string_begin() as gettok:
+                with self.build_string_begin():
                     self.forward()  # skip '"'
-                res.append(gettok())
+                res.append(self.retrieve_token())
             else:
                 ok = False
             if ok:
@@ -489,10 +499,10 @@ class Tokenizer:
                 two_chars = self.current_char + peek
                 token_type = PUNCTUATIONS_2CHARS.get(two_chars)
                 if token_type is not None:
-                    with self.make_token(token_type) as gettok:
+                    with self.build_token(token_type):
                         self.forward()
                         self.forward()
-                    res.append(gettok())
+                    res.append(self.retrieve_token())
                     continue
             # Try one-char punctuation
             token_type = PUNCTUATIONS_1CHAR.get(self.current_char)
@@ -525,9 +535,9 @@ class Tokenizer:
                             self.in_command_fexpr = False
                         elif got_f.str_fexpr:
                             self.in_string_fexpr = False
-                with self.make_token(token_type) as gettok:
+                with self.build_token(token_type):
                     self.forward()
-                res.append(gettok())
+                res.append(self.retrieve_token())
                 continue
             # We've run out of possibilities, throw
             self.error_range(
@@ -559,9 +569,9 @@ class Tokenizer:
                 self.continued_comment or self.continued_command
                 or self.bracket_stack
             ):
-                with self.make_newline() as gettok:
+                with self.build_newline():
                     self.forward()  # skip '\n'
-                res.append(gettok())
+                res.append(self.retrieve_token())
             self.last_line_continued = False
         elif self.current_char is None:
             if self.continued_comment:
@@ -588,9 +598,9 @@ class Tokenizer:
                     args={'char': STStr(br.type.value)}
                 )
             if self.has_content:
-                with self.make_newline() as gettok:
+                with self.build_newline():
                     pass  # This NEWLINE is added implicitly, so zerowidth
-                res.append(gettok())
+                res.append(self.retrieve_token())
             eof = True
         elif self.current_char == '\\':
             self.forward()  # skip "\\"
@@ -629,27 +639,34 @@ class Tokenizer:
         return Token(tok_type, self.current_pos, self.current_pos, value)
 
     @contextmanager
-    def make_token(self, tok_type: Optional[TokenType] = None) \
-            -> Generator[Callable[..., Token], None, None]:
+    def build_token(self, tok_type: Optional[TokenType] = None) \
+            -> Generator[None, None, None]:
         """
-        "Make" a token. Used as a context manager.
-        Return a callback that produces a `Token` whose beginning point
-        is position when the context manager enters and ending point is
-        the position when we exits.
-        Callback accepts an optional `value` that is used as token
-        value. If `tok_type` is None, callback has a required argument
-        that is used as token type.
+        "Build" a token. Used as a context manager. The current
+        positions when entering and exiting the context are saved and
+        used as starting and ending position of the token. To retrieve
+        the token, if you did specify `tok_type`, use `retrieve_token`;
+        otherwise use `retrieve_token2`. The token must be retrieved
+        after your `with` statement, following first-in-last-out order.
+        You may specify the token's value when you retrieve it.
         """
-        if tok_type is None:
-            # Redeclaration of `_get` causes type checker error.
-            def _get(tok_type: TokenType, value=None) -> Token:  # type: ignore
-                return Token(tok_type, pos1, pos2, value)
-        else:
-            def _get(value=None) -> Token:
-                return Token(tok_type, pos1, pos2, value)
         pos1 = self.current_pos
-        yield _get
+        yield
         pos2 = self.current_pos
+        self.built_tokens.append(_IncompleteToken(pos1, pos2, tok_type))
+
+    def retrieve_token(self, value: Any = None) -> Token:
+        """See method `build_token`."""
+        it = self.built_tokens.pop()
+        type_ = it.type
+        assert type_ is not None
+        return Token(type_, it.pos1, it.pos2, value)
+
+    def retrieve_token2(self, tok_type: TokenType, value: Any = None) -> Token:
+        """See method `build_token`."""
+        it = self.built_tokens.pop()
+        assert it.type is None
+        return Token(tok_type, it.pos1, it.pos2, value)
 
     def skip_spaces(self):
         """Skip space characters."""
@@ -662,13 +679,15 @@ class Tokenizer:
             self.forward()
 
     @contextmanager
-    def make_string_begin(self) -> Generator[Callable[[], Token], None, None]:
+    def build_string_begin(self) -> Generator[None, None, None]:
+        """Build a STRING_BEGIN token and enter string context."""
         self.in_string_fexpr = False
-        def _my_gettok():
-            return token
-        with self.make_token(TokenType.string_begin) as gettok:
-            yield _my_gettok
-        token = gettok()
+        with self.build_token(TokenType.string_begin):
+            yield
+        token = self.retrieve_token()
+        self.built_tokens.append(_IncompleteToken(
+            token.pos1, token.pos2, token.type
+        ))  # Don't consume
         self.string_stack.append(_FormattedStrManager(token))
 
     def handle_long_comment(self):
@@ -684,11 +703,11 @@ class Tokenizer:
         self.forward()  # skip char "#"
         self.continued_comment = False
 
-    def make_newline(self):
-        """Make a logical NEWLINE token and do checks."""
+    def build_newline(self):
+        """Build a logical NEWLINE token and do checks."""
         if self.last_is_interface:
             self.error('interface-path-expected')
-        return self.make_token(TokenType.new_line)
+        return self.build_token(TokenType.new_line)
 
     def handle_indent(self, spaces: int, begin_col: int, end_col: int) \
             -> Tuple[Token, int]:
@@ -774,9 +793,9 @@ class Tokenizer:
 
     def handle_number(self):
         """Read an INTEGER or a FLOAT token."""
-        with self.make_token() as gettok:
+        with self.build_token():
             tok_type, value = self._handle_number()
-        token = gettok(tok_type, value)
+        token = self.retrieve_token2(tok_type, value)
         # Check integer overflow
         if tok_type is TokenType.integer:
             assert isinstance(value, int)
@@ -787,17 +806,16 @@ class Tokenizer:
     def handle_name(self):
         """Read a keyword or an IDENTIFIER token."""
         chars = []
-        with self.make_token() as gettok:
+        with self.build_token():
             while (self.current_char is not None
                    and is_idcontinue(self.current_char)):
                 chars.append(self.current_char)
                 self.forward()
         name = ''.join(chars)
         token_type = KEYWORDS.get(name)
-        if token_type is None:  # IDENTIFIER
-            return gettok(TokenType.identifier, value=name)
-        # Keyword
-        return gettok(token_type)
+        if token_type is None:  # Identifier
+            return self.retrieve_token2(TokenType.identifier, value=name)
+        return self.retrieve_token2(token_type)  # Keyword
 
     def _read_escapable_char(self) -> str:
         """
@@ -948,15 +966,16 @@ class Tokenizer:
             if tokens:
                 return tokens
         else:
-            tok = mgr.retrieve_text_token(self.current_pos)
-            with self.make_token(TokenType.string_end) as gettok:
+            tokens: List[Token] = []
+            text_tok = mgr.retrieve_text_token(self.current_pos)
+            if text_tok is not None:
+                tokens.append(text_tok)
+            with self.build_token(TokenType.string_end):
                 self.forward()  # skip last '"'
-            endtok = gettok()
+            tokens.append(self.retrieve_token())
             self.string_stack.pop()
             self.in_string_fexpr = bool(self.string_stack)
-            if tok:
-                return [tok, endtok]
-            return [endtok]
+            return tokens
 
     def _fexpr_unit(self, mgr: _FormattedStrManager, is_cmd: bool) \
             -> List[Token]:
@@ -979,14 +998,14 @@ class Tokenizer:
             tok = mgr.retrieve_text_token(self.current_pos)
             if tok:
                 res.append(tok)
-            with self.make_token(TokenType.dollar_lbrace) as gettok:
+            with self.build_token(TokenType.dollar_lbrace):
                 self.forward()  # skip "$"
                 self.bracket_stack.append(_BracketFrame(
                     TokenType.lbrace, self.current_pos,
                     **{("cmd_fexpr" if is_cmd else "str_fexpr"): True}
                 ))  # Make sure position points to "{", not "$"
                 self.forward()  # skip "{"
-            dollar_lbrace = gettok()
+            dollar_lbrace = self.retrieve_token()
             res.append(dollar_lbrace)
             # Use `mgr.last_dollar_lbrace` to track where last "${" is
             # for better error messages.
@@ -1014,16 +1033,17 @@ class Tokenizer:
             if tokens:
                 return tokens
         else:
-            tok = mgr.retrieve_text_token(self.current_pos)
-            with self.make_token(TokenType.command_end) as gettok:
+            tokens: List[Token] = []
+            text_tok = mgr.retrieve_text_token(self.current_pos)
+            if text_tok is not None:
+                tokens.append(text_tok)
+            with self.build_token(TokenType.command_end):
                 self.forward()  # skip "*"
                 self.forward()  # skip "/"
-            endtok = gettok()
+            tokens.append(self.retrieve_token())
             self.continued_command = False
             self.inside_command = None
-            if tok:
-                return [tok, endtok]
-            return [endtok]
+            return tokens
 
     def handle_command(self) -> List[Token]:
         """Help read a single line command. Return the tokens."""
@@ -1035,11 +1055,11 @@ class Tokenizer:
                 return tokens
         else:
             self.inside_command = None
-            tok = mgr.retrieve_text_token(self.current_pos)
-            endtok = self.make_zerowidth_token(TokenType.command_end)
-            if tok:
-                return [tok, endtok]
-            return [endtok]
+            text_tok = mgr.retrieve_text_token(self.current_pos)
+            end_tok = self.make_zerowidth_token(TokenType.command_end)
+            if text_tok:
+                return [text_tok, end_tok]
+            return [end_tok]
 
     def handle_interface_path(self) -> Token:
         """Help read an interface path."""
@@ -1047,7 +1067,7 @@ class Tokenizer:
         # that Acacia removes support for unquoted parenthesis
         # characters.
         chars = []
-        with self.make_token(TokenType.interface_path) as gettok:
+        with self.build_token(TokenType.interface_path):
             while (
                 self.current_char in FUNCTION_PATH_CHARS
                 and self.current_char not in ('(', ')')
@@ -1056,4 +1076,4 @@ class Tokenizer:
                 self.forward()
         if not chars:
             self.error('interface-path-expected')
-        return gettok(value=''.join(chars))
+        return self.retrieve_token(value=''.join(chars))
