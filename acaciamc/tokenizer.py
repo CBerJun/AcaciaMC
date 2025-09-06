@@ -252,7 +252,7 @@ class Token(NamedTuple):
         if attr is TokenAttr.SPECIAL:
             return self.type.value
         assert attr in (TokenAttr.KEYWORD, TokenAttr.PUNCTUATION)
-        return repr(attr)  # Wrap with single quotes
+        return repr(self.type.value)  # Wrap with single quotes
 
 class _FormattedStrManager:
     """
