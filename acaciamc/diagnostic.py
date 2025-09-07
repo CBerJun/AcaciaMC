@@ -275,7 +275,7 @@ class DiagnosticError(Exception):
 
 DiagnosticKind.ERROR.registry.update({
     # From tokenizer
-    'invalid-char': 'Invalid character ${char}',
+    'invalid-char': 'Invalid syntax near unexpected character ${char}',
     'unmatched-bracket': 'Unmatched ${char}',
     'unmatched-bracket-pair': 'Closing bracket ${close} does not match '
         'opening bracket ${open}',
@@ -285,7 +285,7 @@ DiagnosticKind.ERROR.registry.update({
     'unclosed-bracket': 'Unclosed ${char}',
     'eof-after-continuation': 'Found end of file after line continuation',
     'char-after-continuation': 'Unexpected character after line continuation',
-    'interface-path-expected': "A path is expected after 'interface'",
+    'interface-path-expected': "Expected path after 'interface'",
     'invalid-dedent': 'Dedent does not match any outer indentation level',
     'integer-expected': 'Expected base ${base} integer',
     'invalid-number-char': 'Invalid character ${char} in base ${base} number',
@@ -293,27 +293,26 @@ DiagnosticKind.ERROR.registry.update({
     'invalid-font': 'Invalid font specifier: ${font}',
     'incomplete-unicode-escape': 'Incomplete \\${char raw} Unicode escape',
     'invalid-unicode-code-point': 'Invalid Unicode code point U+${code raw}; '
-        'code points cannot be larger than or equal to 0x110000',
+        'the maximum valid code point is U+10FFFF',
     'unclosed-quote': 'Unclosed double quote',
-    'incomplete-escape': 'Expect a character after backslash escape, found '
+    'incomplete-escape': 'Expected character after backslash escape, found '
         'end of file',
     'invalid-escape': 'Invalid escape sequence \\${character raw}; consider '
         'doubling the backslash?',
-    'integer-literal-overflow': 'Integer literal overflows; it must be in the '
-        'range of a 32-bit signed integer',
+    'integer-literal-overflow': 'Integer literal exceeds the range of a '
+        '32-bit signed integer',
     # From parser
-    'unexpected-token': 'Unexpected token ${token}',
-    'empty-block': 'Expect an indented block',
-    'non-default-arg-after-default': 'Non-default argument ${arg} follows '
-        'default argument',
-    'dont-know-arg-type': 'Type of argument ${arg} or its default value must '
-        'be specified',
-    'duplicate-arg': 'Duplicate argument ${arg} in function definition',
-    'duplicate-keyword-args': 'Duplicate keyword argument ${arg} in function '
-        'call',
+    'unexpected-token': 'Invalid syntax near unexpected ${token}',
+    'empty-block': 'Expected indented block',
+    'non-default-arg-after-default': 'Non-default parameter ${arg} follows '
+        'default parameter',
+    'dont-know-arg-type': 'Type of parameter ${arg} or its default value must '
+        'be specified, as this parameter is passed by value',
+    'duplicate-arg': 'Duplicate parameter ${arg}',
+    'duplicate-keyword-args': 'Duplicate keyword argument ${arg}',
     'invalid-valpassing': 'Qualifier ${qualifier} cannot be used in a '
         '${func-type raw}',
-    'const-new-method': "'new' methods cannot be compile time function",
+    'const-new-method': "'new' method cannot be compile time function",
     'non-static-const-method': 'Non-static method cannot be compile time '
         'function',
     'positional-arg-after-keyword': 'Positional argument follows keyword '
@@ -336,11 +335,11 @@ DiagnosticKind.ERROR.registry.update({
 })
 DiagnosticKind.WARNING.registry.update({
     # From tokenizer
-    'new-font': 'The font specifier ${font} is a Minecraft 1.19.80 feature',
+    'new-font': 'Font specifier ${font} is a Minecraft 1.19.80 feature',
     # From post AST visitor
     'unused-name': 'Name ${name} is defined but not used',
     'partial-wildcard-import': 'Wildcard import on partially initialized '
-        'module ${module} may result in some names not being imported'
+        'module ${module} may result in some names not being imported',
 })
 DiagnosticKind.NOTE.registry.update({
     # From parser
